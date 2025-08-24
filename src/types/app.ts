@@ -12,24 +12,21 @@ export interface ClipMarker {
   exported?: boolean;
 }
 
-export interface ClipData {
-  buffer: ArrayBuffer;
-  metadata: {
-    clipId: string;
-    clipDurationMs: number;
-    clipDurationSec: number;
-    clipStartTime: number;
-    clipEndTime: number;
-    clipStartTimeIso: string;
-    clipEndTimeIso: string;
-    streamStartTime?: number;
-    streamStartTimeIso?: string;
-    clipExported: boolean;
-    streamerName: string;
-    uploadTimestamp: string;
-    originalFilename: string;
-    s3Key: string;
-  };
+export interface S3ClipMetadata {
+  clipId: string;
+  clipDurationMs: number;
+  clipStartTime: number;
+  clipEndTime: number;
+  streamStartTime?: number;
+  streamerName?: string;
+  uploadTimestamp?: string;
+  originalFilename?: string;
+  s3Key: string;
+}
+
+export interface S3ClipData {
+  url: string;
+  metadata: S3ClipMetadata;
 }
 
 type OverlappingStyleProps =
@@ -60,6 +57,21 @@ export interface TextOverlay
   underline: boolean;
   alignment: "left" | "center" | "right";
   visible: boolean;
+}
+
+export interface ImageOverlay {
+  id: string;
+  file: File;
+  x: number; // Normalized 0–1 for export
+  y: number; // Normalized 0–1 for export
+  startTime: number;
+  endTime: number;
+  width: number;
+  height: number;
+  opacity: number;
+  visible: boolean;
+  rotation: number;
+  scale: number;
 }
 
 export interface AudioTrack {
@@ -104,6 +116,7 @@ export interface ClipExportData {
   endTime: number;
   outputName: string;
   textOverlays?: TextOverlay[];
+  imageOverlays?: ImageOverlay[];
   audioTracks?: AudioTrack[];
   exportSettings: ExportSettings;
   clientDisplaySize: { width: number; height: number };
@@ -189,26 +202,6 @@ export interface ClipResponse {
   success: boolean;
   blob?: Uint8Array;
   error?: string;
-}
-
-export interface ClipData {
-  buffer: ArrayBuffer;
-  metadata: {
-    clipId: string;
-    clipDurationMs: number;
-    clipDurationSec: number;
-    clipStartTime: number;
-    clipEndTime: number;
-    clipStartTimeIso: string;
-    clipEndTimeIso: string;
-    streamStartTime?: number;
-    streamStartTimeIso?: string;
-    clipExported: boolean;
-    streamerName: string;
-    uploadTimestamp: string;
-    originalFilename: string;
-    s3Key: string;
-  };
 }
 
 export type Success<T> = {

@@ -1,8 +1,10 @@
-import { TextOverlay, ClipExportData } from "@/types/app";
+import { TextOverlay, ImageOverlay, ClipExportData } from "@/types/app";
+import logger from "@/utils/logger";
 
 interface WorkerMessage {
   type: "generate";
-  overlays: TextOverlay[];
+  textOverlays?: TextOverlay[];
+  imageOverlays?: ImageOverlay[];
   data: ClipExportData;
 }
 
@@ -14,14 +16,18 @@ interface WorkerResponse {
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   if (e.data.type === "generate") {
     try {
-      const frames = await generateOverlayFrames(e.data.overlays, e.data.data);
+      const frames = await generateOverlayFrames(
+        e.data.textOverlays,
+        e.data.imageOverlays,
+        e.data.data
+      );
       const response: WorkerResponse = {
         type: "frames",
         frames,
       };
       self.postMessage(response);
     } catch (error) {
-      console.error("Overlay worker error:", error);
+      logger.error("Overlay worker error:", error);
       self.postMessage({
         type: "error",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -31,7 +37,8 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 };
 
 async function generateOverlayFrames(
-  overlays: TextOverlay[],
+  textOverlays: TextOverlay[] | undefined,
+  imageOverlays: ImageOverlay[] | undefined,
   data: ClipExportData
 ): Promise<Uint8Array[]> {
   const { exportSettings, clientDisplaySize, targetResolution } = data;
@@ -46,7 +53,6 @@ async function generateOverlayFrames(
   const renderDimensions = targetResolution!;
   const { width: renderWidth, height: renderHeight } = renderDimensions;
 
-  // Create OffscreenCanvas
   const canvas = new OffscreenCanvas(renderWidth, renderHeight);
   const ctx = canvas.getContext("2d")!;
 
@@ -55,7 +61,7 @@ async function generateOverlayFrames(
     clientDisplaySize
   );
 
-  console.log("🧠 Generating overlay frames", {
+  logger.log("🧠 Generating overlay frames", {
     totalFrames,
     fps: exportSettings.fps,
     duration: (data.endTime - data.startTime) / 1000,
@@ -67,26 +73,44 @@ async function generateOverlayFrames(
   // Calculate transition points where overlay visibility changes
   const transitionPoints = new Set<number>();
 
-  overlays.forEach((overlay) => {
-    const startFrame = Math.max(
-      0,
-      Math.floor((overlay.startTime / 1000) * exportSettings.fps)
-    );
-    const endFrame = Math.min(
-      totalFrames - 1,
-      Math.ceil((overlay.endTime / 1000) * exportSettings.fps)
-    );
+  if (textOverlays) {
+    textOverlays.forEach((overlay) => {
+      const startFrame = Math.max(
+        0,
+        Math.floor((overlay.startTime / 1000) * exportSettings.fps)
+      );
+      const endFrame = Math.min(
+        totalFrames - 1,
+        Math.ceil((overlay.endTime / 1000) * exportSettings.fps)
+      );
 
-    transitionPoints.add(startFrame);
-    transitionPoints.add(endFrame + 1); // Frame after end
-  });
+      transitionPoints.add(startFrame);
+      transitionPoints.add(endFrame + 1); // Frame after end
+    });
+  }
+
+  if (imageOverlays) {
+    imageOverlays.forEach((overlay) => {
+      const startFrame = Math.max(
+        0,
+        Math.floor((overlay.startTime / 1000) * exportSettings.fps)
+      );
+      const endFrame = Math.min(
+        totalFrames - 1,
+        Math.ceil((overlay.endTime / 1000) * exportSettings.fps)
+      );
+
+      transitionPoints.add(startFrame);
+      transitionPoints.add(endFrame + 1); // Frame after end
+    });
+  }
 
   // Includes first and last frame
   transitionPoints.add(0);
   transitionPoints.add(totalFrames - 1);
 
   const transitionArray = Array.from(transitionPoints).sort((a, b) => a - b);
-  console.log("🔑 Transition points identified:", transitionArray);
+  logger.log("🔑 Transition points identified:", transitionArray);
 
   // Unique overlay states
   const overlayStates = new Map<string, Uint8Array>();
@@ -96,47 +120,80 @@ async function generateOverlayFrames(
 
     const currentTimeMs = (frameIndex / exportSettings.fps) * 1000;
 
-    // Clear canvas with transparent background
     ctx.clearRect(0, 0, renderWidth, renderHeight);
 
-    // Determines visible overlays at this time
-    const visibleOverlays = overlays.filter(
-      (overlay) =>
-        overlay.visible &&
-        currentTimeMs >= overlay.startTime &&
-        currentTimeMs <= overlay.endTime
-    );
+    const visibleOverlays = [];
+
+    if (textOverlays) {
+      visibleOverlays.push(
+        ...textOverlays.filter(
+          (overlay) =>
+            overlay.visible &&
+            currentTimeMs >= overlay.startTime &&
+            currentTimeMs <= overlay.endTime
+        )
+      );
+    }
+
+    if (imageOverlays) {
+      visibleOverlays.push(
+        ...imageOverlays.filter(
+          (overlay) =>
+            overlay.visible &&
+            currentTimeMs >= overlay.startTime &&
+            currentTimeMs <= overlay.endTime
+        )
+      );
+    }
 
     // State key based on visible overlays
     const stateKey = visibleOverlays
-      .map((o) => `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`)
+      .map((o) => {
+        if ("text" in o) {
+          return `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+        } else if ("file" in o) {
+          return `${o.file.name}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+        }
+        return "unknown";
+      })
       .join("|");
 
     // Only generate new buffer if state hasn't been seen before
     if (!overlayStates.has(stateKey)) {
       // Render overlays
       visibleOverlays.forEach((overlay) => {
-        renderTextOverlay(
-          canvas,
-          ctx,
-          overlay,
-          renderDimensions,
-          scaleFactor,
-          targetResolution
-        );
+        if ("text" in overlay) {
+          renderTextOverlay(
+            canvas,
+            ctx,
+            overlay,
+            renderDimensions,
+            scaleFactor,
+            targetResolution
+          );
+        } else if ("file" in overlay) {
+          renderImageOverlay(
+            canvas,
+            ctx,
+            overlay,
+            renderDimensions,
+            scaleFactor,
+            targetResolution
+          );
+        }
       });
 
       const frameBuffer = await canvas.convertToBlob({ type: "image/png" });
       const arrayBuffer = await frameBuffer.arrayBuffer();
       overlayStates.set(stateKey, new Uint8Array(arrayBuffer));
 
-      console.log(
+      logger.log(
         `🎨 Generated unique overlay state: ${stateKey.substring(0, 50)}...`
       );
     }
   }
 
-  console.log(`📊 Generated ${overlayStates.size} unique overlay states`);
+  logger.log(`📊 Generated ${overlayStates.size} unique overlay states`);
 
   // Map each frame to its appropriate overlay state
   let currentTransitionIndex = 0;
@@ -152,18 +209,42 @@ async function generateOverlayFrames(
     }
 
     const currentTimeMs = (frameIndex / exportSettings.fps) * 1000;
-    const visibleOverlays = overlays.filter(
-      (overlay) =>
-        overlay.visible &&
-        currentTimeMs >= overlay.startTime &&
-        currentTimeMs <= overlay.endTime
-    );
+    const visibleOverlays = [];
+
+    if (textOverlays) {
+      visibleOverlays.push(
+        ...textOverlays.filter(
+          (overlay) =>
+            overlay.visible &&
+            currentTimeMs >= overlay.startTime &&
+            currentTimeMs <= overlay.endTime
+        )
+      );
+    }
+
+    if (imageOverlays) {
+      visibleOverlays.push(
+        ...imageOverlays.filter(
+          (overlay) =>
+            overlay.visible &&
+            currentTimeMs >= overlay.startTime &&
+            currentTimeMs <= overlay.endTime
+        )
+      );
+    }
 
     const stateKey = visibleOverlays
-      .map((o) => `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`)
+      .map((o) => {
+        if ("text" in o) {
+          return `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+        } else if ("file" in o) {
+          return `${o.file.name}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+        }
+        return "unknown";
+      })
       .join("|");
 
-    const frameBuffer = overlayStates.get(stateKey) || overlayStates.get("");
+    const frameBuffer = overlayStates.get(stateKey);
 
     if (frameBuffer) {
       frames.push(frameBuffer);
@@ -171,11 +252,11 @@ async function generateOverlayFrames(
 
     // Log progress every 60 frames
     if (frameIndex % 60 === 0) {
-      console.log(`📸 Processed frame ${frameIndex}/${totalFrames}`);
+      logger.log(`📸 Processed frame ${frameIndex}/${totalFrames}`);
     }
   }
 
-  console.log("✅ Overlay frames generated with state-based optimization", {
+  logger.log("✅ Overlay frames generated", {
     totalFrames,
     uniqueStates: overlayStates.size,
     optimizationRatio: `${(
@@ -198,22 +279,20 @@ function calculateScaleFactor(
   let scaleFactor: number;
 
   if (Math.abs(videoAspectRatio - displayAspectRatio) < 0.1) {
-    console.log("📏 Aspect ratios are similar. Scaling based on total area.");
+    logger.log("📏 Aspect ratios are similar. Scaling based on total area.");
     // Similar aspect ratios - scale based on area
     const videoArea = videoDimensions.width * videoDimensions.height;
     const displayArea = clientDisplaySize.width * clientDisplaySize.height;
     scaleFactor = Math.sqrt(videoArea / displayArea);
   } else {
-    console.log(
-      "⚠️ Aspect ratios differ. Scaling based on limiting dimension."
-    );
+    logger.log("⚠️ Aspect ratios differ. Scaling based on limiting dimension.");
     // Different aspect ratios - scale based on the limiting dimension
     const widthScale = videoDimensions.width / clientDisplaySize.width;
     const heightScale = videoDimensions.height / clientDisplaySize.height;
     scaleFactor = Math.max(widthScale, heightScale);
   }
 
-  console.log("✅ Scale factor within bounds:", scaleFactor);
+  logger.log("✅ Scale factor within bounds:", scaleFactor);
   return scaleFactor;
 }
 
@@ -226,13 +305,13 @@ function renderTextOverlay(
   targetResolution?: { width: number; height: number }
 ): void {
   if (!overlay.visible) {
-    console.log("⛔ Overlay not visible, skipping render.");
+    logger.log("⛔ Overlay not visible, skipping render.");
     return;
   }
 
   const renderDimensions = targetResolution || videoDimensions;
   const { width: renderWidth, height: renderHeight } = renderDimensions;
-  console.log(`📐 Video dimensions: ${renderWidth} x ${renderHeight}`);
+  logger.log(`📐 Video dimensions: ${renderWidth} x ${renderHeight}`);
 
   // CSS padding from DraggableTextOverlay: "8px 12px" = top/bottom: 8px, left/right: 12px
   const basePaddingX = 8;
@@ -251,7 +330,7 @@ function renderTextOverlay(
   ctx.fillStyle = overlay.color;
   ctx.globalAlpha = overlay.opacity;
 
-  console.log(`🔤 Using font: ${ctx.font}`);
+  logger.log(`🔤 Using font: ${ctx.font}`);
 
   const scaledLetterSpacing = Math.round(
     (parseInt(overlay.letterSpacing) || 0) * scaleFactor
@@ -296,7 +375,7 @@ function renderTextOverlay(
     Math.min(renderHeight - divHeight, idealDivY)
   );
 
-  console.log("📦 Div positioning", {
+  logger.log("📦 Div positioning", {
     idealPosition: { x: idealDivX, y: idealDivY },
     clampedPosition: { x: clampedDivX, y: clampedDivY },
     divSize: { width: divWidth, height: divHeight },
@@ -307,7 +386,7 @@ function renderTextOverlay(
   // Draw background if specified
   if (overlay.backgroundColor && overlay.backgroundColor !== "transparent") {
     ctx.fillStyle = overlay.backgroundColor;
-    console.log(
+    logger.log(
       `🧱 Rendering background at (${clampedDivX}, ${clampedDivY}) with size ${divWidth} x ${divHeight}`
     );
     ctx.fillRect(clampedDivX, clampedDivY, divWidth, divHeight);
@@ -335,7 +414,7 @@ function renderTextOverlay(
   // Set text alignment for ctx.fillText
   ctx.textAlign = overlay.alignment;
 
-  console.log("🧭 Text positioning", {
+  logger.log("🧭 Text positioning", {
     alignment: overlay.alignment,
     contentAreaX,
     textX,
@@ -347,7 +426,7 @@ function renderTextOverlay(
     const textY = contentAreaY + scaledFontSize + lineIndex * scaledLineHeight;
 
     if (scaledLetterSpacing > 0) {
-      console.log(`🖋️ Rendering with letter spacing at line ${lineIndex + 1}`);
+      logger.log(`🖋️ Rendering with letter spacing at line ${lineIndex + 1}`);
       renderTextWithSpacing(
         ctx,
         line,
@@ -358,7 +437,7 @@ function renderTextOverlay(
         actualContentWidth
       );
     } else {
-      console.log(`🖋️ Rendering line ${lineIndex + 1} using fillText`);
+      logger.log(`🖋️ Rendering line ${lineIndex + 1} using fillText`);
       ctx.fillText(line, textX, textY, actualContentWidth);
     }
 
@@ -375,7 +454,7 @@ function renderTextOverlay(
         underlineX = textX - actualLineWidth;
       }
 
-      console.log(
+      logger.log(
         `🧵 Drawing underline from (${underlineX}, ${underlineY}) to (${
           underlineX + actualLineWidth
         }, ${underlineY})`
@@ -391,7 +470,83 @@ function renderTextOverlay(
   });
 
   ctx.globalAlpha = 1.0;
-  console.log("✅ Text overlay rendering completed.\n");
+  logger.log("✅ Text overlay rendering completed.\n");
+}
+
+function renderImageOverlay(
+  canvas: OffscreenCanvas,
+  ctx: OffscreenCanvasRenderingContext2D,
+  overlay: ImageOverlay,
+  videoDimensions: { width: number; height: number },
+  scaleFactor: number = 1.0,
+  targetResolution?: { width: number; height: number }
+): void {
+  if (!overlay.visible) {
+    logger.log("⛔ Overlay not visible, skipping render.");
+    return;
+  }
+
+  const renderDimensions = targetResolution || videoDimensions;
+  const { width: renderWidth, height: renderHeight } = renderDimensions;
+  logger.log(`📐 Video dimensions: ${renderWidth} x ${renderHeight}`);
+
+  const scaledWidth = overlay.width * scaleFactor;
+  const scaledHeight = overlay.height * scaleFactor;
+
+  const idealDivX = overlay.x * renderWidth;
+  const idealDivY = overlay.y * renderHeight;
+
+  const clampedDivX = Math.max(
+    0,
+    Math.min(renderWidth - scaledWidth, idealDivX)
+  );
+  const clampedDivY = Math.max(
+    0,
+    Math.min(renderHeight - scaledHeight, idealDivY)
+  );
+
+  logger.log("📦 Image positioning", {
+    idealPosition: { x: idealDivX, y: idealDivY },
+    clampedPosition: { x: clampedDivX, y: clampedDivY },
+    imageSize: { width: scaledWidth, height: scaledHeight },
+  });
+
+  const blobUrl = URL.createObjectURL(overlay.file);
+  const image = new Image();
+
+  image.onload = () => {
+    ctx.save();
+    ctx.globalAlpha = overlay.opacity;
+    ctx.translate(
+      clampedDivX + scaledWidth / 2,
+      clampedDivY + scaledHeight / 2
+    );
+    ctx.rotate((overlay.rotation * Math.PI) / 180);
+    ctx.scale(overlay.scale, overlay.scale);
+
+    ctx.drawImage(
+      image,
+      -scaledWidth / 2,
+      -scaledHeight / 2,
+      scaledWidth,
+      scaledHeight
+    );
+
+    ctx.restore();
+
+    logger.log(
+      `🖼️ Rendered image overlay from ${overlay.file.name} at (${clampedDivX}, ${clampedDivY})`
+    );
+
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  image.onerror = (e) => {
+    logger.error(`❌ Failed to load image ${overlay.file.name}:`, e);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  image.src = blobUrl;
 }
 
 function wrapText(

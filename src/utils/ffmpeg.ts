@@ -1,14 +1,14 @@
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { FFmpeg, FileData } from "@ffmpeg/ffmpeg";
+import { toBlobURL } from "@ffmpeg/util";
 import {
   ClipOptions,
   ClipExportData,
   TextOverlay,
+  ImageOverlay,
   ExportClip,
-  ClipResponse,
+  CropMode,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
-import logger from "./logger";
 
 let ffmpeg: FFmpeg | null = null;
 
@@ -27,7 +27,18 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
   return ffmpeg;
 };
 
-export async function processClipWithFFmpeg(
+function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
+  if (typeof fileData === "string") {
+    return new TextEncoder().encode(fileData);
+  }
+  // Create a new ArrayBuffer and copy the data to avoid SharedArrayBuffer
+  const arrayBuffer = new ArrayBuffer(fileData.byteLength);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  uint8Array.set(new Uint8Array(fileData));
+  return uint8Array;
+}
+
+export async function processClip(
   clipData: ArrayBuffer,
   options: ClipOptions = {}
 ): Promise<Blob> {
@@ -55,7 +66,8 @@ export async function processClipWithFFmpeg(
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
 
-  return new Blob([outputData], { type: "video/webm" });
+  const uint8Array = convertFileDataToUint8Array(outputData);
+  return new Blob([uint8Array], { type: "video/webm" });
 }
 
 export async function processClipForExport(
@@ -101,7 +113,32 @@ export async function processClipForExport(
   }
 
   if (data.textOverlays && data.textOverlays.length > 0) {
-    const overlayFrames = await generateOverlayFrames(data.textOverlays, data);
+    const overlayFrames = await generateOverlayFrames(
+      data.textOverlays,
+      data.imageOverlays || [],
+      data
+    );
+    const overlayDir = "overlay_frames";
+
+    for (let i = 0; i < overlayFrames.length; i++) {
+      ffmpeg.writeFile(
+        `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
+        overlayFrames[i]
+      );
+    }
+
+    args.push("-i", `${overlayDir}/overlay_%04d.png`);
+    args.push(
+      "-filter_complex",
+      `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
+    );
+  } else if (data.imageOverlays && data.imageOverlays.length > 0) {
+    // If only image overlays (no text), generate them using the same function
+    const overlayFrames = await generateOverlayFrames(
+      [],
+      data.imageOverlays,
+      data
+    );
     const overlayDir = "overlay_frames";
 
     for (let i = 0; i < overlayFrames.length; i++) {
@@ -123,13 +160,15 @@ export async function processClipForExport(
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
 
-  return new Blob([outputData], {
+  const uint8Array = convertFileDataToUint8Array(outputData);
+  return new Blob([uint8Array], {
     type: `video/${data.exportSettings.format}`,
   });
 }
 
 async function generateOverlayFrames(
-  overlays: TextOverlay[],
+  textOverlays: TextOverlay[],
+  imageOverlays: ImageOverlay[],
   data: ClipExportData
 ): Promise<Uint8Array[]> {
   const worker = new Worker(
@@ -147,7 +186,8 @@ async function generateOverlayFrames(
 
     worker.postMessage({
       type: "generate",
-      overlays,
+      textOverlays,
+      imageOverlays,
       data,
     });
   });
@@ -156,7 +196,7 @@ async function generateOverlayFrames(
 function getAspectRatioFilter(
   width: number,
   height: number,
-  cropMode: string
+  cropMode: CropMode
 ): string {
   const ratio = width / height;
 
@@ -190,50 +230,4 @@ function getBitrate(settings: ClipExportData["exportSettings"]): number {
   } else {
     return fpsBitrates?.standard || 8000;
   }
-}
-
-export async function remuxClip(
-  chunks: Blob[],
-  startMs: number,
-  endMs: number
-): Promise<Blob> {
-  if (typeof window === "undefined") {
-    throw new Error("remuxClip can only be called on the client side");
-  }
-
-  const ffmpeg = await initFFmpeg();
-
-  logger.log("🧩 remuxClip: startMs =", startMs, "endMs =", endMs);
-
-  const inputBlob = new Blob(chunks, { type: "video/webm" });
-  const inputFileName = "input.webm";
-  const outputFileName = "output.webm";
-
-  ffmpeg.writeFile(inputFileName, await fetchFile(inputBlob));
-
-  const startSec = (startMs / 1000).toFixed(3);
-  const durationSec = ((endMs - startMs) / 1000).toFixed(3);
-
-  logger.log(
-    `🔧 remuxClip: ffmpeg.exec with -ss ${startSec}, -t ${durationSec}`
-  );
-
-  await ffmpeg.exec([
-    "-i",
-    inputFileName,
-    "-ss",
-    startSec,
-    "-t",
-    durationSec,
-    "-c",
-    "copy",
-    outputFileName,
-  ]);
-
-  logger.log("✅ remuxClip: ffmpeg.exec completed");
-
-  const outputData = await ffmpeg.readFile(outputFileName);
-  logger.log("📦 remuxClip: outputData length =", outputData.length);
-
-  return new Blob([outputData], { type: "video/webm" });
 }

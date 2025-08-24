@@ -3,24 +3,34 @@ import ClipGrid from "@/components/clip-grid";
 import { listClips } from "@/services/aws-service";
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
+import logger from "@/utils/logger";
 
 function HomePageSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-9 w-48" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3  gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50"
-          >
-            <Skeleton className="aspect-video w-full" />
-            <div className="p-4 space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
+          <div key={i} className="p-4 bg-surface-secondary rounded-lg">
+            <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
+              <div className="aspect-video bg-gray-800 relative overflow-hidden">
+                <Skeleton className="w-full h-full" />
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="flex space-x-2">
+                    <Skeleton className="h-8 w-8 rounded" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4">
+              <Skeleton className="h-6 w-3/4 mb-2" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
             </div>
           </div>
         ))}
@@ -30,19 +40,12 @@ function HomePageSkeleton() {
 }
 
 async function ClipGridWrapper() {
-  let clips: Array<{
-    id: string;
-    name: string;
-    url: string;
-    createdAt: string;
-    duration: number;
-    streamerName: string;
-  }> = [];
+  let clips: Awaited<ReturnType<typeof listClips>> = [];
 
   try {
     clips = await listClips();
   } catch (error) {
-    console.error("Failed to load clips:", error);
+    logger.error("Failed to load clips:", error);
   }
 
   return <ClipGrid initialClips={clips} />;
@@ -51,15 +54,15 @@ async function ClipGridWrapper() {
 export default function Home() {
   return (
     <div className="min-h-screen bg-surface-primary">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
             <Image
-              src="/logo/zinc_norms.png"
+              src="/logo/zinc_norms_white.webp"
               alt="Zinc"
               width={128}
               height={128}
-              className="h-32 w-32 text-white"
+              className="h-24 w-24 text-white"
               priority
             />
           </div>

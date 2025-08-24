@@ -7,9 +7,6 @@ interface DraggableTextOverlayProps {
   onMouseDown: (e: React.MouseEvent) => void;
 }
 
-/**
- * Draggable overlay element rendered on top of a canvas or video.
- */
 export const DraggableTextOverlay = ({
   overlay,
   isSelected,

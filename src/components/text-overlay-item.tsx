@@ -131,7 +131,7 @@ const TextOverlayItem = ({
               <Select
                 value={String(overlay.fontSize)}
                 onValueChange={(value) => {
-                  // updateTextOverlay(overlay.id, { fontSize: parseInt(value) })
+                  updateTextOverlay(overlay.id, { fontSize: parseInt(value) });
                 }}
               >
                 <SelectTrigger className="w-full px-2 py-1 h-auto text-xs">

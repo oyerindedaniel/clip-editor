@@ -22,6 +22,7 @@ import { EXPORT_BITRATE_MAP } from "@/constants/app";
 interface ExportNamingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  streamerName: string;
   onExport: (
     outputName: string,
     exportSettings: Pick<
@@ -135,6 +136,7 @@ const resolutionOptions: {
 export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   isOpen,
   onOpenChange,
+  streamerName,
   onExport,
 }) => {
   const streamerNameRef = useRef<HTMLInputElement>(null);
@@ -171,8 +173,8 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
         if (timeRef.current) timeRef.current.value = time;
         if (clipTitleRef.current) clipTitleRef.current.value = "MyClip";
 
-        const name = "dan";
-        streamerNameRef.current.value = name || "UnknownStreamer";
+        if (streamerNameRef.current)
+          streamerNameRef.current.value = streamerName || "UnknownStreamer";
 
         setPreset("fast");
         setCrf(23);
@@ -185,12 +187,17 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
     }
 
     return () => {
-      if (dateRef.current) dateRef.current.value = "";
-      if (timeRef.current) timeRef.current.value = "";
-      if (clipTitleRef.current) clipTitleRef.current.value = "";
-      if (streamerNameRef.current) streamerNameRef.current.value = "";
+      const dateRefValue = dateRef.current;
+      const timeRefValue = timeRef.current;
+      const clipTitleRefValue = clipTitleRef.current;
+      const streamerNameRefValue = streamerNameRef.current;
+
+      if (dateRefValue) dateRefValue.value = "";
+      if (timeRefValue) timeRefValue.value = "";
+      if (clipTitleRefValue) clipTitleRefValue.value = "";
+      if (streamerNameRefValue) streamerNameRefValue.value = "";
     };
-  }, [isOpen]);
+  }, [isOpen, streamerName, getRecommendedBitrate]);
 
   const handleExportClick = () => {
     const streamerName = streamerNameRef.current?.value || "UnknownStreamer";

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import Image from "next/image";
 import {
   Download,
   Settings,
@@ -14,21 +15,24 @@ import {
   Crosshair,
 } from "lucide-react";
 import {
-  ClipData,
   AudioTrack,
   ExportSettings,
   CropMode,
   ClipExportData,
   ClipMetadata,
   ExportClip,
+  S3ClipData,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
-import { processClipWithFFmpeg, processClipForExport } from "@/utils/ffmpeg";
+import { processClip, processClipForExport } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
-import { useTextOverlays } from "@/hooks/use-text-overlays";
+import { useOverlays } from "@/hooks/use-overlays";
 import { DraggableTextOverlay } from "./draggable-text-overlay";
+import { DraggableImageOverlay } from "./draggable-image-overlay";
 import TextOverlayItem from "./text-overlay-item";
+import ImageOverlayItem from "./image-overlay-item";
+import { FileUpload } from "./ui/file-upload";
 import * as MediaPlayer from "@/components/ui/media-player";
 import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
@@ -40,19 +44,19 @@ import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "@/components/export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import { EditPageSkeleton } from "@/components/edit-skeleton";
 
 interface ClipEditorProps {
-  clipData: ClipData;
+  clipData: S3ClipData;
 }
 
-type ClipToolType = "clips" | "text" | "audio";
+type ClipToolType = "clips" | "text" | "image" | "audio";
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<ClipToolType>("clips");
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
   const {
@@ -77,17 +81,28 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const {
     textOverlays,
+    imageOverlays,
     selectedOverlay,
     addTextOverlay,
+    addImageOverlay,
     updateTextOverlay,
+    updateImageOverlay,
     deleteTextOverlay,
+    deleteImageOverlay,
     getAllVisibleOverlays,
     containerRef,
     startDrag,
-  } = useTextOverlays(videoRef);
+    startResize,
+  } = useOverlays(videoRef);
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
+
+  const [isLoadingBuffer, setIsLoadingBuffer] = useState(false);
+  const [clipBuffer, setClipBuffer] = useState<ArrayBuffer | null>(null);
+  const currentVideoUrl = useRef<string | null>(null);
+
+  const clipBufferRef = useLatestValue(clipBuffer);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -119,23 +134,20 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       : "transparent";
     trace.style.pointerEvents = "none";
     trace.style.zIndex = "15";
-  }, []);
+  }, [showTraceRef]);
 
   const loadClipVideo = useCallback(async (): Promise<string | null> => {
     const video = videoRef.current;
-    if (typeof window === "undefined" || !video) return null;
+    const clipBuffer = clipBufferRef.current;
+    if (typeof window === "undefined" || !video || !clipBuffer) return null;
 
     logger.log("Loading clip video from buffer:", {
       clipId: clipData.metadata.clipId,
-      hasBuffer: !!clipData.buffer,
+      hasBuffer: !!clipBuffer,
     });
 
     try {
-      if (!clipData.buffer) {
-        throw new Error("No clip buffer available");
-      }
-
-      const processedBlob = await processClipWithFFmpeg(clipData.buffer, {
+      const processedBlob = await processClip(clipBuffer, {
         convertAspectRatio: selectedConvertAspectRatio.current,
         cropMode: selectedCropMode.current,
       });
@@ -147,7 +159,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         return objectUrl;
       } else {
         logger.error("Failed to get valid clip blob:", { processedBlob });
-        toast.error("Failed to load clip: No valid clip data found");
+        toast.error("No valid clip data found");
         return null;
       }
     } catch (err) {
@@ -156,7 +168,96 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       toast.error(`Failed to load clip: ${errorMsg}`);
       return null;
     }
-  }, [clipData.metadata.clipId, clipData.buffer]);
+  }, [clipData.metadata.clipId]);
+
+  const initializeVideo = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !clipBuffer) return null;
+
+    let objectUrl: string | null = null;
+
+    try {
+      if (
+        selectedConvertAspectRatio.current === DEFAULT_ASPECT_RATIO &&
+        selectedCropMode.current === DEFAULT_CROP_MODE
+      ) {
+        const blob = new Blob([clipBuffer], { type: "video/mp4" });
+        objectUrl = URL.createObjectURL(blob);
+        video.src = objectUrl;
+        logger.log(
+          "Loaded video directly from buffer with default settings:",
+          objectUrl
+        );
+      } else {
+        objectUrl = await loadClipVideo();
+      }
+      return objectUrl;
+    } catch (error) {
+      logger.error("Error initializing video:", error);
+      return null;
+    }
+  }, [clipBuffer, loadClipVideo]);
+
+  useEffect(() => {
+    let abortController: AbortController | undefined;
+
+    const convertUrlToBuffer = async () => {
+      if (!clipData.url) return;
+
+      setIsLoadingBuffer(true);
+      abortController = new AbortController();
+
+      try {
+        logger.log("Converting URL to buffer:", {
+          clipId: clipData.metadata.clipId,
+          url: clipData.url,
+        });
+
+        const response = await fetch(clipData.url, {
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch clip: ${response.statusText}`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        setClipBuffer(buffer);
+
+        logger.log("Successfully converted URL to buffer:", {
+          clipId: clipData.metadata.clipId,
+          bufferSize: buffer.byteLength,
+        });
+
+        const videoUrl = await initializeVideo();
+        currentVideoUrl.current = videoUrl;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          logger.log("Buffer conversion aborted");
+          return;
+        }
+
+        const errorMsg = normalizeError(err).message;
+        logger.error("Error converting URL to buffer:", err);
+        toast.error(`Failed to load clip: ${errorMsg}`);
+      } finally {
+        setIsLoadingBuffer(false);
+      }
+    };
+
+    convertUrlToBuffer();
+
+    return () => {
+      if (abortController) {
+        abortController.abort();
+      }
+
+      if (currentVideoUrl.current) {
+        URL.revokeObjectURL(currentVideoUrl.current);
+        currentVideoUrl.current = null;
+      }
+    };
+  }, [clipData.url, clipData.metadata.clipId, initializeVideo]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -202,46 +303,17 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       toast.error("Error loading video clip");
     };
 
-    let currentObjectUrl: string | null = null;
-
-    (async () => {
-      if (
-        selectedConvertAspectRatio.current === DEFAULT_ASPECT_RATIO &&
-        selectedCropMode.current === DEFAULT_CROP_MODE &&
-        clipData.buffer
-      ) {
-        const video = videoRef.current;
-        if (video) {
-          const blob = new Blob([clipData.buffer], { type: "video/mp4" });
-          const objectUrl = URL.createObjectURL(blob);
-          video.src = objectUrl;
-          currentObjectUrl = objectUrl;
-          logger.log(
-            "Loaded video directly from buffer with default settings:",
-            objectUrl
-          );
-        }
-      } else {
-        currentObjectUrl = await loadClipVideo();
-      }
-    })();
-
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("error", handleError);
     window.addEventListener("resize", adjustOverlayBounds);
 
     return () => {
-      logger.log("Cleaning up effect");
-
+      logger.log("Cleaning up video event listeners");
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("error", handleError);
       window.removeEventListener("resize", adjustOverlayBounds);
-
-      if (currentObjectUrl) {
-        URL.revokeObjectURL(currentObjectUrl);
-      }
     };
-  }, [clipData.metadata.clipId, loadClipVideo, adjustOverlayBounds]);
+  }, [adjustOverlayBounds]);
 
   const formatTime = (milliseconds: number) => {
     const seconds = Math.floor(milliseconds / 1000);
@@ -280,6 +352,18 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setAudioTracks([...audioTracks, newTrack]);
   };
 
+  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    addImageOverlay(file, 0, duration);
+  };
+
   const updateAudioTrack = (id: string, updates: Partial<AudioTrack>) => {
     setAudioTracks(
       audioTracks.map((track) =>
@@ -315,16 +399,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     const video = videoRef.current;
 
-    if (!video || !clipMetaDataRef.current) return;
+    if (!video || !clipMetaDataRef.current || !clipBuffer) return;
 
     setIsExporting(true);
 
     const promise = new Promise<string>(async (resolve, reject) => {
       try {
-        const response = await fetch(video.src);
-        const blob = await response.blob();
-        const arrayBuffer = await blob.arrayBuffer();
-
         const { width: clientWidth, height: clientHeight } =
           getVideoBoundingBox(video);
         const clientDisplaySize = { width: clientWidth, height: clientHeight };
@@ -343,6 +423,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           endTime: trimRef.current.end || duration,
           outputName,
           textOverlays: textOverlays.filter((overlay) => overlay.visible),
+          imageOverlays: imageOverlays.filter((overlay) => overlay.visible),
           audioTracks: audioTracks.filter((track) => track.visible),
           exportSettings: {
             preset,
@@ -360,7 +441,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         };
 
         const exportClip: ExportClip = {
-          blob: arrayBuffer,
+          blob: clipBuffer,
           metadata: clipMetaDataRef.current,
         };
 
@@ -413,11 +494,23 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed video from:", startTime, "to:", endTime);
   };
 
+  if (isLoadingBuffer) {
+    return <EditPageSkeleton />;
+  }
+
   return (
     <div className="flex flex-col h-screen bg-surface-primary text-foreground-default text-sm">
       <div className="max-w-screen-xl mx-auto w-full">
-        <div className="flex items-center justify-between p-4 bg-surface-secondary border-b border-gray-700/50">
-          <h1 className="text-lg font-bold">Clip Editor</h1>
+        <div className="flex items-center relative justify-between p-4 bg-surface-secondary border-b border-gray-700/50">
+          <Image
+            src="/logo/zinc_norms_white.webp"
+            alt="Zinc"
+            width={128}
+            height={128}
+            className="h-20 w-20 absolute top-2/4 -translate-y-2/4 text-white"
+            priority
+          />
+          <div />
           <div className="flex items-center space-x-2">
             <Button
               className="flex items-center space-x-2 px-3 py-1.5 text-xs"
@@ -457,7 +550,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 ref={videoRef}
                 playsInline
                 className="w-full aspect-video"
-                poster={"/thumbnails/video-thumb.png"}
+                poster={"/thumbnails/video-thumb-2.webp"}
               />
               <MediaPlayer.Loading />
               <MediaPlayer.Error />
@@ -482,7 +575,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             <div ref={traceRef} className="absolute" />
 
             {getAllVisibleOverlays()
-              .filter(
+              .textOverlays.filter(
                 (overlay) =>
                   overlay.startTime === 0 && overlay.endTime >= duration
               )
@@ -495,6 +588,29 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     e.preventDefault();
                     e.stopPropagation();
                     startDrag(overlay.id, e);
+                  }}
+                />
+              ))}
+
+            {getAllVisibleOverlays()
+              .imageOverlays.filter(
+                (overlay) =>
+                  overlay.startTime === 0 && overlay.endTime >= duration
+              )
+              .map((overlay) => (
+                <DraggableImageOverlay
+                  key={`persistent-${overlay.id}`}
+                  overlay={overlay}
+                  isSelected={selectedOverlay === overlay.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startDrag(overlay.id, e);
+                  }}
+                  onResizeStart={(handle, e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startResize(overlay.id, handle, e);
                   }}
                 />
               ))}
@@ -511,6 +627,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               {[
                 { id: "clips", label: "Clips", icon: Scissors },
                 { id: "text", label: "Text", icon: Type },
+                { id: "image", label: "Image", icon: Eye },
                 { id: "audio", label: "Audio", icon: Music },
               ].map(({ id, label, icon: Icon }) => (
                 <Button
@@ -579,6 +696,38 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       duration={duration}
                       updateTextOverlay={updateTextOverlay}
                       deleteTextOverlay={deleteTextOverlay}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {activeTab === "image" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-foreground-default">
+                      Image Overlays
+                    </h3>
+                  </div>
+
+                  <FileUpload
+                    accept="image/*"
+                    hint="Select an image to add as overlay"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleImageFileSelect(e);
+                      }
+                    }}
+                    name="image-overlay"
+                  />
+
+                  {imageOverlays.map((imageOverlay) => (
+                    <ImageOverlayItem
+                      key={imageOverlay.id}
+                      overlay={imageOverlay}
+                      selectedOverlay={selectedOverlay}
+                      duration={duration}
+                      updateImageOverlay={updateImageOverlay}
+                      deleteImageOverlay={deleteImageOverlay}
                     />
                   ))}
                 </div>
@@ -723,6 +872,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         <ExportNamingDialog
           isOpen={isExportNamingModalOpen}
           onOpenChange={closeExportNamingModal}
+          streamerName={clipData.metadata.streamerName || ""}
           onExport={handleExport}
         />
       </div>
