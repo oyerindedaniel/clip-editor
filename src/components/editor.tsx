@@ -205,7 +205,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     let currentObjectUrl: string | null = null;
 
     (async () => {
-      // If using default settings, load directly from buffer without processing
       if (
         selectedConvertAspectRatio.current === DEFAULT_ASPECT_RATIO &&
         selectedCropMode.current === DEFAULT_CROP_MODE &&
@@ -223,7 +222,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           );
         }
       } else {
-        // Process the clip if custom settings are applied
         currentObjectUrl = await loadClipVideo();
       }
     })();
