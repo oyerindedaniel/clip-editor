@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Trash2, RotateCw, Maximize2 } from "lucide-react";
 import { ImageOverlay } from "@/types/app";
 import { cn } from "@/lib/utils";
+import { useImageOverlays } from "@/contexts/overlays-context";
 
 interface ImageOverlayItemProps {
   overlay: ImageOverlay;
@@ -24,14 +25,11 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const objectUrl = useMemo(
-    () => URL.createObjectURL(overlay.file),
-    [overlay.file]
-  );
+  const objectUrl = useRef(URL.createObjectURL(overlay.file));
 
   useEffect(() => {
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      URL.revokeObjectURL(objectUrl.current);
     };
   }, [objectUrl]);
 
@@ -76,7 +74,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
           <img
-            src={objectUrl}
+            src={objectUrl.current}
             alt={overlay.file.name}
             className="w-8 h-8 object-cover rounded"
           />
@@ -188,7 +186,6 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
                   className="px-2 py-1 text-xs"
                   onClick={(e) => e.stopPropagation()}
                 />
-                <RotateCw size={14} className="text-foreground-subtle" />
               </div>
             </div>
             <div>
@@ -213,4 +210,28 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
   );
 };
 
-export default ImageOverlayItem;
+interface ImageOverlayItemContainerProps {
+  selectedOverlay: string | null;
+  duration: number;
+}
+
+const ImageOverlayItemContainer = ({
+  selectedOverlay,
+  duration,
+}: ImageOverlayItemContainerProps) => {
+  const { imageOverlays, updateImageOverlay, deleteImageOverlay } =
+    useImageOverlays();
+
+  return imageOverlays.map((imageOverlay) => (
+    <ImageOverlayItem
+      key={imageOverlay.id}
+      overlay={imageOverlay}
+      selectedOverlay={selectedOverlay}
+      duration={duration}
+      updateImageOverlay={updateImageOverlay}
+      deleteImageOverlay={deleteImageOverlay}
+    />
+  ));
+};
+
+export default memo(ImageOverlayItemContainer);

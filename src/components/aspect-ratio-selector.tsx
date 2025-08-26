@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
 import { CropMode } from "@/types/app";
+import { cn } from "@/lib/utils";
 
 interface AspectRatioSelectorProps {
   isOpen: boolean;
@@ -114,11 +115,12 @@ const AspectRatioSelector = ({
                   <Button
                     key={mode.value}
                     onClick={() => setCropMode(mode.value)}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-colors space-y-1 ${
+                    className={cn(
+                      "flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-colors space-y-1 border",
                       cropMode === mode.value
-                        ? "bg-primary/20 text-primary border border-primary"
-                        : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border border-gray-700/50"
-                    }`}
+                        ? "bg-primary/20 text-primary border-primary"
+                        : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
+                    )}
                     variant="ghost"
                     size="sm"
                   >

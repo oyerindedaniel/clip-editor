@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import {
   Eye,
   EyeOff,
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { useTextOverlays } from "@/contexts/overlays-context";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -271,4 +272,28 @@ const TextOverlayItem = ({
   );
 };
 
-export default TextOverlayItem;
+interface TextOverlayItemContainerProps {
+  selectedOverlay: string | null;
+  duration: number;
+}
+
+const TextOverlayItemContainer = ({
+  selectedOverlay,
+  duration,
+}: TextOverlayItemContainerProps) => {
+  const { textOverlays, updateTextOverlay, deleteTextOverlay } =
+    useTextOverlays();
+
+  return textOverlays.map((textOverlay) => (
+    <TextOverlayItem
+      key={textOverlay.id}
+      overlay={textOverlay}
+      selectedOverlay={selectedOverlay}
+      duration={duration}
+      updateTextOverlay={updateTextOverlay}
+      deleteTextOverlay={deleteTextOverlay}
+    />
+  ));
+};
+
+export default memo(TextOverlayItemContainer);

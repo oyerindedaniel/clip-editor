@@ -16,3 +16,8 @@ export const getAWSConfig = () => {
     folder: process.env.AWS_FOLDER || awsConfig.folder,
   };
 };
+
+export const PRESIGNED_URL_EXPIRES = parseInt(
+  process.env.S3_PRESIGNED_URL_EXPIRES || "3600",
+  10
+);

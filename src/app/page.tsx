@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import ClipGrid from "@/components/clip-grid";
 import { listClips } from "@/services/aws-service";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +47,13 @@ async function ClipGridWrapper() {
     clips = await listClips();
   } catch (error) {
     logger.error("Failed to load clips:", error);
+    <div className="min-h-dvh bg-surface-primary flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-3xl text-foreground-subtle font-sans tracking-wide">
+          Failed to load video clips.
+        </p>
+      </div>
+    </div>;
   }
 
   return <ClipGrid initialClips={clips} />;
@@ -57,14 +65,16 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
-            <Image
-              src="/logo/zinc_norms_white.webp"
-              alt="Zinc"
-              width={128}
-              height={128}
-              className="h-24 w-24 text-white"
-              priority
-            />
+            <Link href="/">
+              <Image
+                src="/logo/zinc_norms_white.webp"
+                alt="Zinc"
+                width={128}
+                height={128}
+                className="h-24 w-24 text-white"
+                priority
+              />
+            </Link>
           </div>
         </div>
 

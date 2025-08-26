@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useMemo } from "react";
 import { ImageOverlay } from "@/types/app";
 import { ResizeHandle } from "./resize-handle";
+import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";
 
 interface DraggableImageOverlayProps {
@@ -19,40 +20,13 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
 }) => {
   const elementRef = useRef<HTMLDivElement>(null);
 
-  const rafId = useRef<number | null>(null);
-
-  const objectUrl = useMemo(
-    () => URL.createObjectURL(overlay.file),
-    [overlay.file]
-  );
+  const objectUrl = useRef(URL.createObjectURL(overlay.file));
 
   useEffect(() => {
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      URL.revokeObjectURL(objectUrl.current);
     };
   }, [objectUrl]);
-
-  useEffect(() => {
-    if (elementRef.current) {
-      elementRef.current.style.transform = `translate3d(${overlay.x * 100}%, ${
-        overlay.y * 100
-      }%, 0)`;
-      elementRef.current.style.width = `${overlay.width}px`;
-      elementRef.current.style.height = `${overlay.height}px`;
-
-      rafId.current = requestAnimationFrame(() => {
-        elementRef.current!.style.transform = `translate3d(${
-          overlay.x * 100
-        }%, ${overlay.y * 100}%, 0)`;
-      });
-    }
-
-    return () => {
-      if (rafId.current) {
-        cancelAnimationFrame(rafId.current);
-      }
-    };
-  }, [overlay.x, overlay.y, overlay.width, overlay.height]);
 
   const resizeHandles = [
     { position: "nw", cursor: "nw-resize" },
@@ -63,21 +37,19 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
     { position: "s", cursor: "s-resize" },
     { position: "sw", cursor: "sw-resize" },
     { position: "w", cursor: "w-resize" },
-  ];
+  ] as const;
 
   return (
     <div
       ref={elementRef}
       className={cn(
         "absolute top-0 left-0 cursor-move select-none",
-        "[transform:translate3d(var(--x),var(--y),0)]",
+        "[transform:translate3d(0,0,0)]",
         "w-[var(--width)] h-[var(--height)]",
         isSelected && "ring-2 ring-primary ring-opacity-50"
       )}
       style={
         {
-          "--x": `${overlay.x * 100}%`,
-          "--y": `${overlay.y * 100}%`,
           "--width": `${overlay.width}px`,
           "--height": `${overlay.height}px`,
         } as React.CSSProperties
@@ -85,7 +57,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
       onMouseDown={onMouseDown}
     >
       <img
-        src={objectUrl}
+        src={objectUrl.current}
         alt={overlay.file.name}
         className={cn(
           "w-full h-full object-cover pointer-events-none",

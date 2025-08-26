@@ -7,8 +7,8 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getAWSConfig } from "../config/aws-config";
-import logger from "../utils/logger";
+import { getAWSConfig, PRESIGNED_URL_EXPIRES } from "@/config/aws-config";
+import logger from "@/utils/logger";
 import {
   S3ClipMetadata as ClipMetadata,
   S3ClipData as ClipData,
@@ -41,18 +41,25 @@ export async function getClip(referenceId: string): Promise<ClipData> {
   logger.log(`🔍 Generating pre-signed URL for key: ${s3Key}`);
 
   try {
-    const command = new GetObjectCommand({
+    const headCommand = new HeadObjectCommand({
       Bucket: config.bucket,
       Key: s3Key,
     });
 
-    const [signedUrl, s3Response] = await Promise.all([
-      getSignedUrl(s3Client, command, { expiresIn: 3600 }),
-      s3Client.send(command),
+    const [signedUrl, headResponse] = await Promise.all([
+      getSignedUrl(
+        s3Client,
+        new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: s3Key,
+        }),
+        { expiresIn: PRESIGNED_URL_EXPIRES }
+      ),
+      s3Client.send(headCommand),
     ]);
 
     const clipMetadata = parseClipMetadata(
-      s3Response.Metadata || {},
+      headResponse.Metadata || {},
       referenceId,
       s3Key
     );
@@ -110,7 +117,7 @@ export async function listClips(): Promise<ClipData[]> {
               Bucket: config.bucket,
               Key: object.Key!,
             }),
-            { expiresIn: 3600 }
+            { expiresIn: PRESIGNED_URL_EXPIRES }
           );
 
           return { url: signedUrl, metadata: clipMetadata } as ClipData;

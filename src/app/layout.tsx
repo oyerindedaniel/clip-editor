@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { OverlaysProvider } from "@/contexts/overlays-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,7 +39,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <OverlaysProvider>{children}</OverlaysProvider>
         <Toaster position="top-right" richColors closeButton />
       </body>
     </html>

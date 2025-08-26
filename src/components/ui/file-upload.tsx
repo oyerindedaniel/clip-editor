@@ -60,7 +60,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         <span>Choose file</span>
       </Button>
 
-      <span className="ml-3 text-sm text-foreground-subtle truncate max-w-[200px]">
+      <span className="ml-3 text-sm text-foreground-subtle truncate">
         {isFile ? value[0]?.name : hint}
       </span>
     </div>

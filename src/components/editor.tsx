@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+  useCallback,
+  startTransition,
+} from "react";
 import Image from "next/image";
 import {
   Download,
@@ -21,17 +28,14 @@ import {
   ClipExportData,
   ClipMetadata,
   ExportClip,
-  S3ClipData,
+  S3ClipData as ClipData,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
 import { processClip, processClipForExport } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
-import { useOverlays } from "@/hooks/use-overlays";
 import { DraggableTextOverlay } from "./draggable-text-overlay";
 import { DraggableImageOverlay } from "./draggable-image-overlay";
-import TextOverlayItem from "./text-overlay-item";
-import ImageOverlayItem from "./image-overlay-item";
 import { FileUpload } from "./ui/file-upload";
 import * as MediaPlayer from "@/components/ui/media-player";
 import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
@@ -45,9 +49,14 @@ import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "@/components/export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { EditPageSkeleton } from "@/components/edit-skeleton";
+import TextOverlayItemContainer from "./text-overlay-item";
+import { useOverlayControls } from "@/contexts/overlays-context";
+import ImageOverlayItemContainer from "./image-overlay-item";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface ClipEditorProps {
-  clipData: S3ClipData;
+  clipData: ClipData;
 }
 
 type ClipToolType = "clips" | "text" | "image" | "audio";
@@ -73,41 +82,40 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const selectedConvertAspectRatio = useRef<string>(DEFAULT_ASPECT_RATIO);
   const selectedCropMode = useRef<CropMode>(DEFAULT_CROP_MODE);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioFileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioFileRef = useRef<HTMLInputElement | null>(null);
   const trimRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const clipMetaDataRef = useRef<ClipMetadata | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
 
   const {
-    textOverlays,
-    imageOverlays,
     selectedOverlay,
     addTextOverlay,
     addImageOverlay,
-    updateTextOverlay,
-    updateImageOverlay,
-    deleteTextOverlay,
-    deleteImageOverlay,
     getAllVisibleOverlays,
     containerRef,
     startDrag,
     startResize,
-  } = useOverlays(videoRef);
+    setVideoRef,
+    textOverlaysRef,
+    imageOverlaysRef,
+  } = useOverlayControls();
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
 
-  const [isLoadingBuffer, setIsLoadingBuffer] = useState(false);
-  const [clipBuffer, setClipBuffer] = useState<ArrayBuffer | null>(null);
+  const clipBufferRef = useRef<ArrayBuffer | null>(null);
   const currentVideoUrl = useRef<string | null>(null);
-
-  const clipBufferRef = useLatestValue(clipBuffer);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
-      if (v && traceRef.current) {
-        traceRef.current.style.backgroundColor = "transparent";
+      console.log("trace", { v });
+      if (traceRef.current) {
+        if (v) {
+          traceRef.current.style.backgroundColor = "transparent";
+        } else {
+          traceRef.current.style.backgroundColor = "rgba(255, 0, 0, 0.15)";
+        }
       }
       return !v;
     });
@@ -139,7 +147,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const loadClipVideo = useCallback(async (): Promise<string | null> => {
     const video = videoRef.current;
     const clipBuffer = clipBufferRef.current;
-    if (typeof window === "undefined" || !video || !clipBuffer) return null;
+    if (!video || !clipBuffer) return null;
 
     logger.log("Loading clip video from buffer:", {
       clipId: clipData.metadata.clipId,
@@ -171,9 +179,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, [clipData.metadata.clipId]);
 
   const initializeVideo = useCallback(async () => {
+    console.log("here now", videoRef.current);
     const video = videoRef.current;
+    const clipBuffer = clipBufferRef.current;
     if (!video || !clipBuffer) return null;
 
+    console.log("us noe");
+
+    setVideoRef(videoRef);
     let objectUrl: string | null = null;
 
     try {
@@ -196,7 +209,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       logger.error("Error initializing video:", error);
       return null;
     }
-  }, [clipBuffer, loadClipVideo]);
+  }, [loadClipVideo]);
 
   useEffect(() => {
     let abortController: AbortController | undefined;
@@ -204,7 +217,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     const convertUrlToBuffer = async () => {
       if (!clipData.url) return;
 
-      setIsLoadingBuffer(true);
       abortController = new AbortController();
 
       try {
@@ -217,12 +229,15 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           signal: abortController.signal,
         });
 
+        console.log({ response });
+
         if (!response.ok) {
+          console.log("here....", response);
           throw new Error(`Failed to fetch clip: ${response.statusText}`);
         }
 
         const buffer = await response.arrayBuffer();
-        setClipBuffer(buffer);
+        clipBufferRef.current = buffer;
 
         logger.log("Successfully converted URL to buffer:", {
           clipId: clipData.metadata.clipId,
@@ -241,7 +256,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         logger.error("Error converting URL to buffer:", err);
         toast.error(`Failed to load clip: ${errorMsg}`);
       } finally {
-        setIsLoadingBuffer(false);
       }
     };
 
@@ -261,6 +275,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   useEffect(() => {
     const video = videoRef.current;
+    console.log("mearnt to sync write", video);
     if (!video) return;
 
     const handleLoadedMetadata = () => {
@@ -399,7 +414,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     const video = videoRef.current;
 
-    if (!video || !clipMetaDataRef.current || !clipBuffer) return;
+    if (!video || !clipMetaDataRef.current || !clipBufferRef.current) return;
 
     setIsExporting(true);
 
@@ -422,8 +437,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           startTime: trimRef.current.start || 0,
           endTime: trimRef.current.end || duration,
           outputName,
-          textOverlays: textOverlays.filter((overlay) => overlay.visible),
-          imageOverlays: imageOverlays.filter((overlay) => overlay.visible),
+          textOverlays: textOverlaysRef.current.filter(
+            (overlay) => overlay.visible
+          ),
+          imageOverlays: imageOverlaysRef.current.filter(
+            (overlay) => overlay.visible
+          ),
           audioTracks: audioTracks.filter((track) => track.visible),
           exportSettings: {
             preset,
@@ -441,7 +460,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         };
 
         const exportClip: ExportClip = {
-          blob: clipBuffer,
+          blob: clipBufferRef.current!,
           metadata: clipMetaDataRef.current,
         };
 
@@ -494,22 +513,20 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed video from:", startTime, "to:", endTime);
   };
 
-  if (isLoadingBuffer) {
-    return <EditPageSkeleton />;
-  }
-
   return (
     <div className="flex flex-col h-screen bg-surface-primary text-foreground-default text-sm">
       <div className="max-w-screen-xl mx-auto w-full">
         <div className="flex items-center relative justify-between p-4 bg-surface-secondary border-b border-gray-700/50">
-          <Image
-            src="/logo/zinc_norms_white.webp"
-            alt="Zinc"
-            width={128}
-            height={128}
-            className="h-20 w-20 absolute top-2/4 -translate-y-2/4 text-white"
-            priority
-          />
+          <Link href="/">
+            <Image
+              src="/logo/zinc_norms_white.webp"
+              alt="Zinc"
+              width={128}
+              height={128}
+              className="h-20 w-20 absolute top-2/4 -translate-y-2/4 text-white"
+              priority
+            />
+          </Link>
           <div />
           <div className="flex items-center space-x-2">
             <Button
@@ -572,7 +589,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               </MediaPlayer.Controls>
             </MediaPlayer.Root>
 
-            <div ref={traceRef} className="absolute" />
+            <div ref={traceRef} />
 
             {getAllVisibleOverlays()
               .textOverlays.filter(
@@ -632,15 +649,15 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               ].map(({ id, label, icon: Icon }) => (
                 <Button
                   key={id}
-                  onClick={() => setActiveTab(id as ClipToolType)}
-                  className={`flex-1 py-2 px-1 flex items-center justify-center space-x-1.5 rounded-none text-xs
-                    ${
-                      activeTab === id
-                        ? "bg-primary text-foreground-on-accent border-b-2 border-primary"
-                        : "text-foreground-subtle hover:text-foreground-default hover:bg-surface-hover"
-                    }
-                    transition-colors
-                  `}
+                  onClick={() =>
+                    startTransition(() => setActiveTab(id as ClipToolType))
+                  }
+                  className={cn(
+                    "flex-1 py-2 px-1 flex items-center justify-center space-x-1.5 rounded-none text-xs transition-colors",
+                    activeTab === id
+                      ? "bg-primary text-foreground-on-accent border-b-2 border-primary"
+                      : "text-foreground-subtle hover:text-foreground-default hover:bg-surface-hover"
+                  )}
                   variant="ghost"
                   disabled={!isVideoLoaded}
                 >
@@ -688,16 +705,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       <Plus size={16} />
                     </Button>
                   </div>
-                  {textOverlays.map((textOverlay) => (
-                    <TextOverlayItem
-                      key={textOverlay.id}
-                      overlay={textOverlay}
-                      selectedOverlay={selectedOverlay}
-                      duration={duration}
-                      updateTextOverlay={updateTextOverlay}
-                      deleteTextOverlay={deleteTextOverlay}
-                    />
-                  ))}
+                  <TextOverlayItemContainer
+                    selectedOverlay={selectedOverlay}
+                    duration={duration}
+                  />
                 </div>
               )}
 
@@ -720,16 +731,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     name="image-overlay"
                   />
 
-                  {imageOverlays.map((imageOverlay) => (
-                    <ImageOverlayItem
-                      key={imageOverlay.id}
-                      overlay={imageOverlay}
-                      selectedOverlay={selectedOverlay}
-                      duration={duration}
-                      updateImageOverlay={updateImageOverlay}
-                      deleteImageOverlay={deleteImageOverlay}
-                    />
-                  ))}
+                  <ImageOverlayItemContainer
+                    selectedOverlay={selectedOverlay}
+                    duration={duration}
+                  />
                 </div>
               )}
 
@@ -773,11 +778,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                 visible: !track.visible,
                               })
                             }
-                            className={`p-1 rounded ${
+                            className={cn(
+                              "p-1 rounded",
                               track.visible
                                 ? "text-accent-primary"
                                 : "text-foreground-muted"
-                            }`}
+                            )}
                             variant="ghost"
                             size="icon"
                           >

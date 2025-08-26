@@ -2,8 +2,10 @@
 
 import React from "react";
 
+export type Position = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
 interface ResizeHandleProps {
-  position: string;
+  position: Position;
   cursor: string;
   onMouseDown: (e: React.MouseEvent) => void;
 }
