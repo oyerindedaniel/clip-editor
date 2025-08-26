@@ -9,7 +9,7 @@ interface DraggableImageOverlayProps {
   overlay: ImageOverlay;
   isSelected: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
-  onResizeStart: (handle: string, e: React.MouseEvent) => void;
+  onResizeStart: (handle: Position, e: React.MouseEvent) => void;
 }
 
 const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({

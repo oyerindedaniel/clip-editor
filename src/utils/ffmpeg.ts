@@ -31,8 +31,8 @@ function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
   if (typeof fileData === "string") {
     return new TextEncoder().encode(fileData);
   }
-  // Create a new ArrayBuffer and copy the data to avoid SharedArrayBuffer
-  const arrayBuffer = new ArrayBuffer(fileData.byteLength);
+
+  const arrayBuffer: ArrayBuffer = new ArrayBuffer(fileData.byteLength);
   const uint8Array = new Uint8Array(arrayBuffer);
   uint8Array.set(new Uint8Array(fileData));
   return uint8Array;
@@ -66,7 +66,9 @@ export async function processClip(
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
 
-  const uint8Array = convertFileDataToUint8Array(outputData);
+  const uint8Array = convertFileDataToUint8Array(
+    outputData
+  ) as Uint8Array<ArrayBuffer>;
   return new Blob([uint8Array], { type: "video/webm" });
 }
 
@@ -160,7 +162,9 @@ export async function processClipForExport(
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
 
-  const uint8Array = convertFileDataToUint8Array(outputData);
+  const uint8Array = convertFileDataToUint8Array(
+    outputData
+  ) as Uint8Array<ArrayBuffer>;
   return new Blob([uint8Array], {
     type: `video/${data.exportSettings.format}`,
   });
