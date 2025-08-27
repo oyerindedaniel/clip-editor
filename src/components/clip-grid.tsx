@@ -4,7 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
-import { S3ClipData as ClipData } from "@/types/app";
+import type { S3ClipData as ClipData } from "@/types/app";
 import Link from "next/link";
 
 interface ClipGridProps {

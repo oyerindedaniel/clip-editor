@@ -1,5 +1,5 @@
 import React from "react";
-import { TextOverlay } from "@/types/app";
+import type { TextOverlay } from "@/types/app";
 
 interface DraggableTextOverlayProps {
   overlay: TextOverlay;

@@ -21,7 +21,7 @@ import {
   Trash2,
   Crosshair,
 } from "lucide-react";
-import {
+import type {
   AudioTrack,
   ExportSettings,
   CropMode,
@@ -48,7 +48,6 @@ import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "@/components/export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
-import { EditPageSkeleton } from "@/components/edit-skeleton";
 import TextOverlayItemContainer from "./text-overlay-item";
 import { useOverlayControls } from "@/contexts/overlays-context";
 import ImageOverlayItemContainer from "./image-overlay-item";
@@ -109,7 +108,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
-      console.log("trace", { v });
       if (traceRef.current) {
         if (v) {
           traceRef.current.style.backgroundColor = "transparent";
@@ -179,12 +177,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, [clipData.metadata.clipId]);
 
   const initializeVideo = useCallback(async () => {
-    console.log("here now", videoRef.current);
     const video = videoRef.current;
     const clipBuffer = clipBufferRef.current;
     if (!video || !clipBuffer) return null;
-
-    console.log("us noe");
 
     setVideoRef(videoRef);
     let objectUrl: string | null = null;
@@ -229,10 +224,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           signal: abortController.signal,
         });
 
-        console.log({ response });
-
         if (!response.ok) {
-          console.log("here....", response);
           throw new Error(`Failed to fetch clip: ${response.statusText}`);
         }
 
@@ -275,7 +267,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   useEffect(() => {
     const video = videoRef.current;
-    console.log("mearnt to sync write", video);
     if (!video) return;
 
     const handleLoadedMetadata = () => {
@@ -432,6 +423,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           videoAspectRatio
         );
 
+        console.log("export ----------------");
+
         const exportData: ClipExportData = {
           id: clipData.metadata.clipId,
           startTime: trimRef.current.start || 0,
@@ -452,7 +445,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             resolution,
             bitrate,
             customBitrateKbps,
-            convertAspectRatio: selectedConvertAspectRatio.current || undefined,
+            convertAspectRatio: selectedConvertAspectRatio.current,
             cropMode: selectedCropMode.current,
           },
           clientDisplaySize,
@@ -464,10 +457,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           metadata: clipMetaDataRef.current,
         };
 
+        console.log({ exportClip, exportData });
+
         const processedBlob = await processClipForExport(
           exportClip,
           exportData
         );
+
+        console.log("export", processedBlob);
 
         const downloadUrl = URL.createObjectURL(processedBlob);
         const a = document.createElement("a");

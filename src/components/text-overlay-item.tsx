@@ -10,7 +10,7 @@ import {
   AlignCenter,
   AlignRight,
 } from "lucide-react";
-import { TextOverlay } from "@/types/app";
+import type { TextOverlay } from "@/types/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

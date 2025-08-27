@@ -1,6 +1,6 @@
 import { FFmpeg, FileData } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
-import {
+import type {
   ClipOptions,
   ClipExportData,
   TextOverlay,
@@ -9,15 +9,29 @@ import {
   CropMode,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
+import { WorkerType } from "@/types/app";
+import logger from "./logger";
 
 let ffmpeg: FFmpeg | null = null;
 
 export const initFFmpeg = async (): Promise<FFmpeg> => {
-  if (ffmpeg) return ffmpeg;
+  if (ffmpeg && ffmpeg.loaded) return ffmpeg;
 
   ffmpeg = new FFmpeg();
 
-  const baseURL = "/ffmpeg";
+  ffmpeg.on("log", ({ type, message }) => {
+    logger.log(`[FFmpeg ${type}] ${message}`);
+  });
+
+  ffmpeg.on("progress", ({ progress, time }) => {
+    logger.log(
+      `FFmpeg progress: ${(progress * 100).toFixed(2)}% (time: ${time}s)`
+    );
+  });
+
+  // const baseURL = "/ffmpeg";
+
+  const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 
   await ffmpeg.load({
     coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
@@ -47,7 +61,7 @@ export async function processClip(
   const inputFileName = "input.webm";
   const outputFileName = "output.webm";
 
-  ffmpeg.writeFile(inputFileName, new Uint8Array(clipData));
+  await ffmpeg.writeFile(inputFileName, new Uint8Array(clipData));
 
   const args = ["-i", inputFileName, "-c", "copy"];
 
@@ -76,12 +90,15 @@ export async function processClipForExport(
   clip: ExportClip,
   data: ClipExportData
 ): Promise<Blob> {
+  console.log("fit -----------------------");
   const ffmpeg = await initFFmpeg();
+
+  console.log("fit ----------------------- after");
 
   const inputFileName = "input.webm";
   const outputFileName = `output.${data.exportSettings.format}`;
 
-  ffmpeg.writeFile(inputFileName, new Uint8Array(clip.blob));
+  await ffmpeg.writeFile(inputFileName, new Uint8Array(clip.blob));
 
   const startSeconds = data.startTime / 1000;
   const duration = (data.endTime - data.startTime) / 1000;
@@ -115,6 +132,7 @@ export async function processClipForExport(
   }
 
   if (data.textOverlays && data.textOverlays.length > 0) {
+    logger.log("Generating text overlay frames...");
     const overlayFrames = await generateOverlayFrames(
       data.textOverlays,
       data.imageOverlays || [],
@@ -123,7 +141,7 @@ export async function processClipForExport(
     const overlayDir = "overlay_frames";
 
     for (let i = 0; i < overlayFrames.length; i++) {
-      ffmpeg.writeFile(
+      await ffmpeg.writeFile(
         `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
         overlayFrames[i]
       );
@@ -135,7 +153,8 @@ export async function processClipForExport(
       `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
     );
   } else if (data.imageOverlays && data.imageOverlays.length > 0) {
-    // If only image overlays (no text), generate them using the same function
+    logger.log("Generating image overlay frames...");
+
     const overlayFrames = await generateOverlayFrames(
       [],
       data.imageOverlays,
@@ -144,7 +163,7 @@ export async function processClipForExport(
     const overlayDir = "overlay_frames";
 
     for (let i = 0; i < overlayFrames.length; i++) {
-      ffmpeg.writeFile(
+      await ffmpeg.writeFile(
         `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
         overlayFrames[i]
       );
@@ -155,12 +174,18 @@ export async function processClipForExport(
       "-filter_complex",
       `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
     );
+  } else {
+    logger.log(
+      "No text or image overlays provided, skipping overlay generation."
+    );
   }
 
   args.push("-y", outputFileName);
 
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
+
+  console.log("outputdata----------", outputData);
 
   const uint8Array = convertFileDataToUint8Array(
     outputData
@@ -181,7 +206,7 @@ async function generateOverlayFrames(
 
   return new Promise((resolve, reject) => {
     worker.onmessage = (e) => {
-      if (e.data.type === "frames") {
+      if (e.data.type === WorkerType.FRAMES) {
         resolve(e.data.frames);
       }
     };
@@ -189,7 +214,7 @@ async function generateOverlayFrames(
     worker.onerror = reject;
 
     worker.postMessage({
-      type: "generate",
+      type: WorkerType.GENERATE,
       textOverlays,
       imageOverlays,
       data,

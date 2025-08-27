@@ -1,4 +1,4 @@
-import { ExportSettings } from "@/types/app";
+import type { ExportSettings } from "@/types/app";
 
 export const DEFAULT_ASPECT_RATIO = "original";
 export const DEFAULT_CROP_MODE = "letterbox";

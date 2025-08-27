@@ -213,3 +213,20 @@ export type Failure<E> = {
   status: "error";
   error: E;
 };
+
+export enum WorkerType {
+  GENERATE = "generate",
+  FRAMES = "frames",
+}
+
+export interface WorkerMessage {
+  type: WorkerType.GENERATE;
+  textOverlays?: TextOverlay[];
+  imageOverlays?: ImageOverlay[];
+  data: ClipExportData;
+}
+
+export interface WorkerResponse {
+  type: WorkerType.FRAMES;
+  frames: Uint8Array[];
+}

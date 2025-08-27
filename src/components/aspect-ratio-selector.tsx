@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
-import { CropMode } from "@/types/app";
+import type { CropMode } from "@/types/app";
 import { cn } from "@/lib/utils";
 
 interface AspectRatioSelectorProps {

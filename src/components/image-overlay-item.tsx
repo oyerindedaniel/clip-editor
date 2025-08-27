@@ -89,7 +89,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
               updateImageOverlay(overlay.id, { visible: !overlay.visible });
             }}
             className={cn(
-              "p-1 rounded",
+              "p-1",
               overlay.visible ? "text-accent-primary" : "text-foreground-muted"
             )}
             variant="ghost"

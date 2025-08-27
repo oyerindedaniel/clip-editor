@@ -1,20 +1,15 @@
-import { TextOverlay, ImageOverlay, ClipExportData } from "@/types/app";
+import type {
+  TextOverlay,
+  ImageOverlay,
+  ClipExportData,
+  WorkerMessage,
+  WorkerResponse,
+} from "@/types/app";
 import logger from "@/utils/logger";
-
-interface WorkerMessage {
-  type: "generate";
-  textOverlays?: TextOverlay[];
-  imageOverlays?: ImageOverlay[];
-  data: ClipExportData;
-}
-
-interface WorkerResponse {
-  type: "frames";
-  frames: Uint8Array[];
-}
+import { WorkerType } from "@/types/app";
 
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  if (e.data.type === "generate") {
+  if (e.data.type === WorkerType.GENERATE) {
     try {
       const frames = await generateOverlayFrames(
         e.data.textOverlays,
@@ -22,7 +17,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         e.data.data
       );
       const response: WorkerResponse = {
-        type: "frames",
+        type: WorkerType.FRAMES,
         frames,
       };
       self.postMessage(response);

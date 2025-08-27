@@ -9,7 +9,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getAWSConfig, PRESIGNED_URL_EXPIRES } from "@/config/aws-config";
 import logger from "@/utils/logger";
-import {
+import type {
   S3ClipMetadata as ClipMetadata,
   S3ClipData as ClipData,
 } from "@/types/app";

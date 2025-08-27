@@ -1,6 +1,6 @@
 "use client";
 import React, { useRef, useEffect, useMemo } from "react";
-import { ImageOverlay } from "@/types/app";
+import type { ImageOverlay } from "@/types/app";
 import { ResizeHandle } from "./resize-handle";
 import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";

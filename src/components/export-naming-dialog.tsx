@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ExportSettings } from "@/types/app";
+import type { ExportSettings } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 
 interface ExportNamingDialogProps {
@@ -178,9 +178,9 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
         setPreset("fast");
         setCrf(23);
-        setFps(60);
+        setFps(30);
         setFormat("mp4");
-        setResolution("1080p");
+        setResolution("720p");
         setBitrate("recommended");
         setCustomBitrateKbps(getRecommendedBitrate());
       }, 0);
@@ -197,7 +197,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
       if (clipTitleRefValue) clipTitleRefValue.value = "";
       if (streamerNameRefValue) streamerNameRefValue.value = "";
     };
-  }, [isOpen, streamerName, getRecommendedBitrate]);
+  }, [isOpen]);
 
   const handleExportClick = () => {
     const streamerName = streamerNameRef.current?.value || "UnknownStreamer";
