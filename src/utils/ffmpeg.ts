@@ -111,7 +111,11 @@ export async function processClip(
     await ffmpeg.exec(args);
 
     const data = await ffmpeg.readFile(outputFileName);
-    const blob = new Blob([data], { type: "video/webm" });
+
+    const uint8Array = convertFileDataToUint8Array(
+      data
+    ) as Uint8Array<ArrayBuffer>;
+    const blob = new Blob([uint8Array], { type: "video/webm" });
 
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile(outputFileName);
@@ -294,8 +298,8 @@ function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
   return uint8Array;
 }
 
-async function getVideoDimensions(ffmpeg: FFmpeg, fileName: string) {
-  let dimensions = { width: 0, height: 0 };
+export async function getVideoDimensions(ffmpeg: FFmpeg, fileName: string) {
+  const dimensions = { width: 0, height: 0 };
 
   const logHandler = ({ message }: { message: string }) => {
     const match = message.match(/Video:.*?(\d+)x(\d+)/);
