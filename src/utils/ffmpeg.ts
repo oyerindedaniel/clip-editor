@@ -6,7 +6,6 @@ import type {
   TextOverlay,
   ImageOverlay,
   ExportClip,
-  CropMode,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 import { WorkerType } from "@/types/app";
@@ -41,40 +40,6 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
   return ffmpeg;
 };
 
-function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
-  if (typeof fileData === "string") {
-    return new TextEncoder().encode(fileData);
-  }
-
-  const arrayBuffer: ArrayBuffer = new ArrayBuffer(fileData.byteLength);
-  const uint8Array = new Uint8Array(arrayBuffer);
-  uint8Array.set(new Uint8Array(fileData));
-  return uint8Array;
-}
-
-async function getVideoDimensions(ffmpeg: FFmpeg, fileName: string) {
-  let dimensions = { width: 0, height: 0 };
-
-  const logHandler = ({ message }: { message: string }) => {
-    const match = message.match(/Video:.*?(\d+)x(\d+)/);
-    if (match) {
-      dimensions.width = parseInt(match[1]);
-      dimensions.height = parseInt(match[2]);
-    }
-  };
-
-  ffmpeg.on("log", logHandler);
-
-  try {
-    await ffmpeg.exec(["-i", fileName, "-t", "0.001", "-f", "null", "-"]);
-  } catch {
-  } finally {
-    ffmpeg.off("log", logHandler);
-  }
-
-  return dimensions;
-}
-
 export async function processClip(
   clipData: ArrayBuffer,
   options: ClipOptions = {},
@@ -89,13 +54,8 @@ export async function processClip(
 
   let args: string[] = [];
 
-  console.log({ options, videoDimensions });
-
   if (options.convertAspectRatio && options.convertAspectRatio !== "original") {
-    const { width: _, height: inputH } = { width: 1920, height: 1080 };
-    const dimensions = await getVideoDimensions(ffmpeg, inputFileName);
-
-    console.log({ dimensions, videoDimensions });
+    const { width: _, height: inputH } = videoDimensions;
 
     const [targetW, targetH] = options.convertAspectRatio
       .split(":")
@@ -173,10 +133,10 @@ export async function processClipForExport(
   clip: ExportClip,
   data: ClipExportData
 ): Promise<Blob> {
-  console.log("fit -----------------------");
+  // console.log("fit -----------------------");
   const ffmpeg = await initFFmpeg();
 
-  console.log("fit ----------------------- after");
+  // console.log("fit ----------------------- after");
 
   const inputFileName = "input.webm";
   const outputFileName = `output.${data.exportSettings.format}`;
@@ -268,8 +228,6 @@ export async function processClipForExport(
   await ffmpeg.exec(args);
   const outputData = await ffmpeg.readFile(outputFileName);
 
-  console.log("outputdata----------", outputData);
-
   const uint8Array = convertFileDataToUint8Array(
     outputData
   ) as Uint8Array<ArrayBuffer>;
@@ -323,4 +281,38 @@ function getBitrate(settings: ClipExportData["exportSettings"]): number {
   } else {
     return fpsBitrates?.standard || 8000;
   }
+}
+
+function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
+  if (typeof fileData === "string") {
+    return new TextEncoder().encode(fileData);
+  }
+
+  const arrayBuffer: ArrayBuffer = new ArrayBuffer(fileData.byteLength);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  uint8Array.set(new Uint8Array(fileData));
+  return uint8Array;
+}
+
+async function getVideoDimensions(ffmpeg: FFmpeg, fileName: string) {
+  let dimensions = { width: 0, height: 0 };
+
+  const logHandler = ({ message }: { message: string }) => {
+    const match = message.match(/Video:.*?(\d+)x(\d+)/);
+    if (match) {
+      dimensions.width = parseInt(match[1]);
+      dimensions.height = parseInt(match[2]);
+    }
+  };
+
+  ffmpeg.on("log", logHandler);
+
+  try {
+    await ffmpeg.exec(["-i", fileName, "-t", "0.001", "-f", "null", "-"]);
+  } catch {
+  } finally {
+    ffmpeg.off("log", logHandler);
+  }
+
+  return dimensions;
 }
