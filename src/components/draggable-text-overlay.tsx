@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { TextOverlay } from "@/types/app";
+import { useOverlayControls } from "@/contexts/overlays-context";
 
 interface DraggableTextOverlayProps {
   overlay: TextOverlay;
@@ -12,8 +13,17 @@ export const DraggableTextOverlay = ({
   isSelected,
   onMouseDown,
 }: DraggableTextOverlayProps) => {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const { registerTextOverlayRef } = useOverlayControls();
+
+  useEffect(() => {
+    registerTextOverlayRef(overlay.id, elementRef.current);
+    return () => registerTextOverlayRef(overlay.id, null);
+  }, []);
+
   return (
     <div
+      ref={elementRef}
       className={`absolute select-none cursor-move ${
         isSelected ? "ring-2 ring-primary" : ""
       }`}

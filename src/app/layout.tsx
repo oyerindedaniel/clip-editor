@@ -52,7 +52,7 @@ export default function RootLayout({
         )}
       >
         <OverlaysProvider>{children}</OverlaysProvider>
-        <Toaster position="top-right" richColors closeButton />
+        <Toaster position="bottom-right" richColors closeButton />
       </body>
     </html>
   );

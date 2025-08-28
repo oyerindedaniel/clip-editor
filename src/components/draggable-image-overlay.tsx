@@ -4,6 +4,7 @@ import type { ImageOverlay } from "@/types/app";
 import { ResizeHandle } from "./resize-handle";
 import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";
+import { useOverlayControls } from "@/contexts/overlays-context";
 
 interface DraggableImageOverlayProps {
   overlay: ImageOverlay;
@@ -18,7 +19,8 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
   onMouseDown,
   onResizeStart,
 }) => {
-  const elementRef = useRef<HTMLDivElement>(null);
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const { registerImageOverlayRef } = useOverlayControls();
 
   const objectUrl = useRef(URL.createObjectURL(overlay.file));
 
@@ -27,6 +29,11 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
       URL.revokeObjectURL(objectUrl.current);
     };
   }, [objectUrl]);
+
+  useEffect(() => {
+    registerImageOverlayRef(overlay.id, elementRef.current);
+    return () => registerImageOverlayRef(overlay.id, null);
+  }, []);
 
   const resizeHandles = [
     { position: "nw", cursor: "nw-resize" },

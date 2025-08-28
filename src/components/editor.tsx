@@ -153,10 +153,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     });
 
     try {
-      const processedBlob = await processClip(clipBuffer, {
-        convertAspectRatio: selectedConvertAspectRatio.current,
-        cropMode: selectedCropMode.current,
-      });
+      const processedBlob = await processClip(
+        clipBuffer,
+        {
+          convertAspectRatio: selectedConvertAspectRatio.current,
+          cropMode: selectedCropMode.current,
+        },
+        clipMetaDataRef.current!.dimensions
+      );
 
       if (processedBlob && processedBlob.size > 0) {
         const objectUrl = URL.createObjectURL(processedBlob);
@@ -529,6 +533,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             <Button
               className="flex items-center space-x-2 px-3 py-1.5 text-xs"
               variant="outline"
+              disabled={!isVideoLoaded}
               onClick={() => openAspectRatioModal()}
             >
               <Settings size={16} />
@@ -537,7 +542,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
             <Button
               onClick={() => openExportNamingModal()}
-              disabled={isExporting}
+              disabled={isExporting || !isVideoLoaded}
               className="flex items-center space-x-2 px-3 py-1.5 text-xs"
             >
               <Download size={16} />
@@ -546,6 +551,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             <Button
               className="flex items-center space-x-2 px-3 py-1.5 text-xs"
               variant="outline"
+              disabled={!isVideoLoaded}
               onClick={toggleTrace}
             >
               <Crosshair size={16} />

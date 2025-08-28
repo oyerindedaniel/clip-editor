@@ -52,9 +52,33 @@ function convertFileDataToUint8Array(fileData: FileData): Uint8Array {
   return uint8Array;
 }
 
+async function getVideoDimensions(ffmpeg: FFmpeg, fileName: string) {
+  let dimensions = { width: 0, height: 0 };
+
+  const logHandler = ({ message }: { message: string }) => {
+    const match = message.match(/Video:.*?(\d+)x(\d+)/);
+    if (match) {
+      dimensions.width = parseInt(match[1]);
+      dimensions.height = parseInt(match[2]);
+    }
+  };
+
+  ffmpeg.on("log", logHandler);
+
+  try {
+    await ffmpeg.exec(["-i", fileName, "-t", "0.001", "-f", "null", "-"]);
+  } catch {
+  } finally {
+    ffmpeg.off("log", logHandler);
+  }
+
+  return dimensions;
+}
+
 export async function processClip(
   clipData: ArrayBuffer,
-  options: ClipOptions = {}
+  options: ClipOptions = {},
+  videoDimensions: { width: number; height: number }
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
@@ -63,27 +87,86 @@ export async function processClip(
 
   await ffmpeg.writeFile(inputFileName, new Uint8Array(clipData));
 
-  const args = ["-i", inputFileName, "-c", "copy"];
+  let args: string[] = [];
+
+  console.log({ options, videoDimensions });
 
   if (options.convertAspectRatio && options.convertAspectRatio !== "original") {
-    const [width, height] = options.convertAspectRatio.split(":").map(Number);
-    const filter = getAspectRatioFilter(
-      width,
-      height,
-      options.cropMode || "letterbox"
-    );
-    args.push("-vf", filter);
+    const { width: _, height: inputH } = { width: 1920, height: 1080 };
+    const dimensions = await getVideoDimensions(ffmpeg, inputFileName);
+
+    console.log({ dimensions, videoDimensions });
+
+    const [targetW, targetH] = options.convertAspectRatio
+      .split(":")
+      .map(Number);
+    const targetRatio = targetW / targetH;
+
+    let filterArgs: string[] = [];
+    switch (options.cropMode) {
+      case "letterbox": {
+        const padW = Math.round(inputH * targetRatio);
+        const padH = inputH;
+        const scaleExpr = `scale='if(gt(a,${targetRatio}),${padW},-1)':'if(gt(a,${targetRatio}),-1,${padH})'`;
+        const padExpr = `pad=${padW}:${padH}:(ow-iw)/2:(oh-ih)/2:color=white`;
+        filterArgs = ["-vf", `${scaleExpr},${padExpr}`];
+
+        logger.log("📐 Letterbox scale and pad expressions:", {
+          scaleExpr,
+          padExpr,
+        });
+
+        break;
+      }
+      case "crop": {
+        const cropW = Math.round(inputH * targetRatio);
+        const cropH = inputH;
+        const scaleExpr = `scale=-1:${cropH}`;
+        const cropExpr = `crop=${cropW}:${cropH}`;
+        filterArgs = ["-vf", `${scaleExpr},${cropExpr}`];
+        break;
+      }
+      case "stretch": {
+        const stretchW = Math.round(inputH * targetRatio);
+        const stretchH = inputH;
+        filterArgs = ["-vf", `scale=${stretchW}:${stretchH}`];
+        break;
+      }
+    }
+
+    args = [
+      "-i",
+      inputFileName,
+      ...filterArgs,
+      "-c:a",
+      "copy",
+      "-y",
+      outputFileName,
+    ];
+  } else {
+    args = ["-i", inputFileName, "-c", "copy", outputFileName];
   }
 
-  args.push(outputFileName);
+  try {
+    await ffmpeg.exec(args);
 
-  await ffmpeg.exec(args);
-  const outputData = await ffmpeg.readFile(outputFileName);
+    const data = await ffmpeg.readFile(outputFileName);
+    const blob = new Blob([data], { type: "video/webm" });
 
-  const uint8Array = convertFileDataToUint8Array(
-    outputData
-  ) as Uint8Array<ArrayBuffer>;
-  return new Blob([uint8Array], { type: "video/webm" });
+    await ffmpeg.deleteFile(inputFileName);
+    await ffmpeg.deleteFile(outputFileName);
+
+    return blob;
+  } catch (error) {
+    logger.error("FFmpeg processing failed:", error);
+
+    try {
+      await ffmpeg.deleteFile(inputFileName);
+      await ffmpeg.deleteFile(outputFileName);
+    } catch (cleanupError) {}
+
+    throw error;
+  }
 }
 
 export async function processClipForExport(
@@ -220,25 +303,6 @@ async function generateOverlayFrames(
       data,
     });
   });
-}
-
-function getAspectRatioFilter(
-  width: number,
-  height: number,
-  cropMode: CropMode
-): string {
-  const ratio = width / height;
-
-  switch (cropMode) {
-    case "letterbox":
-      return `scale='if(gt(a,${ratio}),${width},-1)':'if(gt(a,${ratio}),-1,${height})',pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;
-    case "crop":
-      return `scale=-1:${height},crop=${width}:${height}`;
-    case "stretch":
-      return `scale=${width}:${height}`;
-    default:
-      return `scale=${width}:${height}`;
-  }
 }
 
 function getBitrate(settings: ClipExportData["exportSettings"]): number {

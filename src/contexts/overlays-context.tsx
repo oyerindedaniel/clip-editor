@@ -14,6 +14,7 @@ import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Position } from "@/components/resize-handle";
+import { debounce } from "@/utils/app";
 
 export type OverlayType = "text" | "image";
 
@@ -47,7 +48,7 @@ interface ResizeState {
   overlayId: string | null;
 }
 
-export function calculateMaxWidth(value: number): string {
+export function calculateTextMaxWidth(value: number): string {
   return `${Math.round(value * 0.65)}px`;
 }
 
@@ -62,6 +63,8 @@ type OverlaysContextValue = {
     currentTime?: number,
     duration?: number
   ) => void;
+  registerTextOverlayRef: (id: string, element: HTMLElement | null) => void;
+  registerImageOverlayRef: (id: string, element: HTMLElement | null) => void;
   updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
   updateImageOverlay: (id: string, updates: Partial<ImageOverlay>) => void;
   deleteTextOverlay: (id: string) => void;
@@ -131,6 +134,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
   const textOverlaysRef = useLatestValue(textOverlays);
   const imageOverlaysRef = useLatestValue(imageOverlays);
+
+  const textOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const imageOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const previousVideoDimensions = useRef<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState>({
@@ -241,7 +251,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         underline: false,
         alignment: "left",
         visible: true,
-        maxWidth: calculateMaxWidth(videoWidth),
+        maxWidth: calculateTextMaxWidth(videoWidth),
       };
       setTextOverlays((prev) => [...prev, newOverlay]);
       setSelectedOverlay(newOverlay.id);
@@ -280,6 +290,28 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     [videoRef]
   );
 
+  const registerTextOverlayRef = useCallback(
+    (id: string, element: HTMLElement | null) => {
+      if (element) {
+        textOverlayRefs.current.set(id, element);
+      } else {
+        textOverlayRefs.current.delete(id);
+      }
+    },
+    []
+  );
+
+  const registerImageOverlayRef = useCallback(
+    (id: string, element: HTMLElement | null) => {
+      if (element) {
+        imageOverlayRefs.current.set(id, element);
+      } else {
+        imageOverlayRefs.current.delete(id);
+      }
+    },
+    []
+  );
+
   const updateTextOverlay = useCallback(
     (id: string, updates: Partial<TextOverlay>) => {
       setTextOverlays((prev) =>
@@ -301,6 +333,132 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     },
     []
   );
+
+  const debouncedUpdateNormalizedCoords = useCallback(
+    debounce(() => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      textOverlayRefs.current.forEach((element, id) => {
+        const computedStyle = window.getComputedStyle(element);
+        const transform = computedStyle.transform;
+        if (transform && transform !== "none") {
+          const { x: currentX, y: currentY } = getTransformPosition(element);
+          const { x, y } = getOverlayNormalizedCoords(video, {
+            overlayX: currentX,
+            overlayY: currentY,
+          });
+          updateTextOverlay(id, { x, y });
+        }
+      });
+
+      imageOverlayRefs.current.forEach((element, id) => {
+        const computedStyle = window.getComputedStyle(element);
+        const transform = computedStyle.transform;
+        if (transform && transform !== "none") {
+          const { x: currentX, y: currentY } = getTransformPosition(element);
+          const { x, y } = getOverlayNormalizedCoords(video, {
+            overlayX: currentX,
+            overlayY: currentY,
+          });
+          const width = parseFloat(element.style.width);
+          const height = parseFloat(element.style.height);
+          updateImageOverlay(id, { x, y, width, height });
+        }
+      });
+    }, 300),
+    [updateTextOverlay, updateImageOverlay, videoRef]
+  );
+
+  const handleWindowResize = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const { width: newVideoWidth, height: newVideoHeight } =
+      getVideoBoundingBox(video);
+    const prevDimensions = previousVideoDimensions.current;
+
+    if (!prevDimensions) {
+      previousVideoDimensions.current = {
+        width: newVideoWidth,
+        height: newVideoHeight,
+      };
+      return;
+    }
+
+    const scaleX = newVideoWidth / prevDimensions.width;
+    const scaleY = newVideoHeight / prevDimensions.height;
+
+    textOverlayRefs.current.forEach((element, id) => {
+      const { x: currentX, y: currentY } = getTransformPosition(element);
+
+      const finalLeft = currentX * scaleX;
+      const finalTop = currentY * scaleY;
+
+      const elementRect = element.getBoundingClientRect();
+      const constrainedLeft = Math.max(
+        0,
+        Math.min(newVideoWidth - elementRect.width, finalLeft)
+      );
+      const constrainedTop = Math.max(
+        0,
+        Math.min(newVideoHeight - elementRect.height, finalTop)
+      );
+
+      const drag = dragRef.current;
+      if (!drag.element) return;
+
+      drag.rafId = requestAnimationFrame(() => {
+        if (drag.element) {
+          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
+          element.style.maxWidth = calculateTextMaxWidth(newVideoWidth);
+        }
+      });
+    });
+
+    imageOverlayRefs.current.forEach((element, id) => {
+      const { x: currentX, y: currentY } = getTransformPosition(element);
+      const currentWidth = parseFloat(element.style.width);
+      const currentHeight = parseFloat(element.style.height);
+
+      const finalLeft = currentX * scaleX;
+      const finalTop = currentY * scaleY;
+      const finalWidth = currentWidth * scaleX;
+      const finalHeight = currentHeight * scaleY;
+
+      const maxWidth = newVideoWidth * 0.3;
+      const maxHeight = newVideoHeight * 0.3;
+      const constrainedWidth = Math.min(finalWidth, maxWidth);
+      const constrainedHeight = Math.min(finalHeight, maxHeight);
+
+      const constrainedLeft = Math.max(
+        0,
+        Math.min(newVideoWidth - constrainedWidth, finalLeft)
+      );
+      const constrainedTop = Math.max(
+        0,
+        Math.min(newVideoHeight - constrainedHeight, finalTop)
+      );
+
+      element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
+      element.style.width = `${constrainedWidth}px`;
+      element.style.height = `${constrainedHeight}px`;
+    });
+
+    previousVideoDimensions.current = {
+      width: newVideoWidth,
+      height: newVideoHeight,
+    };
+
+    debouncedUpdateNormalizedCoords();
+  }, [debouncedUpdateNormalizedCoords]);
+
+  useEffect(() => {
+    window.addEventListener("resize", handleWindowResize);
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [handleWindowResize]);
 
   const deleteTextOverlay = useCallback((id: string) => {
     setTextOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
@@ -607,6 +765,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         textOverlays,
         imageOverlays,
         selectedOverlay,
+        registerTextOverlayRef,
+        registerImageOverlayRef,
         setSelectedOverlay,
         addTextOverlay,
         addImageOverlay,
@@ -648,6 +808,8 @@ export const useOverlayControls = () =>
     setSelectedOverlay: state.setSelectedOverlay,
     addTextOverlay: state.addTextOverlay,
     addImageOverlay: state.addImageOverlay,
+    registerTextOverlayRef: state.registerTextOverlayRef,
+    registerImageOverlayRef: state.registerImageOverlayRef,
     getTimeBasedOverlays: state.getTimeBasedOverlays,
     getAllVisibleOverlays: state.getAllVisibleOverlays,
     containerRef: state.containerRef,

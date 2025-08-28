@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
 import logger from "@/utils/logger";
 
+export const dynamic = "force-dynamic";
+
 function HomePageSkeleton() {
   return (
     <div className="space-y-8">

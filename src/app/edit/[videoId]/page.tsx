@@ -18,11 +18,20 @@ export async function generateMetadata({
     const { videoId } = await params;
     const { metadata } = await getClip(videoId);
 
+    const { clipId, streamerName, clipDurationMs } = metadata;
+
+    const totalSec = Math.floor(clipDurationMs / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    const durationStr = `${min}:${sec.toString().padStart(2, "0")}`;
+
+    const title = `${streamerName} - Clip ${clipId} | Zinc`;
+
+    const description = `${streamerName}'s clip (${durationStr})`;
+
     return {
-      title: {
-        absolute: `${metadata.streamerName} - ${metadata.clipId} | Zinc`,
-      },
-      description: metadata.streamerName,
+      title: { absolute: title },
+      description,
     };
   } catch (error) {
     return {
@@ -32,12 +41,7 @@ export async function generateMetadata({
   }
 }
 
-export const dynamicParams = true;
-
-export async function generateStaticParams() {
-  const clips = await listClips();
-  return clips.map((clip) => ({ videoId: clip.metadata.clipId }));
-}
+export const dynamic = "force-dynamic";
 
 async function ClipEditorWrapper({ videoId }: { videoId: string }) {
   try {
