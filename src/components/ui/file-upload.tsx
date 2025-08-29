@@ -27,15 +27,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const inputId = useId();
 
   const handleClick = useCallback(() => {
-    if (inputRef.current) {
-      inputRef.current.click();
-    }
+    inputRef.current?.click();
   }, []);
 
   const isFile = value && value.length > 0;
 
   return (
-    <div className="flex items-center border border-gray-700/50 rounded-lg p-3 bg-surface-secondary">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-surface-secondary px-3 py-2">
       <input
         id={inputId}
         ref={inputRef}
@@ -52,17 +50,17 @@ const FileUpload: React.FC<FileUploadProps> = ({
         type="button"
         variant="outline"
         size="sm"
-        className="flex items-center space-x-2"
+        className="h-7 px-2 text-xs"
         disabled={disabled}
         onClick={handleClick}
       >
-        <Upload size={16} />
-        <span>Choose file</span>
+        <Upload size={12} className="mr-2" />
+        Choose
       </Button>
 
-      <span className="ml-3 text-sm text-foreground-subtle truncate">
-        {isFile ? value[0]?.name : hint}
-      </span>
+      <div className="min-w-0 flex-1 text-xs text-foreground-subtle truncate">
+        {isFile ? value![0]?.name : hint}
+      </div>
     </div>
   );
 };

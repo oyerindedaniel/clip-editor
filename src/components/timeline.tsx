@@ -1,12 +1,12 @@
 import React, {
   useRef,
-  useEffect,
   useCallback,
   useLayoutEffect,
   useState,
   memo,
 } from "react";
 import { GripVertical } from "lucide-react";
+import { useScale } from "@/hooks/app/use-scale";
 
 interface TimelineProps {
   duration: number;
@@ -22,13 +22,18 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
   const leftHandleRef = useRef<HTMLDivElement>(null);
   const rightHandleRef = useRef<HTMLDivElement>(null);
   const filledAreaRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
 
   const leftTooltipContentRef = useRef<HTMLSpanElement>(null);
   const rightTooltipContentRef = useRef<HTMLSpanElement>(null);
 
   const trimValuesRef = useRef({ start: 0, end: duration });
-  const pixelsPerMs = useRef(0);
   const rafIdRef = useRef<number | null>(null);
+
+  const { pxPerMsRef, recalc } = useScale({
+    containerRef: timelineRef,
+    durationMs: duration,
+  });
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
@@ -42,20 +47,46 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
       .padStart(2, "0")}`;
   }
 
-  const calculatePixelsPerMs = useCallback(() => {
-    if (timelineRef.current) {
-      const timelineWidth = timelineRef.current.offsetWidth;
-      pixelsPerMs.current =
-        duration > 0 && timelineWidth > 0 ? timelineWidth / duration : 0;
+  const drawRuler = useCallback(() => {
+    const el = rulerRef.current;
+    const tl = timelineRef.current;
+    if (!el || !tl) return;
+    el.innerHTML = "";
+
+    const ppm = pxPerMsRef.current;
+    if (ppm <= 0) return;
+
+    const totalSeconds = Math.ceil(duration / 1000);
+    for (let s = 0; s <= totalSeconds; s++) {
+      const x = Math.round(s * 1000 * ppm);
+      const tick = document.createElement("div");
+      tick.style.position = "absolute";
+      tick.style.left = `${x}px`;
+      tick.style.top = "0";
+      tick.style.bottom = "0";
+      tick.style.width = "1px";
+      tick.style.background = "var(--color-subtle)";
+
+      const label = document.createElement("div");
+      label.style.position = "absolute";
+      label.style.left = `${x + 2}px`;
+      label.style.top = "0";
+      label.style.fontSize = "10px";
+      label.style.color = "var(--color-foreground-muted)";
+      label.textContent = `${s}s`;
+
+      el.appendChild(tick);
+      el.appendChild(label);
     }
-  }, [duration]);
+  }, [duration, pxPerMsRef]);
 
   useLayoutEffect(() => {
     trimValuesRef.current = { start: 0, end: duration };
-    calculatePixelsPerMs();
+    recalc();
+    drawRuler();
 
     const leftPos = 0;
-    const rightPos = duration * pixelsPerMs.current;
+    const rightPos = duration * pxPerMsRef.current;
 
     if (leftHandleRef.current) {
       leftHandleRef.current.style.left = `${leftPos - HANDLE_OFFSET}px`;
@@ -67,7 +98,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
       filledAreaRef.current.style.left = `${leftPos}px`;
       filledAreaRef.current.style.width = `${rightPos - leftPos}px`;
     }
-  }, [duration, calculatePixelsPerMs]);
+  }, [duration, recalc, drawRuler, pxPerMsRef]);
 
   const updateTooltipContent = (trimStart: number, trimEnd: number) => {
     if (leftTooltipContentRef.current) {
@@ -82,12 +113,6 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
       )}`;
     }
   };
-
-  useEffect(() => {
-    calculatePixelsPerMs();
-    window.addEventListener("resize", calculatePixelsPerMs);
-    return () => window.removeEventListener("resize", calculatePixelsPerMs);
-  }, [duration, calculatePixelsPerMs]);
 
   const handleDrag = useCallback(
     (event: MouseEvent, handleType: Dir) => {
@@ -108,15 +133,15 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
           let newX = moveEvent.clientX - timelineRect.left;
           newX = Math.max(0, Math.min(newX, timelineRect.width));
 
-          const newTime = newX / pixelsPerMs.current;
+          const newTime = newX / pxPerMsRef.current;
 
           if (handleType === "left") {
             const maxStartTime = Math.max(0, trimValuesRef.current.end - 1000);
             const newTrimStart = Math.max(0, Math.min(newTime, maxStartTime));
             trimValuesRef.current.start = newTrimStart;
 
-            const newLeftPos = newTrimStart * pixelsPerMs.current;
-            const rightPos = trimValuesRef.current.end * pixelsPerMs.current;
+            const newLeftPos = newTrimStart * pxPerMsRef.current;
+            const rightPos = trimValuesRef.current.end * pxPerMsRef.current;
 
             if (leftHandleRef.current) {
               leftHandleRef.current.style.left = `${
@@ -140,8 +165,8 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
             );
             trimValuesRef.current.end = newTrimEnd;
 
-            const leftPos = trimValuesRef.current.start * pixelsPerMs.current;
-            const newRightPos = newTrimEnd * pixelsPerMs.current;
+            const leftPos = trimValuesRef.current.start * pxPerMsRef.current;
+            const newRightPos = newTrimEnd * pxPerMsRef.current;
 
             if (rightHandleRef.current) {
               rightHandleRef.current.style.left = `${
@@ -182,21 +207,13 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
       className="relative w-full px-2 py-3"
       style={{ "--handle-offset": `${HANDLE_OFFSET}px` } as React.CSSProperties}
     >
+      <div ref={rulerRef} className="relative h-4 mb-1" />
+
       <div className="relative w-full h-8 bg-gradient-to-r from-surface-secondary via-surface-primary to-surface-secondary rounded-xl shadow-inner">
         <div
           ref={timelineRef}
           className="absolute inset-0 bg-gradient-to-b from-surface-primary to-surface-secondary"
-        >
-          {/* {Array.from({ length: Math.floor(duration / 1000) }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute top-0 w-px h-full bg-surface-hover"
-                style={{
-                  left: `${(i * 1000 * pixelsPerMs.current).toFixed(2)}px`,
-                }}
-              />
-            ))} */}
-        </div>
+        />
 
         <div
           ref={filledAreaRef}
@@ -260,7 +277,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
 
       {showTooltip && (
         <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-30">
-          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap">
+          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap border border-border">
             <div className="flex gap-3">
               <span className="text-primary" ref={leftTooltipContentRef}>
                 {formatDurationDisplay(duration)}

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { TextOverlay } from "@/types/app";
 import { useOverlayControls } from "@/contexts/overlays-context";
+import { cn } from "@/lib/utils";
 
 interface DraggableTextOverlayProps {
   overlay: TextOverlay;
@@ -24,12 +25,13 @@ export const DraggableTextOverlay = ({
   return (
     <div
       ref={elementRef}
-      className={`absolute select-none cursor-move ${
-        isSelected ? "ring-2 ring-primary" : ""
-      }`}
+      className={cn(
+        "absolute select-none cursor-move",
+        isSelected && "ring-2 ring-primary"
+      )}
       style={
         {
-          transform: "translate3d(0px, 0px, 0)",
+          transform: `translate3d(${overlay.x}px, ${overlay.y}px, 0)`,
           willChange: "transform",
           left: 0,
           top: 0,

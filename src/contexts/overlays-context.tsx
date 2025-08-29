@@ -48,7 +48,7 @@ interface ResizeState {
   overlayId: string | null;
 }
 
-export function calculateTextMaxWidth(value: number): string {
+export function calculateMaxWidth(value: number): string {
   return `${Math.round(value * 0.65)}px`;
 }
 
@@ -93,6 +93,33 @@ type OverlaysContextValue = {
 };
 
 const OverlaysContext = createContext<OverlaysContextValue>(null!);
+
+function getImageOverlaySizeByArea(
+  containerWidth: number,
+  containerHeight: number,
+  imageWidth: number,
+  imageHeight: number,
+  scaleFactor: number = 0.3
+): { width: number; height: number } {
+  if (
+    containerWidth <= 0 ||
+    containerHeight <= 0 ||
+    imageWidth <= 0 ||
+    imageHeight <= 0
+  ) {
+    return { width: 0, height: 0 };
+  }
+
+  const containerArea = containerWidth * containerHeight;
+  const targetArea = containerArea * scaleFactor;
+
+  const aspectRatio = imageWidth / imageHeight;
+
+  const height = Math.sqrt(targetArea / aspectRatio);
+  const width = height * aspectRatio;
+
+  return { width, height };
+}
 
 function getTransformPosition(target: HTMLElement): {
   x: number;
@@ -240,6 +267,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         endTime: duration ?? Infinity,
         x: 0,
         y: 0,
+        normX: 0,
+        normY: 0,
         fontSize: 24,
         fontFamily: "var(--font-inter), sans-serif",
         letterSpacing: "-0.03em",
@@ -251,7 +280,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         underline: false,
         alignment: "left",
         visible: true,
-        maxWidth: calculateTextMaxWidth(videoWidth),
+        maxWidth: calculateMaxWidth(videoWidth),
       };
       setTextOverlays((prev) => [...prev, newOverlay]);
       setSelectedOverlay(newOverlay.id);
@@ -268,24 +297,43 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         );
         return;
       }
+
       const { width: videoWidth, height: videoHeight } =
         getVideoBoundingBox(video);
-      const newOverlay: ImageOverlay = {
-        id: `image_${Date.now()}`,
-        file,
-        startTime: currentTime,
-        endTime: duration ?? Infinity,
-        x: 0,
-        y: 0,
-        width: Math.min(200, videoWidth * 0.3),
-        height: Math.min(200, videoHeight * 0.3),
-        opacity: 1,
-        visible: true,
-        rotation: 0,
-        scale: 1,
+      const url = URL.createObjectURL(file);
+
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        const { width, height } = getImageOverlaySizeByArea(
+          videoWidth,
+          videoHeight,
+          img.naturalWidth,
+          img.naturalHeight
+        );
+
+        const newOverlay: ImageOverlay = {
+          id: `image_${Date.now()}`,
+          file,
+          startTime: currentTime,
+          endTime: duration ?? Infinity,
+          x: 0,
+          y: 0,
+          normX: 0,
+          normY: 0,
+          width,
+          height,
+          opacity: 1,
+          visible: true,
+          rotation: 0,
+          scale: 1,
+        };
+
+        setImageOverlays((prev) => [...prev, newOverlay]);
+        setSelectedOverlay(newOverlay.id);
+
+        URL.revokeObjectURL(url);
       };
-      setImageOverlays((prev) => [...prev, newOverlay]);
-      setSelectedOverlay(newOverlay.id);
     },
     [videoRef]
   );
@@ -343,12 +391,12 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         const computedStyle = window.getComputedStyle(element);
         const transform = computedStyle.transform;
         if (transform && transform !== "none") {
-          const { x: currentX, y: currentY } = getTransformPosition(element);
-          const { x, y } = getOverlayNormalizedCoords(video, {
-            overlayX: currentX,
-            overlayY: currentY,
+          const { x, y } = getTransformPosition(element);
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
+            overlayX: x,
+            overlayY: y,
           });
-          updateTextOverlay(id, { x, y });
+          updateTextOverlay(id, { x, y, normX, normY });
         }
       });
 
@@ -356,26 +404,28 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         const computedStyle = window.getComputedStyle(element);
         const transform = computedStyle.transform;
         if (transform && transform !== "none") {
-          const { x: currentX, y: currentY } = getTransformPosition(element);
-          const { x, y } = getOverlayNormalizedCoords(video, {
-            overlayX: currentX,
-            overlayY: currentY,
+          const { x, y } = getTransformPosition(element);
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
+            overlayX: x,
+            overlayY: y,
           });
           const width = parseFloat(element.style.width);
           const height = parseFloat(element.style.height);
-          updateImageOverlay(id, { x, y, width, height });
+          updateImageOverlay(id, { x, y, normX, normY, width, height });
         }
       });
     }, 300),
     [updateTextOverlay, updateImageOverlay, videoRef]
   );
 
+  const rafIdRef = useRef<number | null>(null);
+
   const handleWindowResize = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const { width: newVideoWidth, height: newVideoHeight } =
-      getVideoBoundingBox(video);
+      video.getBoundingClientRect();
     const prevDimensions = previousVideoDimensions.current;
 
     if (!prevDimensions) {
@@ -389,66 +439,63 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     const scaleX = newVideoWidth / prevDimensions.width;
     const scaleY = newVideoHeight / prevDimensions.height;
 
-    textOverlayRefs.current.forEach((element, id) => {
-      const { x: currentX, y: currentY } = getTransformPosition(element);
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
 
-      const finalLeft = currentX * scaleX;
-      const finalTop = currentY * scaleY;
+    rafIdRef.current = requestAnimationFrame(() => {
+      textOverlayRefs.current.forEach((element, id) => {
+        const { x: currentX, y: currentY } = getTransformPosition(element);
 
-      const elementRect = element.getBoundingClientRect();
-      const constrainedLeft = Math.max(
-        0,
-        Math.min(newVideoWidth - elementRect.width, finalLeft)
-      );
-      const constrainedTop = Math.max(
-        0,
-        Math.min(newVideoHeight - elementRect.height, finalTop)
-      );
+        const finalLeft = currentX * scaleX;
+        const finalTop = currentY * scaleY;
 
-      const drag = dragRef.current;
-      if (!drag.element) return;
+        const elementRect = element.getBoundingClientRect();
+        const constrainedLeft = Math.max(
+          0,
+          Math.min(newVideoWidth - elementRect.width, finalLeft)
+        );
+        const constrainedTop = Math.max(
+          0,
+          Math.min(newVideoHeight - elementRect.height, finalTop)
+        );
 
-      drag.rafId = requestAnimationFrame(() => {
-        if (drag.element) {
-          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
-          element.style.maxWidth = calculateTextMaxWidth(newVideoWidth);
-        }
+        element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
+        element.style.maxWidth = calculateMaxWidth(newVideoWidth);
       });
+
+      imageOverlayRefs.current.forEach((element, id) => {
+        const { x: currentX, y: currentY } = getTransformPosition(element);
+
+        const rect = element.getBoundingClientRect();
+        const currentWidth = rect.width;
+        const currentHeight = rect.height;
+
+        const finalLeft = currentX * scaleX;
+        const finalTop = currentY * scaleY;
+
+        const targetWidth = currentWidth * scaleX;
+        const targetHeight = currentHeight * scaleY;
+
+        const constrainedLeft = Math.max(
+          0,
+          Math.min(newVideoWidth - targetWidth, finalLeft)
+        );
+        const constrainedTop = Math.max(
+          0,
+          Math.min(newVideoHeight - targetHeight, finalTop)
+        );
+
+        element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
+        element.style.width = `${targetWidth}px`;
+        element.style.height = `${targetHeight}px`;
+      });
+
+      previousVideoDimensions.current = {
+        width: newVideoWidth,
+        height: newVideoHeight,
+      };
     });
-
-    imageOverlayRefs.current.forEach((element, id) => {
-      const { x: currentX, y: currentY } = getTransformPosition(element);
-      const currentWidth = parseFloat(element.style.width);
-      const currentHeight = parseFloat(element.style.height);
-
-      const finalLeft = currentX * scaleX;
-      const finalTop = currentY * scaleY;
-      const finalWidth = currentWidth * scaleX;
-      const finalHeight = currentHeight * scaleY;
-
-      const maxWidth = newVideoWidth * 0.3;
-      const maxHeight = newVideoHeight * 0.3;
-      const constrainedWidth = Math.min(finalWidth, maxWidth);
-      const constrainedHeight = Math.min(finalHeight, maxHeight);
-
-      const constrainedLeft = Math.max(
-        0,
-        Math.min(newVideoWidth - constrainedWidth, finalLeft)
-      );
-      const constrainedTop = Math.max(
-        0,
-        Math.min(newVideoHeight - constrainedHeight, finalTop)
-      );
-
-      element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
-      element.style.width = `${constrainedWidth}px`;
-      element.style.height = `${constrainedHeight}px`;
-    });
-
-    previousVideoDimensions.current = {
-      width: newVideoWidth,
-      height: newVideoHeight,
-    };
 
     debouncedUpdateNormalizedCoords();
   }, [debouncedUpdateNormalizedCoords]);
@@ -457,6 +504,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener("resize", handleWindowResize);
     return () => {
       window.removeEventListener("resize", handleWindowResize);
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      debouncedUpdateNormalizedCoords.cancel?.();
     };
   }, [handleWindowResize]);
 
@@ -522,8 +573,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         offsetY: currentY,
         overlayId,
         rafId: null,
-        finalLeft: 0,
-        finalTop: 0,
+        finalLeft: currentX,
+        finalTop: currentY,
       };
       setSelectedOverlay(overlayId);
       const onMouseMove = (ev: MouseEvent) => {
@@ -582,21 +633,40 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const onMouseUp = () => {
         const drag = dragRef.current;
         drag.isDragging = false;
+
         if (videoRef?.current && drag.overlayId) {
-          const { x, y } = getOverlayNormalizedCoords(videoRef.current, {
-            overlayX: drag.finalLeft,
-            overlayY: drag.finalTop,
-          });
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(
+            videoRef.current,
+            {
+              overlayX: drag.finalLeft,
+              overlayY: drag.finalTop,
+            }
+          );
           const textOverlay = textOverlays.find((o) => o.id === drag.overlayId);
           const imageOverlay = imageOverlays.find(
             (o) => o.id === drag.overlayId
           );
           if (textOverlay) {
-            updateTextOverlay(drag.overlayId, { x, y });
+            updateTextOverlay(drag.overlayId, {
+              x: drag.finalLeft,
+              y: drag.finalTop,
+              normX,
+              normY,
+            });
           } else if (imageOverlay) {
-            updateImageOverlay(drag.overlayId, { x, y });
+            updateImageOverlay(drag.overlayId, {
+              x: drag.finalLeft,
+              y: drag.finalTop,
+              normX,
+              normY,
+            });
           }
-          logger.log("[Normalized Overlay Position]", { x, y });
+          logger.log("[Normalized Overlay Position]", {
+            x: drag.finalLeft,
+            y: drag.finalTop,
+            normX,
+            normY,
+          });
         }
         if (vGuideRef.current) vGuideRef.current.style.display = "none";
         if (hGuideRef.current) hGuideRef.current.style.display = "none";

@@ -64,14 +64,14 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
   return (
     <div
       className={cn(
-        "p-3 rounded-lg border transition-colors cursor-pointer",
+        "py-2 px-3 rounded-lg border-2 text-sm",
         selectedOverlay === overlay.id
           ? "border-primary bg-primary/10"
           : "border-gray-700/50 bg-surface-secondary"
       )}
       onClick={() => setIsExpanded(!isExpanded)}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <img
             src={objectUrl.current}

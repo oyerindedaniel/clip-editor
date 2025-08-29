@@ -21,8 +21,9 @@ export interface S3ClipMetadata {
   streamerName?: string;
   uploadTimestamp?: string;
   originalFilename?: string;
-  s3Key: string;
 }
+
+export type ClipToolType = "clips" | "text" | "image" | "audio" | "dual";
 
 export interface S3ClipData {
   url: string;
@@ -42,8 +43,10 @@ export interface TextOverlay
   extends Partial<Omit<CSSProperties, OverlappingStyleProps>> {
   id: string;
   text: string;
-  x: number; // Normalized 0–1 for export
-  y: number; // Normalized 0–1 for export
+  x: number;
+  y: number;
+  normX: number; // Normalized 0–1 for export
+  normY: number; // Normalized 0–1 for export
   startTime: number;
   endTime: number;
   fontSize: number;
@@ -62,8 +65,10 @@ export interface TextOverlay
 export interface ImageOverlay {
   id: string;
   file: File;
-  x: number; // Normalized 0–1 for export
-  y: number; // Normalized 0–1 for export
+  x: number;
+  y: number;
+  normX: number; // Normalized 0–1 for export
+  normY: number; // Normalized 0–1 for export
   startTime: number;
   endTime: number;
   width: number;
@@ -121,6 +126,11 @@ export interface ClipExportData {
   exportSettings: ExportSettings;
   clientDisplaySize: { width: number; height: number };
   targetResolution?: { width: number; height: number };
+  dualVideo?: {
+    primaryClip: DualVideoClip;
+    secondaryClip: DualVideoClip;
+    settings: DualVideoSettings;
+  };
 }
 
 /**
@@ -229,4 +239,26 @@ export interface WorkerMessage {
 export interface WorkerResponse {
   type: WorkerType.FRAMES;
   frames: Uint8Array[];
+}
+
+export interface DualVideoClip {
+  id: string;
+  url: string;
+  buffer: ArrayBuffer | null;
+  metadata: S3ClipMetadata;
+  offset: number; // Time offset in milliseconds
+  volume: number; // Audio volume level (0-1)
+  visible: boolean;
+}
+
+export type DualVideoLayout = "vertical" | "horizontal";
+export type DualVideoOrientation = "vertical" | "horizontal";
+
+export interface DualVideoSettings {
+  layout: DualVideoLayout;
+  outputOrientation: DualVideoOrientation;
+  primaryAudio: "primary" | "secondary" | "mixed";
+  normalizeAudio: boolean;
+  primaryVolume: number;
+  secondaryVolume: number;
 }

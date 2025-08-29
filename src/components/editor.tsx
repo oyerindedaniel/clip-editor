@@ -1,27 +1,8 @@
 "use client";
 
-import React, {
-  useState,
-  useRef,
-  useLayoutEffect,
-  useEffect,
-  useCallback,
-  startTransition,
-} from "react";
-import Image from "next/image";
-import {
-  Download,
-  Settings,
-  Type,
-  Music,
-  Scissors,
-  Eye,
-  EyeOff,
-  Plus,
-  Trash2,
-  Crosshair,
-} from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import type {
+  ClipToolType,
   AudioTrack,
   ExportSettings,
   CropMode,
@@ -29,6 +10,8 @@ import type {
   ClipMetadata,
   ExportClip,
   S3ClipData as ClipData,
+  DualVideoClip,
+  DualVideoSettings,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
@@ -36,29 +19,29 @@ import { processClip, processClipForExport } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
 import { DraggableTextOverlay } from "./draggable-text-overlay";
 import { DraggableImageOverlay } from "./draggable-image-overlay";
-import { FileUpload } from "./ui/file-upload";
 import * as MediaPlayer from "@/components/ui/media-player";
 import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
-import { ExportNamingDialog } from "@/components/export-naming-dialog";
+import { ExportNamingDialog } from "./export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
-import TextOverlayItemContainer from "./text-overlay-item";
 import { useOverlayControls } from "@/contexts/overlays-context";
-import ImageOverlayItemContainer from "./image-overlay-item";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { EditorRightPanel } from "./editor-right-panel";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import DualVideoTracks from "./dual-video-tracks";
+import EditorHeader from "./editor-header";
+import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 
 interface ClipEditorProps {
   clipData: ClipData;
 }
-
-type ClipToolType = "clips" | "text" | "image" | "audio";
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
@@ -66,6 +49,20 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<ClipToolType>("clips");
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+
+  const [secondaryClip, setSecondaryClip] = useState<DualVideoClip | null>(
+    null
+  );
+  const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
+    {
+      layout: "vertical",
+      outputOrientation: "vertical",
+      primaryAudio: "primary",
+      normalizeAudio: true,
+      primaryVolume: 0.8,
+      secondaryVolume: 0.6,
+    }
+  );
 
   const {
     isOpen: isAspectRatioModalOpen,
@@ -210,6 +207,79 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     }
   }, [loadClipVideo]);
 
+  const handleAddSecondaryClip = useCallback(async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+
+      const tempVideo = document.createElement("video");
+      const tempUrl = URL.createObjectURL(file);
+      tempVideo.src = tempUrl;
+
+      const metadata: DualVideoClip["metadata"] = {
+        clipId: `secondary_${Date.now()}`,
+        clipDurationMs: 0,
+        clipStartTime: 0,
+        clipEndTime: 0,
+        originalFilename: file.name,
+      };
+
+      const newSecondaryClip: DualVideoClip = {
+        id: `secondary_${Date.now()}`,
+        url: tempUrl,
+        buffer,
+        metadata,
+        offset: 0,
+        volume: 0.6,
+        visible: true,
+      };
+
+      tempVideo.addEventListener("loadedmetadata", () => {
+        const durationMs = tempVideo.duration * 1000;
+
+        setSecondaryClip({
+          ...newSecondaryClip,
+          metadata: {
+            ...newSecondaryClip.metadata,
+            clipDurationMs: durationMs,
+            clipEndTime: durationMs,
+          },
+        });
+        toast.success("Secondary video clip added");
+      });
+    } catch (error) {
+      logger.error("Error adding secondary clip:", error);
+      toast.error("Failed to add secondary video clip");
+    }
+  }, []);
+
+  const handleSecondaryClipChange = useCallback(
+    (clip: DualVideoClip | null) => {
+      if (secondaryClip?.url && secondaryClip.url !== clip?.url) {
+        URL.revokeObjectURL(secondaryClip.url);
+      }
+      setSecondaryClip(clip);
+    },
+    [secondaryClip?.url]
+  );
+
+  const handleDualVideoSettingsChange = useCallback(
+    (settings: DualVideoSettings) => {
+      setDualVideoSettings(settings);
+    },
+    []
+  );
+
+  const primaryFrames = useVideoThumbnails(
+    videoRef.current?.src || undefined,
+    24,
+    isVideoLoaded
+  );
+  const secondaryFrames = useVideoThumbnails(
+    secondaryClip?.url,
+    24,
+    Boolean(secondaryClip?.url)
+  );
+
   useEffect(() => {
     let abortController: AbortController | undefined;
 
@@ -255,7 +325,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       }
     };
 
-    convertUrlToBuffer();
+    if (!clipBufferRef.current) {
+      convertUrlToBuffer();
+    }
 
     return () => {
       if (abortController) {
@@ -266,8 +338,17 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         URL.revokeObjectURL(currentVideoUrl.current);
         currentVideoUrl.current = null;
       }
+
+      if (secondaryClip?.url) {
+        URL.revokeObjectURL(secondaryClip.url);
+      }
     };
-  }, [clipData.url, clipData.metadata.clipId, initializeVideo]);
+  }, [
+    clipData.url,
+    clipData.metadata.clipId,
+    initializeVideo,
+    secondaryClip?.url,
+  ]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -325,41 +406,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     };
   }, [adjustOverlayBounds]);
 
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      return `${hours}:${(minutes % 60).toString().padStart(2, "0")}:${(
-        seconds % 60
-      )
-        .toString()
-        .padStart(2, "0")}`;
-    }
-    return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
-  };
-
   const addAudioTrack = () => {
     if (audioFileRef.current) {
       audioFileRef.current.click();
     }
-  };
-
-  const handleAudioFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const newTrack: AudioTrack = {
-      id: `audio_${Date.now()}`,
-      name: file.name,
-      file,
-      volume: 1,
-      startTime: 0,
-      endTime: duration,
-      visible: true,
-    };
-    setAudioTracks([...audioTracks, newTrack]);
   };
 
   const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,6 +504,22 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           },
           clientDisplaySize,
           targetResolution: targetResolutionDimensions,
+          // Add dual video data if available
+          ...(secondaryClip && {
+            dualVideo: {
+              primaryClip: {
+                id: clipData.metadata.clipId,
+                url: clipData.url,
+                buffer: clipBufferRef.current,
+                metadata: clipData.metadata,
+                offset: 0,
+                volume: 1,
+                visible: true,
+              },
+              secondaryClip,
+              settings: dualVideoSettings,
+            },
+          }),
         };
 
         const exportClip: ExportClip = {
@@ -515,376 +581,170 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-surface-primary text-foreground-default text-sm">
-      <div className="max-w-screen-xl mx-auto w-full">
-        <div className="flex items-center relative justify-between p-4 bg-surface-secondary border-b border-gray-700/50">
-          <Link href="/">
-            <Image
-              src="/logo/zinc_norms_white.webp"
-              alt="Zinc"
-              width={128}
-              height={128}
-              className="h-20 w-20 absolute top-2/4 -translate-y-2/4 text-white"
-              priority
-            />
-          </Link>
-          <div />
-          <div className="flex items-center space-x-2">
-            <Button
-              className="flex items-center space-x-2 px-3 py-1.5 text-xs"
-              variant="outline"
-              disabled={!isVideoLoaded}
-              onClick={() => openAspectRatioModal()}
-            >
-              <Settings size={16} />
-              <span>Settings</span>
-            </Button>
+    <div className="h-[100dvh] bg-surface-primary text-foreground-default text-sm flex flex-col">
+      <EditorHeader
+        isVideoLoaded={isVideoLoaded}
+        isExporting={isExporting}
+        showTrace={showTrace}
+        onToggleTrace={toggleTrace}
+        onOpenAdjust={openAspectRatioModal}
+        onOpenExport={openExportNamingModal}
+      />
 
-            <Button
-              onClick={() => openExportNamingModal()}
-              disabled={isExporting || !isVideoLoaded}
-              className="flex items-center space-x-2 px-3 py-1.5 text-xs"
-            >
-              <Download size={16} />
-              <span>{isExporting ? "Exporting..." : "Export"}</span>
-            </Button>
-            <Button
-              className="flex items-center space-x-2 px-3 py-1.5 text-xs"
-              variant="outline"
-              disabled={!isVideoLoaded}
-              onClick={toggleTrace}
-            >
-              <Crosshair size={16} />
-              <span>{showTrace ? "Hide Trace" : "Show Trace"}</span>
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col p-4 space-y-4 overflow-hidden pb-16">
-          <div
-            ref={containerRef}
-            className="relative w-full aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md border border-gray-700/50"
-          >
-            <MediaPlayer.Root>
-              <MediaPlayer.Video
-                ref={videoRef}
-                playsInline
-                className="w-full aspect-video"
-                poster={"/thumbnails/video-thumb-2.webp"}
-              />
-              <MediaPlayer.Loading />
-              <MediaPlayer.Error />
-              <MediaPlayer.VolumeIndicator />
-              <MediaPlayer.Controls>
-                <MediaPlayer.ControlsOverlay />
-                <MediaPlayer.Play />
-                <MediaPlayer.SeekBackward />
-                <MediaPlayer.SeekForward />
-                <MediaPlayer.Volume />
-                <MediaPlayer.Seek />
-                <MediaPlayer.Time />
-                <MediaPlayer.PlaybackSpeed />
-                <MediaPlayer.Loop />
-                <MediaPlayer.Captions />
-                <MediaPlayer.PiP />
-                <MediaPlayer.Fullscreen />
-                <MediaPlayer.Download />
-              </MediaPlayer.Controls>
-            </MediaPlayer.Root>
-
-            <div ref={traceRef} />
-
-            {getAllVisibleOverlays()
-              .textOverlays.filter(
-                (overlay) =>
-                  overlay.startTime === 0 && overlay.endTime >= duration
-              )
-              .map((overlay) => (
-                <DraggableTextOverlay
-                  key={`persistent-${overlay.id}`}
-                  overlay={overlay}
-                  isSelected={selectedOverlay === overlay.id}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    startDrag(overlay.id, e);
-                  }}
-                />
-              ))}
-
-            {getAllVisibleOverlays()
-              .imageOverlays.filter(
-                (overlay) =>
-                  overlay.startTime === 0 && overlay.endTime >= duration
-              )
-              .map((overlay) => (
-                <DraggableImageOverlay
-                  key={`persistent-${overlay.id}`}
-                  overlay={overlay}
-                  isSelected={selectedOverlay === overlay.id}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    startDrag(overlay.id, e);
-                  }}
-                  onResizeStart={(handle, e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    startResize(overlay.id, handle, e);
-                  }}
-                />
-              ))}
-          </div>
-
-          {isVideoLoaded ? (
-            <Timeline duration={duration} onTrim={handleTrim} />
-          ) : (
-            <TimelineSkeleton />
-          )}
-
-          <div className="flex-1 flex flex-col bg-surface-primary rounded-lg shadow-md overflow-hidden border border-gray-700/50">
-            <div className="flex border-b border-gray-700/50">
-              {[
-                { id: "clips", label: "Clips", icon: Scissors },
-                { id: "text", label: "Text", icon: Type },
-                { id: "image", label: "Image", icon: Eye },
-                { id: "audio", label: "Audio", icon: Music },
-              ].map(({ id, label, icon: Icon }) => (
-                <Button
-                  key={id}
-                  onClick={() =>
-                    startTransition(() => setActiveTab(id as ClipToolType))
-                  }
-                  className={cn(
-                    "flex-1 py-2 px-1 flex items-center justify-center space-x-1.5 rounded-none text-xs transition-colors",
-                    activeTab === id
-                      ? "bg-primary text-foreground-on-accent border-b-2 border-primary"
-                      : "text-foreground-subtle hover:text-foreground-default hover:bg-surface-hover"
-                  )}
-                  variant="ghost"
-                  disabled={!isVideoLoaded}
-                >
-                  <Icon size={16} />
-                  <span className="text-xs">{label}</span>
-                </Button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              {activeTab === "clips" && (
-                <div className="space-y-4">
-                  <h3 className="text-base font-semibold text-foreground-default">
-                    Clip
-                  </h3>
-                  {[
-                    {
-                      id: clipData.metadata.clipId,
-                      startTime: clipData.metadata.clipStartTime,
-                      endTime: clipData.metadata.clipEndTime,
-                    },
-                  ].map((clip) => (
-                    <div key={clip.id}>
-                      <div className="font-medium text-foreground-default text-sm">{`Clip ${clip.id}`}</div>
-                      <div className="text-xs text-foreground-subtle">
-                        {formatTime(clip.endTime - clip.startTime)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === "text" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-foreground-default">
-                      Text Overlays
-                    </h3>
-                    <Button
-                      onClick={() => addTextOverlay(0, duration)}
-                      className="p-1.5"
-                      variant="default"
-                      size="icon"
-                    >
-                      <Plus size={16} />
-                    </Button>
-                  </div>
-                  <TextOverlayItemContainer
-                    selectedOverlay={selectedOverlay}
-                    duration={duration}
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          <ResizablePanel defaultSize={75} minSize={50}>
+            <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+              <div
+                ref={containerRef}
+                className="relative w-full aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md flex-shrink-0"
+              >
+                <MediaPlayer.Root>
+                  <MediaPlayer.Video
+                    ref={videoRef}
+                    playsInline
+                    className="w-full aspect-video"
+                    poster={"/thumbnails/video-thumb-2.webp"}
                   />
-                </div>
-              )}
+                  <MediaPlayer.Loading />
+                  <MediaPlayer.Error />
+                  <MediaPlayer.VolumeIndicator />
+                  <MediaPlayer.Controls>
+                    <MediaPlayer.ControlsOverlay />
+                    <MediaPlayer.Play />
+                    <MediaPlayer.SeekBackward />
+                    <MediaPlayer.SeekForward />
+                    <MediaPlayer.Volume />
+                    <MediaPlayer.Seek />
+                    <MediaPlayer.Time />
+                    <MediaPlayer.PlaybackSpeed />
+                    <MediaPlayer.Loop />
+                    <MediaPlayer.Captions />
+                    <MediaPlayer.PiP />
+                    <MediaPlayer.Fullscreen />
+                    <MediaPlayer.Download />
+                  </MediaPlayer.Controls>
+                </MediaPlayer.Root>
 
-              {activeTab === "image" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-foreground-default">
-                      Image Overlays
-                    </h3>
-                  </div>
+                <div ref={traceRef} />
 
-                  <FileUpload
-                    accept="image/*"
-                    hint="Select an image to add as overlay"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleImageFileSelect(e);
-                      }
+                {getAllVisibleOverlays()
+                  .textOverlays.filter(
+                    (overlay) =>
+                      overlay.startTime === 0 && overlay.endTime >= duration
+                  )
+                  .map((overlay) => (
+                    <DraggableTextOverlay
+                      key={`persistent-${overlay.id}`}
+                      overlay={overlay}
+                      isSelected={selectedOverlay === overlay.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startDrag(overlay.id, e);
+                      }}
+                    />
+                  ))}
+
+                {getAllVisibleOverlays()
+                  .imageOverlays.filter(
+                    (overlay) =>
+                      overlay.startTime === 0 && overlay.endTime >= duration
+                  )
+                  .map((overlay) => (
+                    <DraggableImageOverlay
+                      key={`persistent-${overlay.id}`}
+                      overlay={overlay}
+                      isSelected={selectedOverlay === overlay.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startDrag(overlay.id, e);
+                      }}
+                      onResizeStart={(handle, e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startResize(overlay.id, handle, e);
+                      }}
+                    />
+                  ))}
+              </div>
+
+              <div className="flex-1 min-h-0">
+                {secondaryClip ? (
+                  <DualVideoTracks
+                    primaryDurationMs={duration}
+                    secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
+                    initialOffsetMs={secondaryClip.offset || 0}
+                    onOffsetChange={(ms) => {
+                      // live visual only
                     }}
-                    name="image-overlay"
+                    onCommitOffset={(ms) => {
+                      setSecondaryClip({
+                        ...secondaryClip,
+                        offset: Math.max(0, Math.round(ms)),
+                      });
+                    }}
+                    onCutSecondaryAt={(ms) => {
+                      logger.log("Cut secondary at", ms);
+                    }}
+                    primaryPreviewFrames={primaryFrames}
+                    secondaryPreviewFrames={secondaryFrames}
                   />
-
-                  <ImageOverlayItemContainer
-                    selectedOverlay={selectedOverlay}
-                    duration={duration}
-                  />
-                </div>
-              )}
-
-              {activeTab === "audio" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-foreground-default">
-                      Audio Tracks
-                    </h3>
-                    <Button
-                      onClick={addAudioTrack}
-                      className="p-1.5"
-                      variant="default"
-                      size="icon"
-                    >
-                      <Plus size={16} />
-                    </Button>
-                  </div>
-
-                  <Input
-                    ref={audioFileRef}
-                    type="file"
-                    accept="audio/*"
-                    onChange={handleAudioFileSelect}
-                    className="hidden"
-                  />
-
-                  {audioTracks.map((track) => (
-                    <div
-                      key={track.id}
-                      className="p-3 rounded-lg border border-gray-700/50 bg-surface-secondary"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium truncate text-foreground-default text-sm">
-                          {track.name}
-                        </span>
-                        <div className="flex items-center space-x-1">
-                          <Button
-                            onClick={() =>
-                              updateAudioTrack(track.id, {
-                                visible: !track.visible,
-                              })
-                            }
-                            className={cn(
-                              "p-1 rounded",
-                              track.visible
-                                ? "text-accent-primary"
-                                : "text-foreground-muted"
-                            )}
-                            variant="ghost"
-                            size="icon"
-                          >
-                            {track.visible ? (
-                              <Eye size={14} />
-                            ) : (
-                              <EyeOff size={14} />
-                            )}
-                          </Button>
-                          <Button
-                            onClick={() => deleteAudioTrack(track.id)}
-                            className="p-1 text-error hover:text-error/80"
-                            variant="ghost"
-                            size="icon"
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div>
-                          <label className="block text-xs text-foreground-subtle mb-1">
-                            Volume
-                          </label>
-                          <Input
-                            type="range"
-                            min="0"
-                            max="2"
-                            step="0.1"
-                            value={track.volume}
-                            onChange={(e) =>
-                              updateAudioTrack(track.id, {
-                                volume: parseFloat(e.target.value),
-                              })
-                            }
-                            className="h-7"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-xs text-foreground-subtle mb-1">
-                              Start Time
-                            </label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max={duration}
-                              value={Math.floor(track.startTime / 1000)}
-                              onChange={(e) =>
-                                updateAudioTrack(track.id, {
-                                  startTime: parseInt(e.target.value) * 1000,
-                                })
-                              }
-                              className="px-2 py-1 text-xs"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-foreground-subtle mb-1">
-                              End Time
-                            </label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max={duration}
-                              value={Math.floor(track.endTime / 1000)}
-                              onChange={(e) =>
-                                updateAudioTrack(track.id, {
-                                  endTime: parseInt(e.target.value) * 1000,
-                                })
-                              }
-                              className="px-2 py-1 text-xs"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                ) : isVideoLoaded ? (
+                  <Timeline duration={duration} onTrim={handleTrim} />
+                ) : (
+                  <TimelineSkeleton />
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          </ResizablePanel>
 
-        <AspectRatioSelector
-          isOpen={isAspectRatioModalOpen}
-          onOpenChange={closeAspectRatioModal}
-          onSettingsApplied={handleSettingsApplied}
-        />
+          <ResizableHandle />
 
-        <ExportNamingDialog
-          isOpen={isExportNamingModalOpen}
-          onOpenChange={closeExportNamingModal}
-          streamerName={clipData.metadata.streamerName || ""}
-          onExport={handleExport}
-        />
+          <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
+            <EditorRightPanel
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onSettingsClick={openAspectRatioModal}
+              onExportClick={openExportNamingModal}
+              onTraceToggle={toggleTrace}
+              showTrace={showTrace}
+              isVideoLoaded={isVideoLoaded}
+              isExporting={isExporting}
+              duration={duration}
+              clipData={clipData}
+              audioTracks={audioTracks}
+              onAudioTrackUpdate={updateAudioTrack}
+              onAudioTrackDelete={deleteAudioTrack}
+              onAddAudioTrack={addAudioTrack}
+              onImageFileSelect={handleImageFileSelect}
+              onAddTextOverlay={() => addTextOverlay(0, duration)}
+              selectedOverlay={selectedOverlay}
+              textOverlaysRef={textOverlaysRef}
+              imageOverlaysRef={imageOverlaysRef}
+              secondaryClip={secondaryClip}
+              dualVideoSettings={dualVideoSettings}
+              onSecondaryClipChange={handleSecondaryClipChange}
+              onDualVideoSettingsChange={handleDualVideoSettingsChange}
+              onAddSecondaryClip={handleAddSecondaryClip}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
+
+      <AspectRatioSelector
+        isOpen={isAspectRatioModalOpen}
+        onOpenChange={closeAspectRatioModal}
+        onSettingsApplied={handleSettingsApplied}
+      />
+
+      <ExportNamingDialog
+        isOpen={isExportNamingModalOpen}
+        onOpenChange={closeExportNamingModal}
+        streamerName={clipData.metadata.streamerName || ""}
+        onExport={handleExport}
+      />
     </div>
   );
 };

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { useTextOverlays } from "@/contexts/overlays-context";
+import { cn } from "@/lib/utils";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -46,13 +47,14 @@ const TextOverlayItem = ({
 }: TextOverlayItemProps) => {
   return (
     <div
-      className={`p-3 rounded-lg border-2 text-sm ${
+      className={cn(
+        "py-2 px-3 rounded-lg border-2 text-sm",
         selectedOverlay === overlay.id
           ? "border-primary bg-primary/10"
           : "border-gray-700/50 bg-surface-secondary"
-      }`}
+      )}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between">
         <Input
           type="text"
           value={overlay.text}
@@ -61,7 +63,7 @@ const TextOverlayItem = ({
               text: e.target.value,
             })
           }
-          className="flex-1 px-2 py-1 text-sm"
+          className="flex-1 text-sm"
           placeholder="Text content"
         />
         <div className="flex items-center space-x-1 ml-2">
@@ -71,9 +73,10 @@ const TextOverlayItem = ({
                 visible: !overlay.visible,
               })
             }
-            className={`p-1 rounded ${
-              overlay.visible ? "text-primary" : "text-foreground-muted"
-            }`}
+            className={cn("", {
+              "text-primary": overlay.visible,
+              "text-foreground-muted": !overlay.visible,
+            })}
             variant="ghost"
             size="icon"
           >
@@ -81,7 +84,7 @@ const TextOverlayItem = ({
           </Button>
           <Button
             onClick={() => deleteTextOverlay(overlay.id)}
-            className="p-1 text-error hover:text-error/80"
+            className="text-error hover:text-error/80"
             variant="ghost"
             size="icon"
           >
@@ -178,9 +181,10 @@ const TextOverlayItem = ({
                   bold: !overlay.bold,
                 })
               }
-              className={`p-2 rounded ${
+              className={cn(
+                "p-2 rounded",
                 overlay.bold ? "bg-primary" : "bg-surface-tertiary"
-              }`}
+              )}
               variant="ghost"
               size="icon"
             >
@@ -192,9 +196,10 @@ const TextOverlayItem = ({
                   italic: !overlay.italic,
                 })
               }
-              className={`p-2 rounded ${
+              className={cn(
+                "p-2 rounded",
                 overlay.italic ? "bg-primary" : "bg-surface-tertiary"
-              }`}
+              )}
               variant="ghost"
               size="icon"
             >
@@ -206,9 +211,10 @@ const TextOverlayItem = ({
                   underline: !overlay.underline,
                 })
               }
-              className={`p-2 rounded ${
+              className={cn(
+                "p-2 rounded",
                 overlay.underline ? "bg-primary" : "bg-surface-tertiary"
-              }`}
+              )}
               variant="ghost"
               size="icon"
             >
@@ -229,11 +235,10 @@ const TextOverlayItem = ({
                     alignment: value as "left" | "center" | "right",
                   })
                 }
-                className={`p-2 rounded ${
-                  overlay.alignment === value
-                    ? "bg-primary"
-                    : "bg-surface-tertiary"
-                }`}
+                className={cn("p-2 rounded", {
+                  "bg-primary": overlay.alignment === value,
+                  "bg-surface-tertiary": overlay.alignment !== value,
+                })}
                 variant="ghost"
                 size="icon"
               >
@@ -242,7 +247,7 @@ const TextOverlayItem = ({
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-3">
             <div>
               <label className="block text-xs text-foreground-subtle mb-1">
                 Text Color

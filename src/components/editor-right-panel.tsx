@@ -1,0 +1,356 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  Scissors,
+  Type,
+  Image as ImageIcon,
+  Music,
+  Video,
+  Settings,
+  Eye,
+  EyeOff,
+  Trash2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { DualVideoControls } from "./dual-video-controls";
+import TextOverlayItemContainer from "./text-overlay-item";
+import ImageOverlayItemContainer from "./image-overlay-item";
+import { FileUpload } from "./ui/file-upload";
+import type {
+  ClipToolType,
+  DualVideoClip,
+  DualVideoSettings,
+  S3ClipData,
+  AudioTrack,
+} from "@/types/app";
+
+interface EditorRightPanelProps {
+  activeTab: ClipToolType;
+  onTabChange: (tab: ClipToolType) => void;
+  onSettingsClick: () => void;
+  onExportClick: () => void;
+  onTraceToggle: () => void;
+  showTrace: boolean;
+  isVideoLoaded: boolean;
+  isExporting: boolean;
+  duration: number;
+  clipData: S3ClipData;
+  audioTracks: AudioTrack[];
+  onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
+  onAudioTrackDelete: (id: string) => void;
+  onAddAudioTrack: () => void;
+  onImageFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onAddTextOverlay: () => void;
+  selectedOverlay: string | null;
+  textOverlaysRef: React.RefObject<any[]>;
+  imageOverlaysRef: React.RefObject<any[]>;
+  secondaryClip: DualVideoClip | null;
+  dualVideoSettings: DualVideoSettings;
+  onSecondaryClipChange: (clip: DualVideoClip | null) => void;
+  onDualVideoSettingsChange: (settings: DualVideoSettings) => void;
+  onAddSecondaryClip: (file: File) => void;
+}
+
+const TAB_CONFIG = [
+  {
+    id: "clips" as const,
+    icon: Scissors,
+    label: "Clips",
+  },
+  {
+    id: "text" as const,
+    icon: Type,
+    label: "Text",
+  },
+  {
+    id: "image" as const,
+    icon: ImageIcon,
+    label: "Image",
+  },
+  {
+    id: "audio" as const,
+    icon: Music,
+    label: "Audio",
+  },
+  {
+    id: "dual" as const,
+    icon: Video,
+    label: "Dual Video",
+  },
+];
+
+export function EditorRightPanel({
+  activeTab,
+  onTabChange,
+  onSettingsClick,
+  onExportClick,
+  onTraceToggle,
+  showTrace,
+  isVideoLoaded,
+  isExporting,
+  duration,
+  clipData,
+  audioTracks,
+  onAudioTrackUpdate,
+  onAudioTrackDelete,
+  onAddAudioTrack,
+  onImageFileSelect,
+  onAddTextOverlay,
+  selectedOverlay,
+  textOverlaysRef,
+  imageOverlaysRef,
+  secondaryClip,
+  dualVideoSettings,
+  onSecondaryClipChange,
+  onDualVideoSettingsChange,
+  onAddSecondaryClip,
+}: EditorRightPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const formatTime = (milliseconds: number) => {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}:${(minutes % 60).toString().padStart(2, "0")}:${(
+        seconds % 60
+      )
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
+  };
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "clips":
+        return (
+          <div className="space-y-4">
+            <h3 className="text-base font-semibold text-foreground-default">
+              🎬
+            </h3>
+            {[
+              {
+                id: clipData.metadata.clipId,
+                startTime: clipData.metadata.clipStartTime,
+                endTime: clipData.metadata.clipEndTime,
+              },
+            ].map((clip) => (
+              <div key={clip.id}>
+                <div className="font-medium text-foreground-default text-sm">{`Clip ${clip.id}`}</div>
+                <div className="text-xs text-foreground-subtle">
+                  {formatTime(clip.endTime - clip.startTime)}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "text":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground-default">
+                🅰️
+              </h3>
+              <Button
+                onClick={onAddTextOverlay}
+                className="p-1.5"
+                variant="default"
+                size="icon"
+              >
+                <Type size={16} />
+              </Button>
+            </div>
+            <TextOverlayItemContainer
+              selectedOverlay={selectedOverlay}
+              duration={duration}
+            />
+          </div>
+        );
+
+      case "image":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground-default">
+                🖼️
+              </h3>
+            </div>
+            <FileUpload
+              accept="image/*"
+              hint="Select an image to add as overlay"
+              onChange={onImageFileSelect}
+              name="image-overlay"
+            />
+            <ImageOverlayItemContainer
+              selectedOverlay={selectedOverlay}
+              duration={duration}
+            />
+          </div>
+        );
+
+      case "audio":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground-default">
+                🎵
+              </h3>
+              <Button
+                onClick={onAddAudioTrack}
+                className="p-1.5"
+                variant="default"
+                size="icon"
+              >
+                <Music size={16} />
+              </Button>
+            </div>
+            {audioTracks.map((track) => (
+              <div
+                key={track.id}
+                className="p-3 rounded-lg border border-gray-700/50 bg-surface-secondary"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium truncate text-foreground-default text-sm">
+                    {track.name}
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    <Button
+                      onClick={() =>
+                        onAudioTrackUpdate(track.id, {
+                          visible: !track.visible,
+                        })
+                      }
+                      className={cn(
+                        "p-1 rounded",
+                        track.visible
+                          ? "text-accent-primary"
+                          : "text-foreground-muted"
+                      )}
+                      variant="ghost"
+                      size="icon"
+                    >
+                      {track.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </Button>
+                    <Button
+                      onClick={() => onAudioTrackDelete(track.id)}
+                      className="p-1 text-error hover:text-error/80"
+                      variant="ghost"
+                      size="icon"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs text-foreground-subtle mb-1">
+                      Volume
+                    </label>
+                    <Input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={track.volume}
+                      onChange={(e) =>
+                        onAudioTrackUpdate(track.id, {
+                          volume: parseFloat(e.target.value),
+                        })
+                      }
+                      className="h-7"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-foreground-subtle mb-1">
+                        Start Time
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max={duration}
+                        value={Math.floor(track.startTime / 1000)}
+                        onChange={(e) =>
+                          onAudioTrackUpdate(track.id, {
+                            startTime: parseInt(e.target.value) * 1000,
+                          })
+                        }
+                        className="px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground-subtle mb-1">
+                        End Time
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max={duration}
+                        value={Math.floor(track.endTime / 1000)}
+                        onChange={(e) =>
+                          onAudioTrackUpdate(track.id, {
+                            endTime: parseInt(e.target.value) * 1000,
+                          })
+                        }
+                        className="px-2 py-1 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "dual":
+        return (
+          <DualVideoControls
+            primaryClip={clipData}
+            secondaryClip={secondaryClip}
+            settings={dualVideoSettings}
+            onSecondaryClipChange={onSecondaryClipChange}
+            onSettingsChange={onDualVideoSettingsChange}
+            onAddSecondaryClip={onAddSecondaryClip}
+            disabled={!isVideoLoaded}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="w-full h-full bg-surface-primary flex flex-col">
+      <div className="flex">
+        {TAB_CONFIG.map(({ id, icon: Icon }) => (
+          <Button
+            key={id}
+            onClick={() => onTabChange(id)}
+            className={cn(
+              "flex-1 rounded-none text-xs transition-colors",
+              activeTab === id
+                ? "bg-primary text-foreground-on-accent border-b-2 border-primary"
+                : "text-foreground-subtle hover:text-foreground-default hover:bg-surface-hover"
+            )}
+            size="sm"
+            variant="ghost"
+            disabled={!isVideoLoaded}
+          >
+            <Icon size={16} />
+          </Button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">{renderTabContent()}</div>
+    </div>
+  );
+}

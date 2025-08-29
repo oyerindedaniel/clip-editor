@@ -60,8 +60,7 @@ export async function getClip(referenceId: string): Promise<ClipData> {
 
     const clipMetadata = parseClipMetadata(
       headResponse.Metadata || {},
-      referenceId,
-      s3Key
+      referenceId
     );
 
     return { url: signedUrl, metadata: clipMetadata };
@@ -105,11 +104,7 @@ export async function listClips(): Promise<ClipData[]> {
           const metadata = headResponse.Metadata || {};
 
           const referenceId = metadata["reference-id"] || object.Key!;
-          const clipMetadata = parseClipMetadata(
-            metadata,
-            referenceId,
-            object.Key!
-          );
+          const clipMetadata = parseClipMetadata(metadata, referenceId);
 
           const signedUrl = await getSignedUrl(
             s3Client,
@@ -142,8 +137,7 @@ export async function listClips(): Promise<ClipData[]> {
 
 function parseClipMetadata(
   metadata: Record<string, string> = {},
-  referenceId: string,
-  s3Key: string
+  referenceId: string
 ): ClipMetadata {
   return {
     clipId: metadata["clip-id"] || referenceId,
@@ -162,6 +156,5 @@ function parseClipMetadata(
     streamerName: metadata["streamer-name"],
     uploadTimestamp: metadata["upload-timestamp"],
     originalFilename: metadata["original-filename"],
-    s3Key,
   };
 }

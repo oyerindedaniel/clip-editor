@@ -1,4 +1,4 @@
-import { getClip, listClips } from "@/services/aws-service";
+import { getClip } from "@/services/aws-service";
 import ClipEditor from "@/components/editor-container";
 import logger from "@/utils/logger";
 import { Metadata } from "next";
