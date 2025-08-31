@@ -48,6 +48,16 @@ interface ResizeState {
   overlayId: string | null;
 }
 
+interface RotationState {
+  isRotating: boolean;
+  startAngle: number;
+  startRotation: number;
+  finalRotation: number;
+  element: HTMLElement | null;
+  overlayId: string | null;
+  rafId: number | null;
+}
+
 export function calculateMaxWidth(value: number): string {
   return `${Math.round(value * 0.65)}px`;
 }
@@ -84,6 +94,7 @@ type OverlaysContextValue = {
     handle: Position,
     e: React.MouseEvent
   ) => void;
+  startRotation: (overlayId: string, e: React.MouseEvent) => void;
 
   textOverlaysRef: RefObject<TextOverlay[]>;
   imageOverlaysRef: RefObject<ImageOverlay[]>;
@@ -99,7 +110,7 @@ function getImageOverlaySizeByArea(
   containerHeight: number,
   imageWidth: number,
   imageHeight: number,
-  scaleFactor: number = 0.3
+  scaleFactor: number = 0.1
 ): { width: number; height: number } {
   if (
     containerWidth <= 0 ||
@@ -198,6 +209,16 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     finalWidth: 0,
     rafId: null,
     overlayId: null,
+  });
+
+  const rotationRef = useRef<RotationState>({
+    isRotating: false,
+    startAngle: 0,
+    startRotation: 0,
+    finalRotation: 0,
+    element: null,
+    overlayId: null,
+    rafId: null,
   });
 
   const setVideoRef = (ref: React.RefObject<HTMLVideoElement | null>) => {
@@ -439,7 +460,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     const scaleX = newVideoWidth / prevDimensions.width;
     const scaleY = newVideoHeight / prevDimensions.height;
 
-    if (rafIdRef.current !== null) {
+    if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
     }
 
@@ -562,7 +583,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const container = containerRef.current;
       if (!container) return;
       ensureGuides(container);
-      const { x: currentX, y: currentY } = getTransformPosition(target);
+
+      const overlay = [...imageOverlays, ...textOverlays].find(
+        (overlay) => overlay.id === overlayId
+      );
+      if (!overlay) return;
+
+      const { x: currentX, y: currentY } = overlay;
 
       dragRef.current = {
         isDragging: true,
@@ -698,7 +725,15 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
       const elementRect = target.getBoundingClientRect();
 
-      const { x: currentX, y: currentY } = getTransformPosition(target);
+      const overlay = imageOverlaysRef.current.find(
+        (overlay) => overlay.id === overlayId
+      );
+
+      if (!overlay) return;
+
+      const { x: currentX, y: currentY } = overlay;
+
+      console.log({ currentX, currentY });
 
       resizeRef.current = {
         isResizing: true,
@@ -709,10 +744,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         startHeight: elementRect.height,
         startLeft: currentX,
         startTop: currentY,
-        finalHeight: 0,
-        finalLeft: 0,
-        finalTop: 0,
-        finalWidth: 0,
+        finalWidth: elementRect.width,
+        finalHeight: elementRect.height,
+        finalLeft: currentX,
+        finalTop: currentY,
         rafId: null,
         overlayId,
       };
@@ -797,23 +832,27 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       };
 
       const onMouseUp = () => {
-        const { overlayId, finalLeft, finalTop } = resizeRef.current;
-        resizeRef.current.isResizing = false;
+        const resize = resizeRef.current;
+        const { overlayId, finalLeft, finalTop, finalWidth, finalHeight } =
+          resize;
+        resize.isResizing = false;
 
         if (overlayId && videoRef?.current) {
-          const newWidth = parseFloat(target.style.width);
-          const newHeight = parseFloat(target.style.height);
-
-          const { x, y } = getOverlayNormalizedCoords(videoRef.current, {
-            overlayX: finalLeft,
-            overlayY: finalTop,
-          });
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(
+            videoRef.current,
+            {
+              overlayX: finalLeft,
+              overlayY: finalTop,
+            }
+          );
 
           updateImageOverlay(overlayId, {
-            width: newWidth,
-            height: newHeight,
-            x,
-            y,
+            width: finalWidth,
+            height: finalHeight,
+            x: finalLeft,
+            y: finalTop,
+            normX,
+            normY,
           });
         }
 
@@ -825,6 +864,87 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mouseup", onMouseUp);
     },
     [updateImageOverlay, videoRef]
+  );
+
+  const startRotation = useCallback(
+    (overlayId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const target = e.currentTarget.parentElement as HTMLElement;
+      if (!target) return;
+
+      const imageOverlay = imageOverlaysRef.current.find(
+        (o) => o.id === overlayId
+      );
+      if (!imageOverlay) return;
+
+      const { rotation, scale, x, y } = imageOverlay;
+
+      const rect = target.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      const startAngle =
+        Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+
+      rotationRef.current = {
+        isRotating: true,
+        startAngle,
+        startRotation: rotation,
+        finalRotation: rotation,
+        element: target,
+        overlayId,
+        rafId: null,
+      };
+
+      setSelectedOverlay(overlayId);
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const rotation = rotationRef.current;
+        if (!rotation.isRotating || !rotation.element) return;
+
+        const currentAngle =
+          Math.atan2(ev.clientY - centerY, ev.clientX - centerX) *
+          (180 / Math.PI);
+
+        const deltaAngle = currentAngle - rotation.startAngle;
+        const newRotation = rotation.startRotation + deltaAngle;
+
+        rotation.finalRotation = newRotation;
+
+        if (rotation.rafId) cancelAnimationFrame(rotation.rafId);
+        rotation.rafId = requestAnimationFrame(() => {
+          if (rotation.element) {
+            rotation.element.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${newRotation}deg) scale(${scale})`;
+          }
+        });
+      };
+
+      const onMouseUp = () => {
+        const rotation = rotationRef.current;
+        rotation.isRotating = false;
+
+        if (rotation.overlayId) {
+          updateImageOverlay(rotation.overlayId, {
+            rotation: rotation.finalRotation,
+            scale,
+          });
+        }
+
+        rotation.element = null;
+        rotation.overlayId = null;
+        if (rotation.rafId) {
+          cancelAnimationFrame(rotation.rafId);
+          rotation.rafId = null;
+        }
+
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [updateImageOverlay]
   );
 
   return (
@@ -849,6 +969,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         containerRef,
         startDrag,
         startResize,
+        startRotation,
         textOverlaysRef,
         imageOverlaysRef,
       }}
@@ -878,6 +999,7 @@ export const useOverlayControls = () =>
     setSelectedOverlay: state.setSelectedOverlay,
     addTextOverlay: state.addTextOverlay,
     addImageOverlay: state.addImageOverlay,
+    updateImageOverlay: state.updateImageOverlay,
     registerTextOverlayRef: state.registerTextOverlayRef,
     registerImageOverlayRef: state.registerImageOverlayRef,
     getTimeBasedOverlays: state.getTimeBasedOverlays,
@@ -885,6 +1007,7 @@ export const useOverlayControls = () =>
     containerRef: state.containerRef,
     startDrag: state.startDrag,
     startResize: state.startResize,
+    startRotation: state.startRotation,
     textOverlaysRef: state.textOverlaysRef,
     imageOverlaysRef: state.imageOverlaysRef,
     videoRef: state.videoRef,

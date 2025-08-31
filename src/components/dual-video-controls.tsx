@@ -82,14 +82,11 @@ export function DualVideoControls({
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-foreground-default">
-            Dual Video
-          </h3>
+          <h3 className="text-sm font-medium text-foreground-default">🎥</h3>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 h-6 w-6"
           >
             <Settings size={14} />
           </Button>
@@ -165,23 +162,19 @@ export function DualVideoControls({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground-default">
-          Dual Video
-        </h3>
+        <h3 className="text-sm font-medium text-foreground-default">🎥</h3>
         <div className="flex items-center space-x-1">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 h-6 w-6"
           >
             <Settings size={14} />
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
+            variant="destructive"
+            size="icon"
             onClick={removeSecondaryClip}
-            className="p-1 h-6 w-6 text-destructive hover:text-destructive/80"
           >
             <Trash2 size={14} />
           </Button>
@@ -190,10 +183,10 @@ export function DualVideoControls({
 
       <div className="space-y-3">
         <div className="p-3 rounded-lg border border-border bg-surface-secondary">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-between">
+            <div className="flex min-w-0 items-center space-x-2">
               <Video size={14} className="text-foreground-subtle" />
-              <span className="text-xs font-medium text-foreground-default">
+              <span className="text-xs font-medium text-foreground-default truncate">
                 {secondaryClip.metadata.originalFilename || "Secondary Clip"}
               </span>
             </div>

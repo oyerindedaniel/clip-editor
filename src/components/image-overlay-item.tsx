@@ -47,13 +47,6 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
     }
   };
 
-  const handleRotationChange = (value: string) => {
-    const rotation = parseFloat(value);
-    if (!isNaN(rotation)) {
-      updateImageOverlay(overlay.id, { rotation });
-    }
-  };
-
   const handleScaleChange = (value: string) => {
     const scale = parseFloat(value);
     if (!isNaN(scale) && scale > 0) {
@@ -72,17 +65,17 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
       onClick={() => setIsExpanded(!isExpanded)}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center min-w-0 space-x-2">
           <img
             src={objectUrl.current}
             alt={overlay.file.name}
             className="w-8 h-8 object-cover rounded"
           />
-          <span className="font-medium truncate text-foreground-default text-sm">
+          <span className="font-medium flex-1 min-w-0 truncate text-foreground-default text-sm">
             {overlay.file.name}
           </span>
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 shrink-0">
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -171,38 +164,20 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-foreground-subtle mb-1">
-                Rotation
-              </label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="number"
-                  min="-180"
-                  max="180"
-                  value={overlay.rotation}
-                  onChange={(e) => handleRotationChange(e.target.value)}
-                  className="px-2 py-1 text-xs"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-foreground-subtle mb-1">
-                Scale
-              </label>
-              <Input
-                type="number"
-                min="0.1"
-                max="3"
-                step="0.1"
-                value={overlay.scale}
-                onChange={(e) => handleScaleChange(e.target.value)}
-                className="px-2 py-1 text-xs"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+          <div>
+            <label className="block text-xs text-foreground-subtle mb-1">
+              Scale
+            </label>
+            <Input
+              type="number"
+              min="0.1"
+              max="3"
+              step="0.1"
+              value={overlay.scale}
+              onChange={(e) => handleScaleChange(e.target.value)}
+              className="px-2 py-1 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

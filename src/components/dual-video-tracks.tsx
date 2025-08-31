@@ -5,6 +5,9 @@ import { Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useScale } from "@/hooks/app/use-scale";
+import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
+import { formatDurationDisplay } from "@/utils/app";
+import { flushSync } from "react-dom";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -28,6 +31,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   secondaryPreviewFrames,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const playheadRef = useRef<HTMLDivElement | null>(null);
   const primaryBlockRef = useRef<HTMLDivElement | null>(null);
   const secondaryBlockRef = useRef<HTMLDivElement | null>(null);
@@ -43,27 +47,27 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipContentRef = useRef<HTMLSpanElement>(null);
-  const tooltipPositionRef = useRef({ x: 0, y: 0 });
-
-  function formatDurationDisplay(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
-      .toString()
-      .padStart(2, "0")}`;
-  }
+  const lastSecondaryTooltipRef = useRef<string>("");
+  const lastPlayheadTooltipRef = useRef<string>("");
 
   const maxDurationMs = Math.max(primaryDurationMs, secondaryDurationMs);
   const PX_PER_SECOND = 100;
 
-  console.log(maxDurationMs);
-  console.log({ primaryDurationMs, secondaryDurationMs });
   const { pxPerMsRef, recalc } = useScale({
     containerRef,
     durationMs: maxDurationMs,
     fixedPxPerSecond: PX_PER_SECOND,
     useFixedScaling: true,
+  });
+
+  const {
+    handleDragMove: handleAutoScroll,
+    startAutoScroll,
+    stopAutoScroll,
+  } = useAutoScroll({
+    edgeThreshold: 60,
+    maxScrollSpeed: 20,
+    acceleration: 2.2,
   });
 
   const renderStrips = useCallback(() => {
@@ -79,7 +83,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       if (pxPerMs <= 0) return;
 
       if (frames && frames.length > 0) {
-        // Calculate how many frames we need based on duration and fixed scaling
         const totalWidth = durationMs * pxPerMs;
         const frameWidth = 48; // Each thumbnail is 48px wide
         const numFrames = Math.ceil(totalWidth / frameWidth);
@@ -89,7 +92,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           thumb.style.width = "48px";
           thumb.style.height = "100%";
 
-          // Use frame from array if available, otherwise use fallback
           const frameIndex = Math.min(i, frames.length - 1);
           if (frames[frameIndex]) {
             thumb.style.backgroundImage = `url(${frames[frameIndex]})`;
@@ -106,7 +108,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           container.appendChild(thumb);
         }
       } else {
-        // Fallback pattern - create enough blocks to fill the duration
         const totalWidth = durationMs * pxPerMs;
         const blockWidth = 48;
         const numBlocks = Math.ceil(totalWidth / blockWidth);
@@ -152,7 +153,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     if (pxPerMs <= 0) return;
 
     const totalSeconds = Math.ceil(maxDurationMs / 1000);
-    console.log(totalSeconds, maxDurationMs);
+
     for (let s = 0; s <= totalSeconds; s++) {
       const x = Math.round(s * 1000 * pxPerMs);
       const tick = document.createElement("div");
@@ -215,7 +216,28 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       const startX = e.clientX;
       const startOffset = currentOffsetRef.current;
       draggingSecondaryRef.current = true;
-      setShowTooltip(true);
+
+      startAutoScroll(scrollContainerRef, (scrollDelta) => {
+        const pxPerMs = pxPerMsRef.current;
+        if (pxPerMs > 0) {
+          const deltaMs = scrollDelta / pxPerMs;
+          currentOffsetRef.current = Math.max(
+            0,
+            currentOffsetRef.current + deltaMs
+          );
+          renderBlocks();
+          onOffsetChange?.(currentOffsetRef.current);
+        }
+      });
+
+      flushSync(() => {
+        setShowTooltip(true);
+      });
+
+      if (tooltipContentRef.current) {
+        tooltipContentRef.current.textContent =
+          lastSecondaryTooltipRef.current || "Start";
+      }
 
       const onMove = (ev: MouseEvent) => {
         if (!draggingSecondaryRef.current) return;
@@ -229,17 +251,19 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           renderBlocks();
           onOffsetChange?.(next);
 
+          handleAutoScroll(ev);
+
           if (tooltipContentRef.current) {
-            tooltipContentRef.current.textContent = `Offset: ${formatDurationDisplay(
-              next
-            )}`;
+            const text = `Offset: ${formatDurationDisplay(next)}`;
+            tooltipContentRef.current.textContent = text;
+            lastSecondaryTooltipRef.current = text;
           }
-          tooltipPositionRef.current = { x: ev.clientX, y: ev.clientY - 30 };
         });
       };
 
       const onUp = () => {
         draggingSecondaryRef.current = false;
+        stopAutoScroll();
         setShowTooltip(false);
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
@@ -249,7 +273,15 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [onOffsetChange, onCommitOffset, pxPerMsRef, renderBlocks]
+    [
+      onOffsetChange,
+      onCommitOffset,
+      pxPerMsRef,
+      renderBlocks,
+      handleAutoScroll,
+      startAutoScroll,
+      stopAutoScroll,
+    ]
   );
 
   const onPlayheadMouseDown = useCallback(
@@ -258,7 +290,24 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
       draggingPlayheadRef.current = true;
-      setShowTooltip(true);
+
+      startAutoScroll(scrollContainerRef, (scrollDelta) => {
+        // When container scrolls, adjust playhead position to keep it under mouse
+        if (playheadRef.current) {
+          const currentLeft = parseFloat(playheadRef.current.style.left || "0");
+          const newLeft = Math.max(0, currentLeft + scrollDelta);
+          playheadRef.current.style.left = `${newLeft}px`;
+        }
+      });
+
+      flushSync(() => {
+        setShowTooltip(true);
+      });
+
+      if (tooltipContentRef.current) {
+        tooltipContentRef.current.textContent =
+          lastPlayheadTooltipRef.current || "Start";
+      }
 
       const onMove = (ev: MouseEvent) => {
         if (!draggingPlayheadRef.current || !playheadRef.current) return;
@@ -268,19 +317,21 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           x = Math.max(0, Math.min(x, rect.width));
           playheadRef.current!.style.left = `${x}px`;
 
+          handleAutoScroll(ev);
+
           const pxPerMs = pxPerMsRef.current;
           const timeMs = pxPerMs > 0 ? x / pxPerMs : 0;
           if (tooltipContentRef.current) {
-            tooltipContentRef.current.textContent = `Playhead: ${formatDurationDisplay(
-              timeMs
-            )}`;
+            const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
+            tooltipContentRef.current.textContent = text;
+            lastPlayheadTooltipRef.current = text;
           }
-          tooltipPositionRef.current = { x: ev.clientX, y: ev.clientY - 30 };
         });
       };
 
       const onUp = () => {
         draggingPlayheadRef.current = false;
+        stopAutoScroll();
         setShowTooltip(false);
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
@@ -289,7 +340,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [pxPerMsRef]
+    [pxPerMsRef, handleAutoScroll, startAutoScroll, stopAutoScroll]
   );
 
   const handleCutSecondary = useCallback(() => {
@@ -301,7 +352,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   }, [onCutSecondaryAt, pxPerMsRef]);
 
   return (
-    <div className="flex flex-col gap-2 w-full h-[250px]">
+    <div className="flex relative flex-col gap-2 w-full h-[250px]">
       <div className="flex items-center justify-between">
         <div className="text-xs text-foreground-subtle">🎞️</div>
         <div className="flex items-center gap-2">
@@ -311,7 +362,10 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         </div>
       </div>
 
-      <div className="relative w-full rounded-md border border-border bg-surface-secondary overflow-x-auto overflow-y-hidden">
+      <div
+        ref={scrollContainerRef}
+        className="relative w-full rounded-md border border-border bg-surface-secondary overflow-x-auto overflow-y-hidden"
+      >
         <div
           ref={containerRef}
           className="relative min-w-full"
@@ -372,18 +426,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       </div>
 
       {showTooltip && (
-        <div
-          className="fixed z-50 pointer-events-none"
-          style={{
-            left: tooltipPositionRef.current.x,
-            top: tooltipPositionRef.current.y,
-            transform: "translateX(-50%)",
-          }}
-        >
+        <div className="absolute z-50 pointer-events-none translate-x-2/4">
           <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap border border-border">
-            <span className="text-primary" ref={tooltipContentRef}>
-              {formatDurationDisplay(maxDurationMs)}
-            </span>
+            <span className="text-primary" ref={tooltipContentRef} />
             <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-surface-secondary" />
           </div>
         </div>

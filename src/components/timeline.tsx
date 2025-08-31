@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { GripVertical } from "lucide-react";
 import { useScale } from "@/hooks/app/use-scale";
+import { formatDurationDisplay } from "@/utils/app";
 
 interface TimelineProps {
   duration: number;
@@ -37,15 +38,6 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim }) => {
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
-
-  function formatDurationDisplay(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
-      .toString()
-      .padStart(2, "0")}`;
-  }
 
   const drawRuler = useCallback(() => {
     const el = rulerRef.current;

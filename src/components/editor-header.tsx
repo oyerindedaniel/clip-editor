@@ -45,39 +45,27 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="rounded-lg"
-                  variant="outline"
-                  size="icon"
-                  disabled={!isVideoLoaded}
-                  onClick={onToggleTrace}
-                >
-                  <Crosshair size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span>{showTrace ? "Hide trace" : "Show trace"}</span>
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              className="text-xs"
+              variant="outline"
+              size="sm"
+              disabled={!isVideoLoaded}
+              onClick={onToggleTrace}
+            >
+              <Crosshair size={16} className="mr-2" />
+              Trace
+            </Button>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="rounded-lg"
-                  variant="outline"
-                  size="icon"
-                  disabled={!isVideoLoaded}
-                  onClick={onOpenAdjust}
-                >
-                  <Settings size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span>Adjust</span>
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              className="text-xs"
+              variant="outline"
+              size="sm"
+              disabled={!isVideoLoaded}
+              onClick={onOpenAdjust}
+            >
+              <Settings size={16} className="mr-2" />
+              Settings
+            </Button>
           </div>
 
           <Button

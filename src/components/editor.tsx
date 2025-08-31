@@ -88,10 +88,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     selectedOverlay,
     addTextOverlay,
     addImageOverlay,
+    updateImageOverlay,
     getAllVisibleOverlays,
     containerRef,
     startDrag,
     startResize,
+    startRotation,
     setVideoRef,
     textOverlaysRef,
     imageOverlaysRef,
@@ -665,6 +667,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         e.preventDefault();
                         e.stopPropagation();
                         startResize(overlay.id, handle, e);
+                      }}
+                      onRotationStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startRotation(overlay.id, e);
                       }}
                     />
                   ))}
