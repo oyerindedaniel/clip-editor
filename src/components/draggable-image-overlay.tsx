@@ -4,7 +4,8 @@ import type { ImageOverlay } from "@/types/app";
 import { ResizeHandle } from "./resize-handle";
 import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";
-import { useOverlayControls } from "@/contexts/overlays-context";
+import { OverlaysContext } from "@/contexts/overlays-context";
+import { useShallowSelector } from "@/hooks/context-store";
 
 interface DraggableImageOverlayProps {
   overlay: ImageOverlay;
@@ -22,7 +23,12 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
   onRotationStart,
 }) => {
   const elementRef = useRef<HTMLDivElement | null>(null);
-  const { registerImageOverlayRef } = useOverlayControls();
+  const { registerImageOverlayRef } = useShallowSelector(
+    OverlaysContext,
+    (state) => ({
+      registerImageOverlayRef: state.registerImageOverlayRef,
+    })
+  );
 
   const objectUrl = useRef(URL.createObjectURL(overlay.file));
 

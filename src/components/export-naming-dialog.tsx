@@ -22,7 +22,7 @@ import { EXPORT_BITRATE_MAP } from "@/constants/app";
 interface ExportNamingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  streamerName: string;
+  streamerName: string | undefined;
   onExport: (
     outputName: string,
     exportSettings: Pick<
@@ -139,10 +139,10 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   streamerName,
   onExport,
 }) => {
-  const streamerNameRef = useRef<HTMLInputElement>(null);
-  const clipTitleRef = useRef<HTMLInputElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
-  const timeRef = useRef<HTMLInputElement>(null);
+  const streamerNameRef = useRef<HTMLInputElement | null>(null);
+  const clipTitleRef = useRef<HTMLInputElement | null>(null);
+  const dateRef = useRef<HTMLInputElement | null>(null);
+  const timeRef = useRef<HTMLInputElement | null>(null);
 
   const [preset, setPreset] = useState<ExportSettings["preset"]>("fast");
   const [crf, setCrf] = useState<ExportSettings["crf"]>(23);

@@ -52,7 +52,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               disabled={!isVideoLoaded}
               onClick={onToggleTrace}
             >
-              <Crosshair size={16} className="mr-2" />
+              <Crosshair size={16} className="mr-1" />
               Trace
             </Button>
 
@@ -63,7 +63,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               disabled={!isVideoLoaded}
               onClick={onOpenAdjust}
             >
-              <Settings size={16} className="mr-2" />
+              <Settings size={16} className="mr-1" />
               Settings
             </Button>
           </div>

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import type { TextOverlay } from "@/types/app";
-import { useOverlayControls } from "@/contexts/overlays-context";
 import { cn } from "@/lib/utils";
+import { useShallowSelector } from "@/hooks/context-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface DraggableTextOverlayProps {
   overlay: TextOverlay;
@@ -15,7 +16,12 @@ export const DraggableTextOverlay = ({
   onMouseDown,
 }: DraggableTextOverlayProps) => {
   const elementRef = useRef<HTMLDivElement | null>(null);
-  const { registerTextOverlayRef } = useOverlayControls();
+  const { registerTextOverlayRef } = useShallowSelector(
+    OverlaysContext,
+    (state) => ({
+      registerTextOverlayRef: state.registerTextOverlayRef,
+    })
+  );
 
   useEffect(() => {
     registerTextOverlayRef(overlay.id, elementRef.current);

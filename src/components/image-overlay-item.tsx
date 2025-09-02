@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Trash2, RotateCw, Maximize2 } from "lucide-react";
 import { ImageOverlay } from "@/types/app";
 import { cn } from "@/lib/utils";
-import { useImageOverlays } from "@/contexts/overlays-context";
+import { OverlaysContext } from "@/contexts/overlays-context";
+import { useShallowSelector } from "@/hooks/context-store";
 
 interface ImageOverlayItemProps {
   overlay: ImageOverlay;
@@ -186,16 +187,23 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
 };
 
 interface ImageOverlayItemContainerProps {
-  selectedOverlay: string | null;
   duration: number;
 }
 
 const ImageOverlayItemContainer = ({
-  selectedOverlay,
   duration,
 }: ImageOverlayItemContainerProps) => {
-  const { imageOverlays, updateImageOverlay, deleteImageOverlay } =
-    useImageOverlays();
+  const {
+    imageOverlays,
+    selectedOverlay,
+    updateImageOverlay,
+    deleteImageOverlay,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    imageOverlays: state.imageOverlays,
+    selectedOverlay: state.selectedOverlay,
+    updateImageOverlay: state.updateImageOverlay,
+    deleteImageOverlay: state.deleteImageOverlay,
+  }));
 
   return imageOverlays.map((imageOverlay) => (
     <ImageOverlayItem

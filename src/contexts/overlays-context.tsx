@@ -7,14 +7,20 @@ import {
   ReactNode,
   RefObject,
   useEffect,
+  createContext,
 } from "react";
-import { createContext, useContextSelector } from "use-context-selector";
+
 import { TextOverlay, ImageOverlay } from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Position } from "@/components/resize-handle";
 import { debounce } from "@/utils/app";
+import {
+  StoreApi,
+  useContextStore,
+  useShallowSelector,
+} from "@/hooks/context-store";
 
 export type OverlayType = "text" | "image";
 
@@ -83,10 +89,6 @@ type OverlaysContextValue = {
     textOverlays: TextOverlay[];
     imageOverlays: ImageOverlay[];
   };
-  getAllVisibleOverlays: () => {
-    textOverlays: TextOverlay[];
-    imageOverlays: ImageOverlay[];
-  };
   containerRef: RefObject<HTMLDivElement | null>;
   startDrag: (overlayId: string, e: React.MouseEvent) => void;
   startResize: (
@@ -103,7 +105,8 @@ type OverlaysContextValue = {
   setVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
 };
 
-const OverlaysContext = createContext<OverlaysContextValue>(null!);
+export const OverlaysContext =
+  createContext<StoreApi<OverlaysContextValue> | null>(null);
 
 function getImageOverlaySizeByArea(
   containerWidth: number,
@@ -221,9 +224,12 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     rafId: null,
   });
 
-  const setVideoRef = (ref: React.RefObject<HTMLVideoElement | null>) => {
-    videoRef.current = ref.current;
-  };
+  const setVideoRef = useCallback(
+    (ref: React.RefObject<HTMLVideoElement | null>) => {
+      videoRef.current = ref.current;
+    },
+    []
+  );
 
   const vGuideRef = useRef<HTMLDivElement | null>(null);
   const hGuideRef = useRef<HTMLDivElement | null>(null);
@@ -306,7 +312,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       setTextOverlays((prev) => [...prev, newOverlay]);
       setSelectedOverlay(newOverlay.id);
     },
-    [videoRef]
+    []
   );
 
   const addImageOverlay = useCallback(
@@ -542,40 +548,24 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     setSelectedOverlay((prev) => (prev === id ? null : prev));
   }, []);
 
-  const getTimeBasedOverlays = useCallback(
-    (currentTime: number) => {
-      const visibleTextOverlays = textOverlays.filter(
-        (overlay) =>
-          overlay.visible &&
-          currentTime >= overlay.startTime &&
-          currentTime <= overlay.endTime
-      );
-      const visibleImageOverlays = imageOverlays.filter(
-        (overlay) =>
-          overlay.visible &&
-          currentTime >= overlay.startTime &&
-          currentTime <= overlay.endTime
-      );
-      return {
-        textOverlays: visibleTextOverlays,
-        imageOverlays: visibleImageOverlays,
-      };
-    },
-    [textOverlays, imageOverlays]
-  );
-
-  const getAllVisibleOverlays = useCallback(() => {
-    const visibleTextOverlays = textOverlays.filter(
-      (overlay) => overlay.visible
+  const getTimeBasedOverlays = useCallback((currentTime: number) => {
+    const visibleTextOverlays = textOverlaysRef.current.filter(
+      (overlay) =>
+        overlay.visible &&
+        currentTime >= overlay.startTime &&
+        currentTime <= overlay.endTime
     );
-    const visibleImageOverlays = imageOverlays.filter(
-      (overlay) => overlay.visible
+    const visibleImageOverlays = imageOverlaysRef.current.filter(
+      (overlay) =>
+        overlay.visible &&
+        currentTime >= overlay.startTime &&
+        currentTime <= overlay.endTime
     );
     return {
       textOverlays: visibleTextOverlays,
       imageOverlays: visibleImageOverlays,
     };
-  }, [textOverlays, imageOverlays]);
+  }, []);
 
   const startDrag = useCallback(
     (overlayId: string, e: React.MouseEvent) => {
@@ -584,9 +574,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       if (!container) return;
       ensureGuides(container);
 
-      const overlay = [...imageOverlays, ...textOverlays].find(
-        (overlay) => overlay.id === overlayId
-      );
+      const overlay = [
+        ...imageOverlaysRef.current,
+        ...textOverlaysRef.current,
+      ].find((overlay) => overlay.id === overlayId);
       if (!overlay) return;
 
       const { x: currentX, y: currentY } = overlay;
@@ -669,8 +660,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
               overlayY: drag.finalTop,
             }
           );
-          const textOverlay = textOverlays.find((o) => o.id === drag.overlayId);
-          const imageOverlay = imageOverlays.find(
+          const textOverlay = textOverlaysRef.current.find(
+            (o) => o.id === drag.overlayId
+          );
+          const imageOverlay = imageOverlaysRef.current.find(
             (o) => o.id === drag.overlayId
           );
           if (textOverlay) {
@@ -688,7 +681,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
               normY,
             });
           }
-          logger.log("[Normalized Overlay Position]", {
+          logger.log("[Overlay Position]", {
             x: drag.finalLeft,
             y: drag.finalTop,
             normX,
@@ -707,13 +700,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [
-      updateTextOverlay,
-      updateImageOverlay,
-      videoRef,
-      textOverlays,
-      imageOverlays,
-    ]
+    [updateTextOverlay, updateImageOverlay]
   );
 
   const startResize = useCallback(
@@ -863,7 +850,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateImageOverlay, videoRef]
+    [updateImageOverlay]
   );
 
   const startRotation = useCallback(
@@ -947,69 +934,35 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     [updateImageOverlay]
   );
 
+  const contextValue = {
+    videoRef,
+    setVideoRef,
+    textOverlays,
+    imageOverlays,
+    selectedOverlay,
+    registerTextOverlayRef,
+    registerImageOverlayRef,
+    setSelectedOverlay,
+    addTextOverlay,
+    addImageOverlay,
+    updateTextOverlay,
+    updateImageOverlay,
+    deleteTextOverlay,
+    deleteImageOverlay,
+    getTimeBasedOverlays,
+    containerRef,
+    startDrag,
+    startResize,
+    startRotation,
+    textOverlaysRef,
+    imageOverlaysRef,
+  };
+
+  const overlaysStore = useContextStore(contextValue);
+
   return (
-    <OverlaysContext.Provider
-      value={{
-        videoRef,
-        setVideoRef,
-        textOverlays,
-        imageOverlays,
-        selectedOverlay,
-        registerTextOverlayRef,
-        registerImageOverlayRef,
-        setSelectedOverlay,
-        addTextOverlay,
-        addImageOverlay,
-        updateTextOverlay,
-        updateImageOverlay,
-        deleteTextOverlay,
-        deleteImageOverlay,
-        getTimeBasedOverlays,
-        getAllVisibleOverlays,
-        containerRef,
-        startDrag,
-        startResize,
-        startRotation,
-        textOverlaysRef,
-        imageOverlaysRef,
-      }}
-    >
+    <OverlaysContext.Provider value={overlaysStore}>
       {children}
     </OverlaysContext.Provider>
   );
 };
-
-export const useTextOverlays = () =>
-  useContextSelector(OverlaysContext, (state) => ({
-    textOverlays: state.textOverlays,
-    updateTextOverlay: state.updateTextOverlay,
-    deleteTextOverlay: state.deleteTextOverlay,
-  }));
-
-export const useImageOverlays = () =>
-  useContextSelector(OverlaysContext, (state) => ({
-    imageOverlays: state.imageOverlays,
-    updateImageOverlay: state.updateImageOverlay,
-    deleteImageOverlay: state.deleteImageOverlay,
-  }));
-
-export const useOverlayControls = () =>
-  useContextSelector(OverlaysContext, (state) => ({
-    selectedOverlay: state.selectedOverlay,
-    setSelectedOverlay: state.setSelectedOverlay,
-    addTextOverlay: state.addTextOverlay,
-    addImageOverlay: state.addImageOverlay,
-    updateImageOverlay: state.updateImageOverlay,
-    registerTextOverlayRef: state.registerTextOverlayRef,
-    registerImageOverlayRef: state.registerImageOverlayRef,
-    getTimeBasedOverlays: state.getTimeBasedOverlays,
-    getAllVisibleOverlays: state.getAllVisibleOverlays,
-    containerRef: state.containerRef,
-    startDrag: state.startDrag,
-    startResize: state.startResize,
-    startRotation: state.startRotation,
-    textOverlaysRef: state.textOverlaysRef,
-    imageOverlaysRef: state.imageOverlaysRef,
-    videoRef: state.videoRef,
-    setVideoRef: state.setVideoRef,
-  }));

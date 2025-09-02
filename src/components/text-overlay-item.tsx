@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
-import { useTextOverlays } from "@/contexts/overlays-context";
 import { cn } from "@/lib/utils";
+import { useShallowSelector } from "@/hooks/context-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -278,16 +279,23 @@ const TextOverlayItem = ({
 };
 
 interface TextOverlayItemContainerProps {
-  selectedOverlay: string | null;
   duration: number;
 }
 
 const TextOverlayItemContainer = ({
-  selectedOverlay,
   duration,
 }: TextOverlayItemContainerProps) => {
-  const { textOverlays, updateTextOverlay, deleteTextOverlay } =
-    useTextOverlays();
+  const {
+    textOverlays,
+    selectedOverlay,
+    updateTextOverlay,
+    deleteTextOverlay,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    textOverlays: state.textOverlays,
+    selectedOverlay: state.selectedOverlay,
+    updateTextOverlay: state.updateTextOverlay,
+    deleteTextOverlay: state.deleteTextOverlay,
+  }));
 
   return textOverlays.map((textOverlay) => (
     <TextOverlayItem

@@ -28,7 +28,7 @@ import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "./export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
-import { useOverlayControls } from "@/contexts/overlays-context";
+import { OverlaysContext } from "@/contexts/overlays-context";
 import { EditorRightPanel } from "./editor-right-panel";
 import {
   ResizablePanelGroup,
@@ -38,6 +38,8 @@ import {
 import DualVideoTracks from "./dual-video-tracks";
 import EditorHeader from "./editor-header";
 import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
+import { PersistentOverlays } from "./persistent-overlays";
+import { useShallowSelector } from "@/hooks/context-store";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -47,7 +49,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<ClipToolType>("clips");
+
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
   const [secondaryClip, setSecondaryClip] = useState<DualVideoClip | null>(
@@ -86,18 +88,17 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const {
     selectedOverlay,
-    addTextOverlay,
-    addImageOverlay,
-    updateImageOverlay,
-    getAllVisibleOverlays,
-    containerRef,
-    startDrag,
-    startResize,
-    startRotation,
-    setVideoRef,
     textOverlaysRef,
     imageOverlaysRef,
-  } = useOverlayControls();
+    containerRef,
+    setVideoRef,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    selectedOverlay: state.selectedOverlay,
+    containerRef: state.containerRef,
+    textOverlaysRef: state.textOverlaysRef,
+    imageOverlaysRef: state.imageOverlaysRef,
+    setVideoRef: state.setVideoRef,
+  }));
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -138,7 +139,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? "rgba(255, 0, 0, 0.15)"
       : "transparent";
     trace.style.pointerEvents = "none";
-    trace.style.zIndex = "15";
+    trace.style.zIndex = "999";
   }, [showTraceRef]);
 
   const loadClipVideo = useCallback(async (): Promise<string | null> => {
@@ -414,18 +415,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     }
   };
 
-  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
-
-    addImageOverlay(file, 0, duration);
-  };
-
   const updateAudioTrack = (id: string, updates: Partial<AudioTrack>) => {
     setAudioTracks(
       audioTracks.map((track) =>
@@ -506,7 +495,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           },
           clientDisplaySize,
           targetResolution: targetResolutionDimensions,
-          // Add dual video data if available
           ...(secondaryClip && {
             dualVideo: {
               primaryClip: {
@@ -583,7 +571,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   };
 
   return (
-    <div className="h-[100dvh] bg-surface-primary text-foreground-default text-sm flex flex-col">
+    <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
         isVideoLoaded={isVideoLoaded}
         isExporting={isExporting}
@@ -630,51 +618,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
                 <div ref={traceRef} />
 
-                {getAllVisibleOverlays()
-                  .textOverlays.filter(
-                    (overlay) =>
-                      overlay.startTime === 0 && overlay.endTime >= duration
-                  )
-                  .map((overlay) => (
-                    <DraggableTextOverlay
-                      key={`persistent-${overlay.id}`}
-                      overlay={overlay}
-                      isSelected={selectedOverlay === overlay.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startDrag(overlay.id, e);
-                      }}
-                    />
-                  ))}
-
-                {getAllVisibleOverlays()
-                  .imageOverlays.filter(
-                    (overlay) =>
-                      overlay.startTime === 0 && overlay.endTime >= duration
-                  )
-                  .map((overlay) => (
-                    <DraggableImageOverlay
-                      key={`persistent-${overlay.id}`}
-                      overlay={overlay}
-                      isSelected={selectedOverlay === overlay.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startDrag(overlay.id, e);
-                      }}
-                      onResizeStart={(handle, e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startResize(overlay.id, handle, e);
-                      }}
-                      onRotationStart={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startRotation(overlay.id, e);
-                      }}
-                    />
-                  ))}
+                <PersistentOverlays duration={duration} />
               </div>
 
               <div className="flex-1 min-h-0">
@@ -711,25 +655,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
           <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
             <EditorRightPanel
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              onSettingsClick={openAspectRatioModal}
-              onExportClick={openExportNamingModal}
-              onTraceToggle={toggleTrace}
-              showTrace={showTrace}
               isVideoLoaded={isVideoLoaded}
-              isExporting={isExporting}
               duration={duration}
               clipData={clipData}
               audioTracks={audioTracks}
               onAudioTrackUpdate={updateAudioTrack}
               onAudioTrackDelete={deleteAudioTrack}
               onAddAudioTrack={addAudioTrack}
-              onImageFileSelect={handleImageFileSelect}
-              onAddTextOverlay={() => addTextOverlay(0, duration)}
               selectedOverlay={selectedOverlay}
-              textOverlaysRef={textOverlaysRef}
-              imageOverlaysRef={imageOverlaysRef}
               secondaryClip={secondaryClip}
               dualVideoSettings={dualVideoSettings}
               onSecondaryClipChange={handleSecondaryClipChange}
@@ -749,7 +682,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       <ExportNamingDialog
         isOpen={isExportNamingModalOpen}
         onOpenChange={closeExportNamingModal}
-        streamerName={clipData.metadata.streamerName || ""}
+        streamerName={clipData.metadata.streamerName}
         onExport={handleExport}
       />
     </div>

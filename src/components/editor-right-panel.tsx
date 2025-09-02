@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { startTransition, useState } from "react";
 import {
   Scissors,
   Type,
   Image as ImageIcon,
   Music,
   Video,
-  Settings,
   Eye,
   EyeOff,
   Trash2,
@@ -26,27 +25,20 @@ import type {
   S3ClipData,
   AudioTrack,
 } from "@/types/app";
+import { formatTime } from "@/utils/app";
+import { toast } from "sonner";
+import { useShallowSelector } from "@/hooks/context-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface EditorRightPanelProps {
-  activeTab: ClipToolType;
-  onTabChange: (tab: ClipToolType) => void;
-  onSettingsClick: () => void;
-  onExportClick: () => void;
-  onTraceToggle: () => void;
-  showTrace: boolean;
   isVideoLoaded: boolean;
-  isExporting: boolean;
   duration: number;
   clipData: S3ClipData;
   audioTracks: AudioTrack[];
   onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
   onAudioTrackDelete: (id: string) => void;
   onAddAudioTrack: () => void;
-  onImageFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onAddTextOverlay: () => void;
   selectedOverlay: string | null;
-  textOverlaysRef: React.RefObject<any[]>;
-  imageOverlaysRef: React.RefObject<any[]>;
   secondaryClip: DualVideoClip | null;
   dualVideoSettings: DualVideoSettings;
   onSecondaryClipChange: (clip: DualVideoClip | null) => void;
@@ -83,46 +75,39 @@ const TAB_CONFIG = [
 ];
 
 export function EditorRightPanel({
-  activeTab,
-  onTabChange,
-  onSettingsClick,
-  onExportClick,
-  onTraceToggle,
-  showTrace,
   isVideoLoaded,
-  isExporting,
   duration,
   clipData,
   audioTracks,
   onAudioTrackUpdate,
   onAudioTrackDelete,
   onAddAudioTrack,
-  onImageFileSelect,
-  onAddTextOverlay,
   selectedOverlay,
-  textOverlaysRef,
-  imageOverlaysRef,
   secondaryClip,
   dualVideoSettings,
   onSecondaryClipChange,
   onDualVideoSettingsChange,
   onAddSecondaryClip,
 }: EditorRightPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<ClipToolType>("clips");
+  const { addTextOverlay, addImageOverlay } = useShallowSelector(
+    OverlaysContext,
+    (state) => ({
+      addTextOverlay: state.addTextOverlay,
+      addImageOverlay: state.addImageOverlay,
+    })
+  );
 
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
+  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    if (hours > 0) {
-      return `${hours}:${(minutes % 60).toString().padStart(2, "0")}:${(
-        seconds % 60
-      )
-        .toString()
-        .padStart(2, "0")}`;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
     }
-    return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
+
+    addImageOverlay(file, 0, duration);
   };
 
   const renderTabContent = () => {
@@ -158,7 +143,7 @@ export function EditorRightPanel({
                 🅰️
               </h3>
               <Button
-                onClick={onAddTextOverlay}
+                onClick={() => addTextOverlay(0, duration)}
                 className="p-1.5"
                 variant="default"
                 size="icon"
@@ -166,10 +151,7 @@ export function EditorRightPanel({
                 <Type size={16} />
               </Button>
             </div>
-            <TextOverlayItemContainer
-              selectedOverlay={selectedOverlay}
-              duration={duration}
-            />
+            <TextOverlayItemContainer duration={duration} />
           </div>
         );
 
@@ -184,7 +166,7 @@ export function EditorRightPanel({
             <FileUpload
               accept="image/*"
               hint="Select an image to add as overlay"
-              onChange={onImageFileSelect}
+              onChange={handleImageFileSelect}
               name="image-overlay"
             />
             <ImageOverlayItemContainer
@@ -334,7 +316,7 @@ export function EditorRightPanel({
         {TAB_CONFIG.map(({ id, icon: Icon }) => (
           <Button
             key={id}
-            onClick={() => onTabChange(id)}
+            onClick={() => startTransition(() => setActiveTab(id))}
             className={cn(
               "flex-1 rounded-none text-xs transition-colors",
               activeTab === id

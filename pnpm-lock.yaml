@@ -71,6 +71,9 @@ importers:
       react-resizable-panels:
         specifier: ^3.0.5
         version: 3.0.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      scheduler:
+        specifier: ^0.26.0
+        version: 0.26.0
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
