@@ -169,10 +169,7 @@ export function EditorRightPanel({
               onChange={handleImageFileSelect}
               name="image-overlay"
             />
-            <ImageOverlayItemContainer
-              selectedOverlay={selectedOverlay}
-              duration={duration}
-            />
+            <ImageOverlayItemContainer duration={duration} />
           </div>
         );
 
