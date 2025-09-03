@@ -58,9 +58,9 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
   return (
     <div
       className={cn(
-        "py-2 px-3 rounded-lg border-2 text-sm",
+        "py-2 px-3 rounded-lg text-sm",
         selectedOverlay === overlay.id
-          ? "border-primary bg-primary/10"
+          ? "bg-primary/10"
           : "border-gray-700/50 bg-surface-secondary"
       )}
       onClick={() => setIsExpanded(!isExpanded)}

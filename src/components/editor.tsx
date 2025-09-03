@@ -86,19 +86,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const clipMetaDataRef = useRef<ClipMetadata | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
 
-  const {
-    selectedOverlay,
-    textOverlaysRef,
-    imageOverlaysRef,
-    containerRef,
-    setVideoRef,
-  } = useShallowSelector(OverlaysContext, (state) => ({
-    selectedOverlay: state.selectedOverlay,
-    containerRef: state.containerRef,
-    textOverlaysRef: state.textOverlaysRef,
-    imageOverlaysRef: state.imageOverlaysRef,
-    setVideoRef: state.setVideoRef,
-  }));
+  const { textOverlaysRef, imageOverlaysRef, containerRef, setVideoRef } =
+    useShallowSelector(OverlaysContext, (state) => ({
+      containerRef: state.containerRef,
+      textOverlaysRef: state.textOverlaysRef,
+      imageOverlaysRef: state.imageOverlaysRef,
+      setVideoRef: state.setVideoRef,
+    }));
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -643,7 +637,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     secondaryPreviewFrames={secondaryFrames}
                   />
                 ) : isVideoLoaded ? (
-                  <Timeline duration={duration} onTrim={handleTrim} />
+                  <Timeline
+                    duration={duration}
+                    onTrim={handleTrim}
+                    frames={primaryFrames}
+                  />
                 ) : (
                   <TimelineSkeleton />
                 )}
@@ -662,7 +660,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               onAudioTrackUpdate={updateAudioTrack}
               onAudioTrackDelete={deleteAudioTrack}
               onAddAudioTrack={addAudioTrack}
-              selectedOverlay={selectedOverlay}
               secondaryClip={secondaryClip}
               dualVideoSettings={dualVideoSettings}
               onSecondaryClipChange={handleSecondaryClipChange}

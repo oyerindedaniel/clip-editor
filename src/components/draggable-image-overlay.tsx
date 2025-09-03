@@ -58,9 +58,9 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
     <div
       ref={elementRef}
       className={cn(
-        "absolute top-0 left-0 cursor-move select-none origin-center",
+        "absolute top-0 left-0 cursor-move select-none pointer-events-auto origin-center will-change-transform",
         "w-[var(--width)] h-[var(--height)] opacity-[var(--opacity)]",
-        isSelected && "ring-2 ring-primary ring-opacity-50"
+        isSelected && "ring-2 ring-primary/50"
       )}
       style={
         {

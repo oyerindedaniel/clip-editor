@@ -32,15 +32,12 @@ export const DraggableTextOverlay = ({
     <div
       ref={elementRef}
       className={cn(
-        "absolute select-none cursor-move",
-        isSelected && "ring-2 ring-primary"
+        "absolute top-0 left-0 select-none cursor-move pointer-events-auto will-change-transform",
+        isSelected && "ring-2 ring-primary/50"
       )}
       style={
         {
           transform: `translate3d(${overlay.x}px, ${overlay.y}px, 0)`,
-          willChange: "transform",
-          left: 0,
-          top: 0,
           fontSize: `${overlay.fontSize}px`,
           fontFamily: overlay.fontFamily,
           letterSpacing: overlay.letterSpacing,
@@ -55,7 +52,6 @@ export const DraggableTextOverlay = ({
           padding: "6px 8px",
           borderRadius: "4px",
           zIndex: isSelected ? 10 : 1,
-          pointerEvents: "auto",
         } as React.CSSProperties
       }
       onMouseDown={onMouseDown}

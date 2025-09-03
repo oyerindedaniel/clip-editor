@@ -1,38 +1,118 @@
 import { useRef, useCallback, useEffect } from "react";
+import { useLatestValue } from "../use-latest-value";
 
-interface UseScaleProps {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  durationMs: number;
-  fixedPxPerSecond?: number;
-  useFixedScaling?: boolean;
+/**
+ * Fixed scaling configuration - always uses the specified pixels per second
+ */
+type FixedScalingConfig = {
+  type: "fixed";
+  fixedPxPerSecond: number;
+};
+
+/**
+ * Container-based scaling configuration - scales based on container width
+ */
+type ContainerScalingConfig = {
+  type: "container";
+};
+
+/**
+ * Auto scaling configuration - automatically switches between fixed and container scaling
+ * based on container size and minimum usability constraints
+ */
+type AutoScalingConfig = {
+  type: "auto";
+  fixedPxPerSecond: number;
+  minPxPerSecond?: number;
+  maxPxPerSecond?: number;
+};
+
+type UseScaleConfig =
+  | FixedScalingConfig
+  | ContainerScalingConfig
+  | AutoScalingConfig;
+
+interface UseScaleReturn {
+  pxPerMsRef: React.RefObject<number>;
+  recalc: () => void;
+  currentScalingType: "fixed" | "container" | "auto";
 }
 
 export function useScale({
   containerRef,
   durationMs,
-  fixedPxPerSecond = 100,
-  useFixedScaling = false,
-}: UseScaleProps) {
+  ...config
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  durationMs: number;
+} & UseScaleConfig): UseScaleReturn {
   const pxPerMsRef = useRef(0);
+  const currentScalingTypeRef = useRef<"fixed" | "container" | "auto">(
+    "container"
+  );
+  const configRef = useLatestValue(config);
 
   const recalc = useCallback(() => {
-    if (useFixedScaling) {
-      pxPerMsRef.current = fixedPxPerSecond / 1000;
-    } else {
+    const config = configRef.current;
+
+    if (config.type === "fixed") {
+      pxPerMsRef.current = config.fixedPxPerSecond / 1000;
+      currentScalingTypeRef.current = "fixed";
+      return;
+    }
+
+    if (config.type === "container") {
       const el = containerRef.current;
       if (!el) return;
+
       const width = el.clientWidth;
-      pxPerMsRef.current = durationMs > 0 && width > 0 ? width / durationMs : 0;
+      const containerPxPerMs =
+        durationMs > 0 && width > 0 ? width / durationMs : 0;
+
+      pxPerMsRef.current = containerPxPerMs;
+      currentScalingTypeRef.current = "container";
+      return;
     }
-  }, [containerRef, durationMs, fixedPxPerSecond, useFixedScaling]);
+
+    if (config.type === "auto") {
+      const el = containerRef.current;
+      if (!el) return;
+
+      const width = el.clientWidth;
+      const containerPxPerMs =
+        durationMs > 0 && width > 0 ? width / durationMs : 0;
+      const fixedPxPerMs = config.fixedPxPerSecond / 1000;
+
+      const containerPxPerSecond = containerPxPerMs * 1000;
+
+      const minPxPerSecond = config.minPxPerSecond ?? config.fixedPxPerSecond;
+      const isContainerTooSmall = containerPxPerSecond < minPxPerSecond;
+
+      const isContainerTooLarge =
+        config.maxPxPerSecond && containerPxPerSecond > config.maxPxPerSecond;
+
+      if (isContainerTooSmall || isContainerTooLarge) {
+        pxPerMsRef.current = fixedPxPerMs;
+        currentScalingTypeRef.current = "auto";
+      } else {
+        pxPerMsRef.current = containerPxPerMs;
+        currentScalingTypeRef.current = "auto";
+      }
+    }
+  }, [durationMs]);
 
   useEffect(() => {
     recalc();
-    if (!useFixedScaling) {
+
+    if (config.type === "container" || config.type === "auto") {
       window.addEventListener("resize", recalc);
       return () => window.removeEventListener("resize", recalc);
     }
-  }, [recalc, useFixedScaling]);
+  }, [recalc, config.type]);
 
-  return { pxPerMsRef, recalc };
+  return {
+    pxPerMsRef,
+    recalc,
+    currentScalingType: currentScalingTypeRef.current,
+  };
 }

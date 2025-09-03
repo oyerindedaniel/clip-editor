@@ -38,7 +38,6 @@ interface EditorRightPanelProps {
   onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
   onAudioTrackDelete: (id: string) => void;
   onAddAudioTrack: () => void;
-  selectedOverlay: string | null;
   secondaryClip: DualVideoClip | null;
   dualVideoSettings: DualVideoSettings;
   onSecondaryClipChange: (clip: DualVideoClip | null) => void;
@@ -82,7 +81,6 @@ export function EditorRightPanel({
   onAudioTrackUpdate,
   onAudioTrackDelete,
   onAddAudioTrack,
-  selectedOverlay,
   secondaryClip,
   dualVideoSettings,
   onSecondaryClipChange,

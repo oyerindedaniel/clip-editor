@@ -30,54 +30,43 @@ export interface S3ClipData {
   metadata: S3ClipMetadata;
 }
 
-type OverlappingStyleProps =
-  | "color"
-  | "opacity"
-  | "fontFamily"
-  | "fontSize"
-  | "letterSpacing"
-  | "textAlign"
-  | "backgroundColor";
-
-export interface TextOverlay
-  extends Partial<Omit<CSSProperties, OverlappingStyleProps>> {
+export interface BaseOverlay {
   id: string;
-  text: string;
   x: number;
   y: number;
-  normX: number; // Normalized 0–1 for export
-  normY: number; // Normalized 0–1 for export
+  normX: number;
+  normY: number;
   startTime: number;
   endTime: number;
+  opacity: number;
+  visible: boolean;
+}
+
+export interface TextOverlay extends BaseOverlay {
+  type: "text";
+  text: string;
   fontSize: number;
   fontFamily: string;
   letterSpacing: string;
   color: string;
   backgroundColor: string;
-  opacity: number;
   bold: boolean;
   italic: boolean;
   underline: boolean;
   alignment: "left" | "center" | "right";
-  visible: boolean;
+  maxWidth: string;
 }
 
-export interface ImageOverlay {
-  id: string;
+export interface ImageOverlay extends BaseOverlay {
+  type: "image";
   file: File;
-  x: number;
-  y: number;
-  normX: number; // Normalized 0–1 for export
-  normY: number; // Normalized 0–1 for export
-  startTime: number;
-  endTime: number;
   width: number;
   height: number;
-  opacity: number;
-  visible: boolean;
   rotation: number;
   scale: number;
 }
+
+export type Overlay = TextOverlay | ImageOverlay;
 
 export interface AudioTrack {
   id: string;

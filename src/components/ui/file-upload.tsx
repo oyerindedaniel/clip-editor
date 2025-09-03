@@ -33,7 +33,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const isFile = value && value.length > 0;
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-surface-secondary px-3 py-2">
+    <div className="flex items-center gap-3 rounded-lg bg-surface-secondary px-3 py-2">
       <input
         id={inputId}
         ref={inputRef}

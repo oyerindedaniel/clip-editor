@@ -10,17 +10,13 @@ import {
   createContext,
 } from "react";
 
-import { TextOverlay, ImageOverlay } from "@/types/app";
+import { TextOverlay, ImageOverlay, Overlay } from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Position } from "@/components/resize-handle";
 import { debounce } from "@/utils/app";
-import {
-  StoreApi,
-  useContextStore,
-  useShallowSelector,
-} from "@/hooks/context-store";
+import { StoreApi, useContextStore } from "@/hooks/context-store";
 
 export type OverlayType = "text" | "image";
 
@@ -288,6 +284,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       }
       const { width: videoWidth } = getVideoBoundingBox(video);
       const newOverlay: TextOverlay = {
+        type: "text",
         id: `text_${Date.now()}`,
         text: "New Text",
         startTime: currentTime,
@@ -340,6 +337,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         );
 
         const newOverlay: ImageOverlay = {
+          type: "image",
           id: `image_${Date.now()}`,
           file,
           startTime: currentTime,
@@ -531,7 +529,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener("resize", handleWindowResize);
     return () => {
       window.removeEventListener("resize", handleWindowResize);
-      if (rafIdRef.current !== null) {
+      if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
       }
       debouncedUpdateNormalizedCoords.cancel?.();
@@ -574,13 +572,21 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       if (!container) return;
       ensureGuides(container);
 
-      const overlay = [
+      const overlay: Overlay | undefined = [
         ...imageOverlaysRef.current,
         ...textOverlaysRef.current,
-      ].find((overlay) => overlay.id === overlayId);
+      ].find((o) => o.id === overlayId);
+
       if (!overlay) return;
 
       const { x: currentX, y: currentY } = overlay;
+      let scale = 1;
+      let rotation = 0;
+
+      if (overlay.type === "image") {
+        scale = overlay.scale;
+        rotation = overlay.rotation;
+      }
 
       dragRef.current = {
         isDragging: true,
@@ -595,6 +601,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         finalTop: currentY,
       };
       setSelectedOverlay(overlayId);
+
       const onMouseMove = (ev: MouseEvent) => {
         const drag = dragRef.current;
         if (!drag.isDragging || !drag.element) return;
@@ -644,7 +651,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         }
         drag.rafId = requestAnimationFrame(() => {
           if (drag.element) {
-            drag.element.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0)`;
+            drag.element.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
           }
         });
       };
@@ -718,9 +725,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
       if (!overlay) return;
 
-      const { x: currentX, y: currentY } = overlay;
-
-      console.log({ currentX, currentY });
+      const { x: currentX, y: currentY, rotation, scale } = overlay;
 
       resizeRef.current = {
         isResizing: true,
@@ -811,7 +816,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         if (resize.rafId) cancelAnimationFrame(resize.rafId);
         resize.rafId = requestAnimationFrame(() => {
           if (target) {
-            target.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0)`;
+            target.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
             target.style.width = `${newWidth}px`;
             target.style.height = `${newHeight}px`;
           }

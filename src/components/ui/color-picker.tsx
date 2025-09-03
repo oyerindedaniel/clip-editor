@@ -22,17 +22,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-secondary px-2 py-1 text-xs"
+          className="flex w-full items-center gap-2 rounded-lg bg-surface-secondary px-2 py-1 text-xs"
         >
           <span
-            className="inline-block h-4 w-4 rounded-sm border border-border"
+            className="inline-block h-4 w-4 rounded-sm"
             style={{ backgroundColor: color }}
           />
           <HexColorInput
             color={color}
             onChange={onChange}
             prefixed
-            className="flex-1 rounded-md border border-border bg-surface-secondary px-2 py-1 text-xs text-foreground-default"
+            className="flex-1 rounded-lg bg-surface-secondary px-2 py-1 text-xs text-foreground-default"
             onClick={(e) => e.stopPropagation()}
             onFocus={() => setOpen(true)}
           />

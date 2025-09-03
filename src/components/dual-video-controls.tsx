@@ -182,7 +182,7 @@ export function DualVideoControls({
       </div>
 
       <div className="space-y-3">
-        <div className="p-3 rounded-lg border border-border bg-surface-secondary">
+        <div className="p-3 rounded-lg bg-surface-secondary">
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center space-x-2">
               <Video size={14} className="text-foreground-subtle" />

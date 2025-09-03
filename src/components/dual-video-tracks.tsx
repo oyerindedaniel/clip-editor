@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils";
 import { useScale } from "@/hooks/app/use-scale";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
 import { formatDurationDisplay } from "@/utils/app";
+import {
+  renderTimelineStrips,
+  renderTimelineRuler,
+} from "@/utils/timeline-utils";
 import { flushSync } from "react-dom";
 
 interface DualVideoTracksProps {
@@ -56,8 +60,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const { pxPerMsRef, recalc } = useScale({
     containerRef,
     durationMs: maxDurationMs,
+    type: "fixed",
     fixedPxPerSecond: PX_PER_SECOND,
-    useFixedScaling: true,
   });
 
   const {
@@ -71,111 +75,39 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   });
 
   const renderStrips = useCallback(() => {
-    const renderInto = (
-      container: HTMLDivElement | null,
-      durationMs: number,
-      frames?: string[]
-    ) => {
-      if (!container) return;
-      container.innerHTML = "";
+    const pxPerMs = pxPerMsRef.current;
+    if (pxPerMs <= 0) return;
 
-      const pxPerMs = pxPerMsRef.current;
-      if (pxPerMs <= 0) return;
+    renderTimelineStrips({
+      pxPerMs,
+      durationMs: primaryDurationMs,
+      frames: primaryPreviewFrames,
+      container: primaryStripRef.current,
+    });
 
-      if (frames && frames.length > 0) {
-        const totalWidth = durationMs * pxPerMs;
-        const frameWidth = 48; // Each thumbnail is 48px wide
-        const numFrames = Math.ceil(totalWidth / frameWidth);
-
-        for (let i = 0; i < numFrames; i++) {
-          const thumb = document.createElement("div");
-          thumb.style.width = "48px";
-          thumb.style.height = "100%";
-
-          const frameIndex = Math.min(i, frames.length - 1);
-          if (frames[frameIndex]) {
-            thumb.style.backgroundImage = `url(${frames[frameIndex]})`;
-            thumb.style.backgroundSize = "cover";
-            thumb.style.backgroundPosition = "center";
-          } else {
-            thumb.style.background =
-              i % 2 === 0
-                ? "var(--color-surface-tertiary)"
-                : "var(--color-surface-hover)";
-          }
-
-          thumb.style.borderRight = "1px solid var(--color-subtle)";
-          container.appendChild(thumb);
-        }
-      } else {
-        const totalWidth = durationMs * pxPerMs;
-        const blockWidth = 48;
-        const numBlocks = Math.ceil(totalWidth / blockWidth);
-
-        for (let i = 0; i < numBlocks; i++) {
-          const block = document.createElement("div");
-          block.style.width = "48px";
-          block.style.height = "100%";
-          block.style.background =
-            i % 2 === 0
-              ? "var(--color-surface-tertiary)"
-              : "var(--color-surface-hover)";
-          block.style.borderRight = "1px solid var(--color-subtle)";
-          container.appendChild(block);
-        }
-      }
-    };
-
-    renderInto(
-      primaryStripRef.current,
-      primaryDurationMs,
-      primaryPreviewFrames
-    );
-    renderInto(
-      secondaryStripRef.current,
-      secondaryDurationMs,
-      secondaryPreviewFrames
-    );
+    renderTimelineStrips({
+      pxPerMs,
+      durationMs: secondaryDurationMs,
+      frames: secondaryPreviewFrames,
+      container: secondaryStripRef.current,
+    });
   }, [
     primaryPreviewFrames,
     secondaryPreviewFrames,
     primaryDurationMs,
     secondaryDurationMs,
-    pxPerMsRef,
   ]);
 
   const renderRuler = useCallback(() => {
-    const el = rulerRef.current;
-    const container = containerRef.current;
-    if (!el || !container) return;
-    el.innerHTML = "";
     const pxPerMs = pxPerMsRef.current;
     if (pxPerMs <= 0) return;
 
-    const totalSeconds = Math.ceil(maxDurationMs / 1000);
-
-    for (let s = 0; s <= totalSeconds; s++) {
-      const x = Math.round(s * 1000 * pxPerMs);
-      const tick = document.createElement("div");
-      tick.style.position = "absolute";
-      tick.style.left = `${x}px`;
-      tick.style.top = "0";
-      tick.style.bottom = "0";
-      tick.style.width = "1px";
-      tick.style.background = "var(--color-subtle)";
-
-      const label = document.createElement("div");
-      label.style.position = "absolute";
-      label.style.left = `${x + 2}px`;
-      label.style.top = "0";
-      label.style.fontSize = "10px";
-      label.style.color = "var(--color-foreground-muted)";
-      label.textContent = `${s}s`;
-
-      el.appendChild(tick);
-      el.appendChild(label);
-    }
-  }, [maxDurationMs, pxPerMsRef]);
+    renderTimelineRuler({
+      pxPerMs,
+      durationMs: maxDurationMs,
+      container: rulerRef.current,
+    });
+  }, [maxDurationMs]);
 
   const renderBlocks = useCallback(() => {
     const pxPerMs = pxPerMsRef.current;
@@ -193,7 +125,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       secondaryBlockRef.current.style.width = `${width}px`;
       secondaryBlockRef.current.style.left = `${left}px`;
     }
-  }, [primaryDurationMs, secondaryDurationMs, pxPerMsRef]);
+  }, [primaryDurationMs, secondaryDurationMs]);
 
   useEffect(() => {
     currentOffsetRef.current = initialOffsetMs;
@@ -202,7 +134,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       renderBlocks();
       renderStrips();
       renderRuler();
-      // Ensure the container reserves height via spacer
+
       if (spacerRef.current) spacerRef.current.style.height = "160px"; // ruler + two tracks
     });
     return () => {
@@ -213,20 +145,31 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const onSecondaryMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
+      const scrollContainer = scrollContainerRef.current;
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!scrollContainer || !containerRect) return;
+
+      let isDragging = true;
       const startX = e.clientX;
       const startOffset = currentOffsetRef.current;
       draggingSecondaryRef.current = true;
 
-      startAutoScroll(scrollContainerRef, (scrollDelta) => {
-        const pxPerMs = pxPerMsRef.current;
-        if (pxPerMs > 0) {
-          const deltaMs = scrollDelta / pxPerMs;
-          currentOffsetRef.current = Math.max(
-            0,
-            currentOffsetRef.current + deltaMs
-          );
-          renderBlocks();
-          onOffsetChange?.(currentOffsetRef.current);
+      startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
+        if (Math.abs(scrollDelta) > 0) {
+          const pxPerMs = pxPerMsRef.current;
+          if (pxPerMs > 0) {
+            const deltaMs = scrollDelta / pxPerMs;
+            const newOffset = Math.max(0, currentOffsetRef.current + deltaMs);
+            currentOffsetRef.current = newOffset;
+            renderBlocks();
+            onOffsetChange?.(newOffset);
+
+            if (tooltipContentRef.current) {
+              const text = `Offset: ${formatDurationDisplay(newOffset)}`;
+              tooltipContentRef.current.textContent = text;
+              lastSecondaryTooltipRef.current = text;
+            }
+          }
         }
       });
 
@@ -235,38 +178,70 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       });
 
       if (tooltipContentRef.current) {
-        tooltipContentRef.current.textContent =
-          lastSecondaryTooltipRef.current || "Start";
+        const text = `Offset: ${formatDurationDisplay(startOffset)}`;
+        tooltipContentRef.current.textContent = text;
+        lastSecondaryTooltipRef.current = text;
       }
 
-      const onMove = (ev: MouseEvent) => {
-        if (!draggingSecondaryRef.current) return;
+      const onMove = (moveEvent: MouseEvent) => {
+        if (!isDragging) return;
+
         if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+
         rafIdRef.current = requestAnimationFrame(() => {
-          const dx = ev.clientX - startX;
-          const pxPerMs = pxPerMsRef.current;
-          const deltaMs = pxPerMs > 0 ? dx / pxPerMs : 0;
-          const next = Math.max(0, startOffset + deltaMs);
-          currentOffsetRef.current = next;
-          renderBlocks();
-          onOffsetChange?.(next);
+          const scrollContainerRect = scrollContainer.getBoundingClientRect();
 
-          handleAutoScroll(ev);
+          handleAutoScroll(moveEvent);
 
-          if (tooltipContentRef.current) {
-            const text = `Offset: ${formatDurationDisplay(next)}`;
-            tooltipContentRef.current.textContent = text;
-            lastSecondaryTooltipRef.current = text;
+          const scrollLeft = scrollContainer.scrollLeft;
+          const scrollWidth = scrollContainer.scrollWidth;
+          const containerWidth = scrollContainer.clientWidth;
+          const maxScrollLeft = scrollWidth - containerWidth;
+
+          const mouseXRelativeToContainer =
+            moveEvent.clientX - scrollContainerRect.left;
+
+          const needsLeftScroll =
+            mouseXRelativeToContainer <= 60 && scrollLeft > 0;
+          const needsRightScroll =
+            mouseXRelativeToContainer >= containerWidth - 60 &&
+            scrollLeft < maxScrollLeft;
+
+          const shouldControlSecondary = !needsLeftScroll && !needsRightScroll;
+
+          if (shouldControlSecondary) {
+            const dx = moveEvent.clientX - startX;
+            const pxPerMs = pxPerMsRef.current;
+            const deltaMs = pxPerMs > 0 ? dx / pxPerMs : 0;
+            const newOffset = Math.max(0, startOffset + deltaMs);
+
+            currentOffsetRef.current = newOffset;
+            renderBlocks();
+            onOffsetChange?.(newOffset);
+
+            if (tooltipContentRef.current) {
+              const text = `Offset: ${formatDurationDisplay(newOffset)}`;
+              tooltipContentRef.current.textContent = text;
+              lastSecondaryTooltipRef.current = text;
+            }
           }
         });
       };
 
       const onUp = () => {
+        isDragging = false;
         draggingSecondaryRef.current = false;
         stopAutoScroll();
         setShowTooltip(false);
+
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
+
         onCommitOffset?.(currentOffsetRef.current);
       };
 
@@ -281,22 +256,42 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       handleAutoScroll,
       startAutoScroll,
       stopAutoScroll,
+      maxDurationMs,
     ]
   );
 
   const onPlayheadMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const scrollContainer = scrollContainerRef.current;
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!scrollContainer || !containerRect) return;
+
+      let isDragging = true;
+      const startX = e.clientX;
+      const startPlayheadPos = parseFloat(
+        playheadRef.current?.style.left || "0"
+      );
       draggingPlayheadRef.current = true;
 
-      startAutoScroll(scrollContainerRef, (scrollDelta) => {
-        // When container scrolls, adjust playhead position to keep it under mouse
-        if (playheadRef.current) {
+      startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
+        if (Math.abs(scrollDelta) > 0 && playheadRef.current) {
           const currentLeft = parseFloat(playheadRef.current.style.left || "0");
-          const newLeft = Math.max(0, currentLeft + scrollDelta);
+          const maxContentWidth = maxDurationMs * pxPerMsRef.current;
+          const newLeft = Math.max(
+            0,
+            Math.min(currentLeft + scrollDelta, maxContentWidth)
+          );
+
           playheadRef.current.style.left = `${newLeft}px`;
+
+          const pxPerMs = pxPerMsRef.current;
+          const timeMs = pxPerMs > 0 ? newLeft / pxPerMs : 0;
+          if (tooltipContentRef.current) {
+            const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
+            tooltipContentRef.current.textContent = text;
+            lastPlayheadTooltipRef.current = text;
+          }
         }
       });
 
@@ -305,34 +300,69 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       });
 
       if (tooltipContentRef.current) {
-        tooltipContentRef.current.textContent =
-          lastPlayheadTooltipRef.current || "Start";
+        const pxPerMs = pxPerMsRef.current;
+        const timeMs = pxPerMs > 0 ? startPlayheadPos / pxPerMs : 0;
+        const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
+        tooltipContentRef.current.textContent = text;
+        lastPlayheadTooltipRef.current = text;
       }
 
-      const onMove = (ev: MouseEvent) => {
-        if (!draggingPlayheadRef.current || !playheadRef.current) return;
+      const onMove = (moveEvent: MouseEvent) => {
+        const playhead = playheadRef.current;
+        if (!isDragging || !playhead) return;
+
         if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+
         rafIdRef.current = requestAnimationFrame(() => {
-          let x = ev.clientX - rect.left;
-          x = Math.max(0, Math.min(x, rect.width));
-          playheadRef.current!.style.left = `${x}px`;
+          const scrollContainerRect = scrollContainer.getBoundingClientRect();
 
-          handleAutoScroll(ev);
+          handleAutoScroll(moveEvent);
 
-          const pxPerMs = pxPerMsRef.current;
-          const timeMs = pxPerMs > 0 ? x / pxPerMs : 0;
-          if (tooltipContentRef.current) {
-            const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
-            tooltipContentRef.current.textContent = text;
-            lastPlayheadTooltipRef.current = text;
+          const scrollLeft = scrollContainer.scrollLeft;
+          const scrollWidth = scrollContainer.scrollWidth;
+          const containerWidth = scrollContainer.clientWidth;
+          const maxScrollLeft = scrollWidth - containerWidth;
+
+          const mouseXRelativeToContainer =
+            moveEvent.clientX - scrollContainerRect.left;
+
+          const needsLeftScroll =
+            mouseXRelativeToContainer <= 60 && scrollLeft > 0;
+          const needsRightScroll =
+            mouseXRelativeToContainer >= containerWidth - 60 &&
+            scrollLeft < maxScrollLeft;
+
+          const shouldControlPlayhead = !needsLeftScroll && !needsRightScroll;
+
+          if (shouldControlPlayhead) {
+            let x = moveEvent.clientX - containerRect.left;
+            const maxContentWidth = maxDurationMs * pxPerMsRef.current;
+            x = Math.max(0, Math.min(x, maxContentWidth));
+
+            playhead.style.left = `${x}px`;
+
+            const pxPerMs = pxPerMsRef.current;
+            const timeMs = pxPerMs > 0 ? x / pxPerMs : 0;
+            if (tooltipContentRef.current) {
+              const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
+              tooltipContentRef.current.textContent = text;
+              lastPlayheadTooltipRef.current = text;
+            }
           }
         });
       };
 
       const onUp = () => {
+        isDragging = false;
         draggingPlayheadRef.current = false;
         stopAutoScroll();
         setShowTooltip(false);
+
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
@@ -340,7 +370,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [pxPerMsRef, handleAutoScroll, startAutoScroll, stopAutoScroll]
+    [
+      pxPerMsRef,
+      handleAutoScroll,
+      startAutoScroll,
+      stopAutoScroll,
+      maxDurationMs,
+    ]
   );
 
   const handleCutSecondary = useCallback(() => {
@@ -364,16 +400,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
       <div
         ref={scrollContainerRef}
-        className="relative w-full rounded-md border border-border bg-surface-secondary overflow-x-auto overflow-y-hidden"
+        className="relative w-full rounded-md bg-surface-secondary overflow-x-auto overflow-y-hidden"
       >
         <div
           ref={containerRef}
           className="relative min-w-full"
           style={{
-            width: `${Math.max(
-              1000,
-              (maxDurationMs / 1000) * PX_PER_SECOND
-            )}px`,
+            width: `${(maxDurationMs / 1000) * PX_PER_SECOND}px`,
           }}
         >
           <div ref={spacerRef} />
