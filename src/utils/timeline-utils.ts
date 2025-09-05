@@ -106,3 +106,45 @@ export function renderTimelineRuler({
     container.appendChild(label);
   }
 }
+
+export function getScrollState(
+  scrollContainer: HTMLDivElement,
+  maxContentWidth?: number,
+  logicalMaxPx?: number
+) {
+  const scrollLeft = scrollContainer.scrollLeft;
+  const containerWidth = scrollContainer.clientWidth;
+
+  const naturalScrollWidth = scrollContainer.scrollWidth;
+  const scrollWidth =
+    maxContentWidth && maxContentWidth > 0
+      ? Math.min(naturalScrollWidth, maxContentWidth)
+      : naturalScrollWidth;
+
+  const maxScrollLeft = Math.max(0, scrollWidth - containerWidth);
+
+  let canScrollRight = scrollLeft < maxScrollLeft;
+  const canScrollLeft = scrollLeft > 0;
+
+  if (logicalMaxPx != null) {
+    canScrollRight =
+      canScrollRight && scrollLeft + containerWidth < logicalMaxPx;
+  }
+
+  return {
+    scrollLeft,
+    scrollWidth,
+    containerWidth,
+    maxScrollLeft,
+    canScrollLeft,
+    canScrollRight,
+  };
+}
+
+export function msToPx(ms: number, pxPerMs: number) {
+  return ms * pxPerMs;
+}
+
+export function pxToMs(px: number, pxPerMs: number) {
+  return px / pxPerMs;
+}

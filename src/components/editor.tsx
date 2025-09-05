@@ -133,7 +133,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? "rgba(255, 0, 0, 0.15)"
       : "transparent";
     trace.style.pointerEvents = "none";
-    trace.style.zIndex = "999";
+    trace.style.zIndex = "15";
   }, [showTraceRef]);
 
   const loadClipVideo = useCallback(async (): Promise<string | null> => {
@@ -335,17 +335,16 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         URL.revokeObjectURL(currentVideoUrl.current);
         currentVideoUrl.current = null;
       }
+    };
+  }, [clipData.url, clipData.metadata.clipId, initializeVideo]);
 
+  useEffect(() => {
+    return () => {
       if (secondaryClip?.url) {
         URL.revokeObjectURL(secondaryClip.url);
       }
     };
-  }, [
-    clipData.url,
-    clipData.metadata.clipId,
-    initializeVideo,
-    secondaryClip?.url,
-  ]);
+  }, [secondaryClip?.url]);
 
   useEffect(() => {
     const video = videoRef.current;

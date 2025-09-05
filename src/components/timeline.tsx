@@ -6,8 +6,10 @@ import { formatDurationDisplay } from "@/utils/app";
 import {
   renderTimelineStrips,
   renderTimelineRuler,
+  msToPx,
+  pxToMs,
+  getScrollState,
 } from "@/utils/timeline-utils";
-import { flushSync } from "react-dom";
 import { cn } from "@/lib/utils";
 
 interface TimelineProps {
@@ -35,29 +37,19 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const trimValuesRef = useRef({ start: 0, end: duration });
   const rafIdRef = useRef<number | null>(null);
 
-  const PX_PER_SECOND = 50;
+  const FIXED_PX_PER_SECOND = 50;
   const HANDLE_WIDTH = 12;
-  const EDGE_THRESHOLD = 60;
+  const EDGE_THRESHOLD = 30;
 
   const { pxPerMsRef, recalc } = useScale({
     containerRef: timelineRef,
     durationMs: duration,
     type: "auto",
-    fixedPxPerSecond: PX_PER_SECOND,
+    fixedPxPerSecond: FIXED_PX_PER_SECOND,
     maxPxPerSecond: 100,
   });
 
-  const getMinGap = useCallback(() => {
-    return pxPerMsRef.current * 1000;
-  }, []);
-
-  // console.log(getMinGap());
-
-  const {
-    handleDragMove: handleAutoScroll,
-    startAutoScroll,
-    stopAutoScroll,
-  } = useAutoScroll({
+  const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll({
     edgeThreshold: EDGE_THRESHOLD,
     maxScrollSpeed: 10,
     acceleration: 1.2,
@@ -65,6 +57,9 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
+
+  const maxContentWidth = duration * pxPerMsRef.current;
+  const pxPerSecond = pxPerMsRef.current * 1000; // in px
 
   const drawRuler = useCallback(() => {
     const pxPerMs = pxPerMsRef.current;
@@ -91,11 +86,11 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
 
   const renderBlock = useCallback(() => {
     if (blockRef.current) {
-      const width = Math.max(0, duration * pxPerMsRef.current);
+      const width = Math.max(0, maxContentWidth);
       blockRef.current.style.width = `${width}px`;
       blockRef.current.style.left = `0px`;
     }
-  }, [duration]);
+  }, [duration, maxContentWidth]);
 
   useEffect(() => {
     recalc();
@@ -103,26 +98,23 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       drawRuler();
       renderBlock();
 
-      if (spacerRef.current) spacerRef.current.style.height = "90px";
+      if (spacerRef.current) spacerRef.current.style.height = "90px"; // ruler + track
 
       if (leftHandleRef.current && rightHandleRef.current) {
-        const minGap = getMinGap();
-        const maxWidth = duration * pxPerMsRef.current;
-
-        const rightPos = Math.max(minGap, maxWidth);
+        const rightPos = Math.max(pxPerSecond, maxContentWidth);
 
         leftHandleRef.current.style.left = "0px";
         rightHandleRef.current.style.left = `${rightPos}px`;
 
         trimValuesRef.current.start = 0;
-        trimValuesRef.current.end = rightPos / pxPerMsRef.current;
+        trimValuesRef.current.end = duration;
       }
     });
 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [duration, recalc, drawRuler, getMinGap, renderBlock]);
+  }, [duration, maxContentWidth, recalc, drawRuler, pxPerSecond, renderBlock]);
 
   useEffect(() => {
     renderStrip();
@@ -150,64 +142,57 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       event.preventDefault();
       const timelineRect = timelineRef.current?.getBoundingClientRect();
       const scrollContainer = scrollContainerRef.current;
-      if (!timelineRect || !scrollContainer) return;
+      const leftHandle = leftHandleRef.current;
+      const rightHandle = rightHandleRef.current;
+
+      if (!timelineRect || !scrollContainer || !leftHandle || !rightHandle)
+        return;
 
       let isDragging = true;
       setShowTooltip(true);
       setActiveHandle(handleType);
 
-      startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        if (
-          Math.abs(scrollDelta) > 0 &&
-          leftHandleRef.current &&
-          rightHandleRef.current
-        ) {
-          const currentLeftPos = parseFloat(
-            leftHandleRef.current.style.left || "0"
-          );
+      startAutoScroll(scrollContainer, (scrollDelta) => {
+        const { canScrollLeft, canScrollRight } =
+          getScrollState(scrollContainer);
+
+        const isScrollingLeft = scrollDelta < 0;
+        const isScrollingRight = scrollDelta > 0;
+
+        const shouldAllowAutoScroll =
+          (isScrollingLeft && canScrollLeft) ||
+          (isScrollingRight && canScrollRight);
+
+        if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+          const currentLeftPos = parseFloat(leftHandle.style.left || "0");
           const currentRightPos = parseFloat(
-            rightHandleRef.current.style.left ||
-              `${duration * pxPerMsRef.current}`
+            rightHandle.style.left || `${maxContentWidth}`
           );
-          const minGap = getMinGap();
-          const maxContentWidth = duration * pxPerMsRef.current;
 
           if (handleType === "left") {
             const newLeftPos = currentLeftPos + scrollDelta;
-            const maxLeftPos = currentRightPos - minGap;
+            const maxLeftPos = currentRightPos - pxPerSecond;
             const clampedLeftPos = Math.max(
               0,
               Math.min(newLeftPos, maxLeftPos)
             );
 
-            if (
-              clampedLeftPos !== currentLeftPos &&
-              clampedLeftPos >= 0 &&
-              clampedLeftPos <= maxLeftPos
-            ) {
-              leftHandleRef.current.style.left = `${clampedLeftPos}px`;
-              const newStartTime = clampedLeftPos / pxPerMsRef.current;
-              trimValuesRef.current.start = newStartTime;
-              updateTooltipContent(newStartTime, trimValuesRef.current.end);
-            }
+            leftHandle.style.left = `${clampedLeftPos}px`;
+            const newStartTime = pxToMs(clampedLeftPos, pxPerMsRef.current);
+            trimValuesRef.current.start = newStartTime;
+            updateTooltipContent(newStartTime, trimValuesRef.current.end);
           } else if (handleType === "right") {
             const newRightPos = currentRightPos + scrollDelta;
-            const minRightPos = currentLeftPos + minGap;
+            const minRightPos = currentLeftPos + pxPerSecond;
             const clampedRightPos = Math.max(
               minRightPos,
               Math.min(newRightPos, maxContentWidth)
             );
 
-            if (
-              clampedRightPos !== currentRightPos &&
-              clampedRightPos >= minRightPos &&
-              clampedRightPos <= maxContentWidth
-            ) {
-              rightHandleRef.current.style.left = `${clampedRightPos}px`;
-              const newEndTime = clampedRightPos / pxPerMsRef.current;
-              trimValuesRef.current.end = newEndTime;
-              updateTooltipContent(trimValuesRef.current.start, newEndTime);
-            }
+            rightHandle.style.left = `${clampedRightPos}px`;
+            const newEndTime = pxToMs(clampedRightPos, pxPerMsRef.current);
+            trimValuesRef.current.end = newEndTime;
+            updateTooltipContent(trimValuesRef.current.start, newEndTime);
           }
         }
       });
@@ -220,39 +205,40 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
         rafIdRef.current = requestAnimationFrame(() => {
           const scrollContainerRect = scrollContainer.getBoundingClientRect();
           const timelineRect = timelineRef.current?.getBoundingClientRect();
-          if (!timelineRect) return;
+          if (!timelineRect || !scrollContainerRect) return;
 
-          const scrollLeft = scrollContainer.scrollLeft;
-          const scrollWidth = scrollContainer.scrollWidth;
-          const containerWidth = scrollContainer.clientWidth;
-          const maxScrollLeft = scrollWidth - containerWidth;
+          const { containerWidth, canScrollLeft, canScrollRight } =
+            getScrollState(scrollContainer);
 
           const mouseXRelativeToContainer =
             moveEvent.clientX - scrollContainerRect.left;
 
           const needsLeftScroll =
-            mouseXRelativeToContainer <= EDGE_THRESHOLD && scrollLeft > 0;
+            mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
           const needsRightScroll =
             mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
-            scrollLeft < maxScrollLeft;
+            canScrollRight;
 
           const shouldControlHandle = !needsLeftScroll && !needsRightScroll;
 
-          handleAutoScroll(moveEvent);
+          if (needsLeftScroll || needsRightScroll) {
+            handleAutoScroll(moveEvent);
+          }
 
           if (shouldControlHandle) {
             const mouseX = moveEvent.clientX;
             let newX = mouseX - timelineRect.left;
             newX = Math.max(0, Math.min(newX, timelineRect.width));
-            const newTime = newX / pxPerMsRef.current;
-            const minGap = getMinGap();
+
+            const newTime = pxToMs(newX, pxPerMsRef.current);
 
             if (handleType === "left") {
               const currentRightPos = parseFloat(
-                rightHandleRef.current?.style.left ||
-                  `${duration * pxPerMsRef.current}`
+                rightHandle.style.left || `${maxContentWidth}`
               );
-              const maxLeftTime = currentRightPos / pxPerMsRef.current - minGap;
+              const maxLeftTime =
+                pxToMs(currentRightPos, pxPerMsRef.current) -
+                pxToMs(pxPerSecond, pxPerMsRef.current);
               const newTrimStart = Math.max(
                 0,
                 Math.min(newTime, Math.max(0, maxLeftTime))
@@ -261,26 +247,24 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
               trimValuesRef.current.start = newTrimStart;
               const newLeftPos = newTrimStart * pxPerMsRef.current;
 
-              if (leftHandleRef.current) {
-                leftHandleRef.current.style.left = `${newLeftPos}px`;
-              }
+              leftHandle.style.left = `${newLeftPos}px`;
+
               updateTooltipContent(newTrimStart, trimValuesRef.current.end);
             } else if (handleType === "right") {
-              const currentLeftPos = parseFloat(
-                leftHandleRef.current?.style.left || "0"
-              );
-              const minRightTime = currentLeftPos / pxPerMsRef.current + minGap;
+              const currentLeftPos = parseFloat(leftHandle.style.left || "0");
+              const minRightTime =
+                pxToMs(currentLeftPos, pxPerMsRef.current) +
+                pxToMs(pxPerSecond, pxPerMsRef.current);
               const newTrimEnd = Math.min(
                 duration,
                 Math.max(newTime, minRightTime)
               );
 
               trimValuesRef.current.end = newTrimEnd;
-              const newRightPos = newTrimEnd * pxPerMsRef.current;
+              const newRightPos = msToPx(newTrimEnd, pxPerMsRef.current);
 
-              if (rightHandleRef.current) {
-                rightHandleRef.current.style.left = `${newRightPos}px`;
-              }
+              rightHandle.style.left = `${newRightPos}px`;
+
               updateTooltipContent(trimValuesRef.current.start, newTrimEnd);
             }
           }
@@ -309,11 +293,12 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
     },
     [
       duration,
+      maxContentWidth,
+      pxPerSecond,
       onTrim,
       handleAutoScroll,
       startAutoScroll,
       stopAutoScroll,
-      getMinGap,
       updateTooltipContent,
       pxPerMsRef,
     ]
@@ -338,7 +323,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
           ref={timelineRef}
           className="relative min-w-full"
           style={{
-            width: `${(duration / 1000) * PX_PER_SECOND}px`,
+            width: `${(duration / 1000) * pxPerSecond}px`,
           }}
         >
           <div ref={spacerRef} />
@@ -346,10 +331,10 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
           <div className="absolute inset-0 bg-gradient-to-b from-surface-primary/40 to-transparent pointer-events-none" />
 
           <div className="absolute left-0 right-0 top-6 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 mx-2 rounded bg-surface-secondary/60" />
+            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
             <div
               ref={blockRef}
-              className="absolute top-0 h-14 rounded-md border border-default overflow-hidden shadow-inner bg-surface-primary/20"
+              className="absolute top-0 h-14 rounded-md border border-default overflow-hidden shadow-inner"
               title="Video timeline"
             >
               <div

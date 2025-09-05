@@ -10,6 +10,9 @@ import { formatDurationDisplay } from "@/utils/app";
 import {
   renderTimelineStrips,
   renderTimelineRuler,
+  msToPx,
+  pxToMs,
+  getScrollState,
 } from "@/utils/timeline-utils";
 import { flushSync } from "react-dom";
 
@@ -55,23 +58,22 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const lastPlayheadTooltipRef = useRef<string>("");
 
   const maxDurationMs = Math.max(primaryDurationMs, secondaryDurationMs);
-  const PX_PER_SECOND = 100;
+  const FIXED_PX_PER_SECOND = 100;
+  const EDGE_THRESHOLD = 30;
 
   const { pxPerMsRef, recalc } = useScale({
     containerRef,
     durationMs: maxDurationMs,
     type: "fixed",
-    fixedPxPerSecond: PX_PER_SECOND,
+    fixedPxPerSecond: FIXED_PX_PER_SECOND,
   });
 
-  const {
-    handleDragMove: handleAutoScroll,
-    startAutoScroll,
-    stopAutoScroll,
-  } = useAutoScroll({
-    edgeThreshold: 60,
-    maxScrollSpeed: 20,
-    acceleration: 2.2,
+  const pxPerSecond = pxPerMsRef.current * 1000; // in px
+
+  const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll({
+    edgeThreshold: EDGE_THRESHOLD,
+    maxScrollSpeed: 10,
+    acceleration: 1.2,
   });
 
   const renderStrips = useCallback(() => {
@@ -114,14 +116,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const offsetMs = currentOffsetRef.current;
 
     if (primaryBlockRef.current) {
-      const width = Math.max(0, primaryDurationMs * pxPerMs);
+      const width = Math.max(0, msToPx(primaryDurationMs, pxPerMs));
       primaryBlockRef.current.style.width = `${width}px`;
       primaryBlockRef.current.style.left = `0px`;
     }
 
     if (secondaryBlockRef.current) {
-      const width = Math.max(0, secondaryDurationMs * pxPerMs);
-      const left = Math.max(0, offsetMs * pxPerMs);
+      const width = Math.max(0, msToPx(secondaryDurationMs, pxPerMs));
+      const left = Math.max(0, msToPx(offsetMs, pxPerMs));
       secondaryBlockRef.current.style.width = `${width}px`;
       secondaryBlockRef.current.style.left = `${left}px`;
     }
@@ -132,7 +134,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     recalc();
     rafIdRef.current = requestAnimationFrame(() => {
       renderBlocks();
-      renderStrips();
       renderRuler();
 
       if (spacerRef.current) spacerRef.current.style.height = "160px"; // ruler + two tracks
@@ -142,33 +143,67 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     };
   }, [initialOffsetMs, recalc, renderBlocks, renderStrips, renderRuler]);
 
+  useEffect(() => {
+    renderStrips();
+  }, [renderStrips]);
+
   const onSecondaryMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       const scrollContainer = scrollContainerRef.current;
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!scrollContainer || !containerRect) return;
+      const container = containerRef.current;
+      if (!scrollContainer || !container) return;
+
+      const containerRect = container.getBoundingClientRect();
 
       let isDragging = true;
-      const startX = e.clientX;
       const startOffset = currentOffsetRef.current;
+
+      const moveEvent = e;
+      const startMouseX = moveEvent.clientX - containerRect.left;
+
+      const maxOffsetMs =
+        primaryDurationMs - pxToMs(pxPerSecond, pxPerMsRef.current);
+
       draggingSecondaryRef.current = true;
 
       startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        if (Math.abs(scrollDelta) > 0) {
-          const pxPerMs = pxPerMsRef.current;
-          if (pxPerMs > 0) {
-            const deltaMs = scrollDelta / pxPerMs;
-            const newOffset = Math.max(0, currentOffsetRef.current + deltaMs);
-            currentOffsetRef.current = newOffset;
-            renderBlocks();
-            onOffsetChange?.(newOffset);
+        const primaryMaxPx = msToPx(maxOffsetMs, pxPerMsRef.current);
+        const { canScrollLeft, canScrollRight } = getScrollState(
+          scrollContainer,
+          undefined,
+          primaryMaxPx
+        );
 
-            if (tooltipContentRef.current) {
-              const text = `Offset: ${formatDurationDisplay(newOffset)}`;
-              tooltipContentRef.current.textContent = text;
-              lastSecondaryTooltipRef.current = text;
-            }
+        const isScrollingLeft = scrollDelta < 0;
+        const isScrollingRight = scrollDelta > 0;
+
+        const shouldAllowAutoScroll =
+          (isScrollingLeft && canScrollLeft) ||
+          (isScrollingRight && canScrollRight);
+
+        // if (!shouldAllowAutoScroll) {
+        //   // TODO: find a way to stop it
+        //   // stopAutoScroll();
+        //   return;
+        // }
+
+        if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+          const deltaMs = pxToMs(scrollDelta, pxPerMsRef.current);
+          const newOffset = Math.max(
+            0,
+            Math.min(currentOffsetRef.current + deltaMs, maxOffsetMs)
+          );
+
+          currentOffsetRef.current = newOffset;
+          renderBlocks();
+
+          onOffsetChange?.(newOffset);
+
+          if (tooltipContentRef.current) {
+            const text = `Offset: ${formatDurationDisplay(newOffset)}`;
+            tooltipContentRef.current.textContent = text;
+            lastSecondaryTooltipRef.current = text;
           }
         }
       });
@@ -190,30 +225,39 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
         rafIdRef.current = requestAnimationFrame(() => {
           const scrollContainerRect = scrollContainer.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
 
-          handleAutoScroll(moveEvent);
+          if (!scrollContainerRect || !containerRect) return;
 
-          const scrollLeft = scrollContainer.scrollLeft;
-          const scrollWidth = scrollContainer.scrollWidth;
-          const containerWidth = scrollContainer.clientWidth;
-          const maxScrollLeft = scrollWidth - containerWidth;
+          const maxContentWidth = msToPx(maxDurationMs, pxPerMsRef.current);
+
+          const { containerWidth, canScrollLeft, canScrollRight } =
+            getScrollState(scrollContainer, maxContentWidth);
 
           const mouseXRelativeToContainer =
             moveEvent.clientX - scrollContainerRect.left;
 
           const needsLeftScroll =
-            mouseXRelativeToContainer <= 60 && scrollLeft > 0;
+            mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
           const needsRightScroll =
-            mouseXRelativeToContainer >= containerWidth - 60 &&
-            scrollLeft < maxScrollLeft;
+            mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
+            canScrollRight;
 
           const shouldControlSecondary = !needsLeftScroll && !needsRightScroll;
 
+          if (needsLeftScroll || needsRightScroll) {
+            handleAutoScroll(moveEvent);
+          }
+
           if (shouldControlSecondary) {
-            const dx = moveEvent.clientX - startX;
-            const pxPerMs = pxPerMsRef.current;
-            const deltaMs = pxPerMs > 0 ? dx / pxPerMs : 0;
-            const newOffset = Math.max(0, startOffset + deltaMs);
+            const mouseX = moveEvent.clientX - containerRect.left;
+            const deltaX = mouseX - startMouseX;
+
+            const deltaMs = pxToMs(deltaX, pxPerMsRef.current);
+            const newOffset = Math.max(
+              0,
+              Math.min(startOffset + deltaMs, maxOffsetMs)
+            );
 
             currentOffsetRef.current = newOffset;
             renderBlocks();
@@ -256,7 +300,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       handleAutoScroll,
       startAutoScroll,
       stopAutoScroll,
-      maxDurationMs,
+      primaryDurationMs,
     ]
   );
 
@@ -264,29 +308,34 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     (e: React.MouseEvent) => {
       e.preventDefault();
       const scrollContainer = scrollContainerRef.current;
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!scrollContainer || !containerRect) return;
+      const playhead = playheadRef.current;
+      const container = containerRef.current;
+
+      if (!scrollContainer || !container || !playhead) return;
 
       let isDragging = true;
-      const startX = e.clientX;
-      const startPlayheadPos = parseFloat(
-        playheadRef.current?.style.left || "0"
-      );
+      const startPlayheadPos = parseFloat(playhead.style.left || "0");
       draggingPlayheadRef.current = true;
+      const secondaryWidth = msToPx(secondaryDurationMs, pxPerMsRef.current);
 
       startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        if (Math.abs(scrollDelta) > 0 && playheadRef.current) {
-          const currentLeft = parseFloat(playheadRef.current.style.left || "0");
-          const maxContentWidth = maxDurationMs * pxPerMsRef.current;
+        const { canScrollLeft, canScrollRight } =
+          getScrollState(scrollContainer);
+        const isScrollingLeft = scrollDelta < 0;
+        const isScrollingRight = scrollDelta > 0;
+        const shouldAllowAutoScroll =
+          (isScrollingLeft && canScrollLeft) ||
+          (isScrollingRight && canScrollRight);
+
+        if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+          const currentLeft = parseFloat(playhead.style.left || "0");
           const newLeft = Math.max(
             0,
-            Math.min(currentLeft + scrollDelta, maxContentWidth)
+            Math.min(currentLeft + scrollDelta, secondaryWidth)
           );
 
-          playheadRef.current.style.left = `${newLeft}px`;
-
-          const pxPerMs = pxPerMsRef.current;
-          const timeMs = pxPerMs > 0 ? newLeft / pxPerMs : 0;
+          playhead.style.left = `${newLeft}px`;
+          const timeMs = pxToMs(newLeft, pxPerMsRef.current);
           if (tooltipContentRef.current) {
             const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
             tooltipContentRef.current.textContent = text;
@@ -300,8 +349,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       });
 
       if (tooltipContentRef.current) {
-        const pxPerMs = pxPerMsRef.current;
-        const timeMs = pxPerMs > 0 ? startPlayheadPos / pxPerMs : 0;
+        const timeMs = pxToMs(startPlayheadPos, pxPerMsRef.current);
         const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
         tooltipContentRef.current.textContent = text;
         lastPlayheadTooltipRef.current = text;
@@ -312,37 +360,31 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         if (!isDragging || !playhead) return;
 
         if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-
         rafIdRef.current = requestAnimationFrame(() => {
           const scrollContainerRect = scrollContainer.getBoundingClientRect();
-
-          handleAutoScroll(moveEvent);
-
-          const scrollLeft = scrollContainer.scrollLeft;
-          const scrollWidth = scrollContainer.scrollWidth;
-          const containerWidth = scrollContainer.clientWidth;
-          const maxScrollLeft = scrollWidth - containerWidth;
-
+          const containerRect = container.getBoundingClientRect();
+          const { containerWidth, canScrollLeft, canScrollRight } =
+            getScrollState(scrollContainer);
           const mouseXRelativeToContainer =
             moveEvent.clientX - scrollContainerRect.left;
-
           const needsLeftScroll =
-            mouseXRelativeToContainer <= 60 && scrollLeft > 0;
+            mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
           const needsRightScroll =
-            mouseXRelativeToContainer >= containerWidth - 60 &&
-            scrollLeft < maxScrollLeft;
-
+            mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
+            canScrollRight;
           const shouldControlPlayhead = !needsLeftScroll && !needsRightScroll;
 
+          if (needsLeftScroll || needsRightScroll) {
+            handleAutoScroll(moveEvent);
+          }
+
           if (shouldControlPlayhead) {
-            let x = moveEvent.clientX - containerRect.left;
-            const maxContentWidth = maxDurationMs * pxPerMsRef.current;
-            x = Math.max(0, Math.min(x, maxContentWidth));
+            const mouseX = moveEvent.clientX;
+            let newX = mouseX - containerRect.left;
+            newX = Math.max(0, Math.min(newX, secondaryWidth));
 
-            playhead.style.left = `${x}px`;
-
-            const pxPerMs = pxPerMsRef.current;
-            const timeMs = pxPerMs > 0 ? x / pxPerMs : 0;
+            playhead.style.left = `${newX}px`;
+            const timeMs = pxToMs(newX, pxPerMsRef.current);
             if (tooltipContentRef.current) {
               const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
               tooltipContentRef.current.textContent = text;
@@ -357,12 +399,10 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         draggingPlayheadRef.current = false;
         stopAutoScroll();
         setShowTooltip(false);
-
         if (rafIdRef.current) {
           cancelAnimationFrame(rafIdRef.current);
           rafIdRef.current = null;
         }
-
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
@@ -382,8 +422,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const handleCutSecondary = useCallback(() => {
     if (!containerRef.current || !playheadRef.current) return;
     const playheadLeft = parseFloat(playheadRef.current.style.left || "0");
-    const pxPerMs = pxPerMsRef.current;
-    const timeMs = pxPerMs > 0 ? playheadLeft / pxPerMs : 0;
+    const timeMs = pxToMs(playheadLeft, pxPerMsRef.current);
     onCutSecondaryAt?.(Math.round(timeMs));
   }, [onCutSecondaryAt, pxPerMsRef]);
 
@@ -406,7 +445,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           ref={containerRef}
           className="relative min-w-full"
           style={{
-            width: `${(maxDurationMs / 1000) * PX_PER_SECOND}px`,
+            width: `${(maxDurationMs / 1000) * pxPerSecond}px`,
           }}
         >
           <div ref={spacerRef} />
@@ -439,7 +478,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           </div>
 
           <div className="absolute left-0 right-0 top-24 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 mx-2 rounded bg-surface-tertiary/60" />
+            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
             <div
               ref={secondaryBlockRef}
               onMouseDown={onSecondaryMouseDown}
@@ -460,7 +499,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
       {showTooltip && (
         <div className="absolute z-50 pointer-events-none translate-x-2/4">
-          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap border border-border">
+          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap">
             <span className="text-primary" ref={tooltipContentRef} />
             <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-surface-secondary" />
           </div>

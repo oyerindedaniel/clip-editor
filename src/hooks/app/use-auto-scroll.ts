@@ -6,21 +6,12 @@ interface UseAutoScrollOptions {
   acceleration?: number; // Curve factor for acceleration near edge
 }
 
-interface UseAutoScrollReturn {
-  handleDragMove: (event: MouseEvent) => void;
-  startAutoScroll: (
-    container: HTMLDivElement | null,
-    onScrollChange?: (scrollDelta: number, currentScrollLeft: number) => void
-  ) => void;
-  stopAutoScroll: () => void;
-}
-
 export function useAutoScroll({
   edgeThreshold = 80,
   maxScrollSpeed = 25,
   acceleration = 2.5,
-}: UseAutoScrollOptions = {}): UseAutoScrollReturn {
-  const isAutoScrollingRef = useRef(false);
+}: UseAutoScrollOptions = {}) {
+  const isInitializedRef = useRef(false);
   const rafIdRef = useRef<number | null>(null);
   const lastMouseEventRef = useRef<MouseEvent | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -39,15 +30,18 @@ export function useAutoScroll({
   );
 
   const loop = useCallback(() => {
-    if (!isAutoScrollingRef.current) return;
+    if (!isInitializedRef.current) return;
 
     const container = containerRef.current;
     const event = lastMouseEventRef.current;
 
     if (container && event) {
       const rect = container.getBoundingClientRect();
-      const rawMouseX = event.clientX;
-      const mouseX = Math.max(rect.left, Math.min(rawMouseX, rect.right));
+      const MARGIN = 50;
+      const rawMouseX: number = event.clientX;
+      const minX: number = rect.left - MARGIN;
+      const maxX: number = rect.right + MARGIN;
+      const mouseX: number = Math.max(minX, Math.min(rawMouseX, maxX));
 
       const distanceFromLeft = mouseX - rect.left;
       const distanceFromRight = rect.right - mouseX;
@@ -84,7 +78,7 @@ export function useAutoScroll({
     rafIdRef.current = requestAnimationFrame(loop);
   }, [calculateScrollSpeed, edgeThreshold]);
 
-  const handleDragMove = useCallback((event: MouseEvent) => {
+  const handleAutoScroll = useCallback((event: MouseEvent) => {
     lastMouseEventRef.current = event;
   }, []);
 
@@ -93,9 +87,9 @@ export function useAutoScroll({
       container: HTMLDivElement | null,
       onScrollChange?: (scrollDelta: number, currentScrollLeft: number) => void
     ) => {
-      if (!isAutoScrollingRef.current && container) {
+      if (!isInitializedRef.current && container) {
         containerRef.current = container;
-        isAutoScrollingRef.current = true;
+        isInitializedRef.current = true;
         onScrollChangeRef.current = onScrollChange || null;
 
         rafIdRef.current = requestAnimationFrame(loop);
@@ -105,9 +99,10 @@ export function useAutoScroll({
   );
 
   const stopAutoScroll = useCallback(() => {
-    isAutoScrollingRef.current = false;
+    isInitializedRef.current = false;
     containerRef.current = null;
     onScrollChangeRef.current = null;
+    lastMouseEventRef.current = null;
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
@@ -115,7 +110,7 @@ export function useAutoScroll({
   }, []);
 
   return {
-    handleDragMove,
+    handleAutoScroll,
     startAutoScroll,
     stopAutoScroll,
   };

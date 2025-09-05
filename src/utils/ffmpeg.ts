@@ -103,6 +103,28 @@ export async function processClip(
       "-y",
       outputFileName,
     ];
+
+    // args = [
+    //   "-i",
+    //   inputFileName,
+    //   ...filterArgs,
+    //   "-c:v",
+    //   "libvpx-vp9",
+    //   "-crf",
+    //   "35",
+    //   "-cpu-used",
+    //   "8",
+    //   "-row-mt",
+    //   "1",
+    //   "-threads",
+    //   "2",
+    //   "-c:a",
+    //   "libopus",
+    //   "-b:a",
+    //   "96k",
+    //   "-y",
+    //   outputFileName,
+    // ];
   } else {
     args = ["-i", inputFileName, "-c", "copy", outputFileName];
   }

@@ -32,10 +32,12 @@ type UseScaleConfig =
   | ContainerScalingConfig
   | AutoScalingConfig;
 
+type ScalingType = "fixed" | "container" | "auto";
+
 interface UseScaleReturn {
   pxPerMsRef: React.RefObject<number>;
   recalc: () => void;
-  currentScalingType: "fixed" | "container" | "auto";
+  currentScalingType: ScalingType;
 }
 
 export function useScale({
@@ -47,9 +49,7 @@ export function useScale({
   durationMs: number;
 } & UseScaleConfig): UseScaleReturn {
   const pxPerMsRef = useRef(0);
-  const currentScalingTypeRef = useRef<"fixed" | "container" | "auto">(
-    "container"
-  );
+  const currentScalingTypeRef = useRef<ScalingType>("container");
   const configRef = useLatestValue(config);
 
   const recalc = useCallback(() => {

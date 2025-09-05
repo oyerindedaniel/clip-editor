@@ -33,7 +33,7 @@ export const DraggableTextOverlay = ({
       ref={elementRef}
       className={cn(
         "absolute top-0 left-0 select-none cursor-move pointer-events-auto will-change-transform",
-        isSelected && "ring-2 ring-primary/50"
+        isSelected && "ring-2 ring-primary"
       )}
       style={
         {
