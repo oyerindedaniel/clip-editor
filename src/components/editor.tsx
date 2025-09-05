@@ -78,8 +78,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     open: openExportNamingModal,
   } = useDisclosure();
 
-  const selectedConvertAspectRatio = useRef<string>(DEFAULT_ASPECT_RATIO);
-  const selectedCropMode = useRef<CropMode>(DEFAULT_CROP_MODE);
+  const [selectedConvertAspectRatio, setSelectedConvertAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
+  const [selectedCropMode, setSelectedCropMode] = useState<CropMode>(DEFAULT_CROP_MODE);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
   const trimRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -150,8 +150,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       const processedBlob = await processClip(
         clipBuffer,
         {
-          convertAspectRatio: selectedConvertAspectRatio.current,
-          cropMode: selectedCropMode.current,
+          convertAspectRatio: selectedConvertAspectRatio,
+          cropMode: selectedCropMode,
         },
         clipMetaDataRef.current!.dimensions
       );
@@ -184,8 +184,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     try {
       if (
-        selectedConvertAspectRatio.current === DEFAULT_ASPECT_RATIO &&
-        selectedCropMode.current === DEFAULT_CROP_MODE
+        selectedConvertAspectRatio === DEFAULT_ASPECT_RATIO &&
+        selectedCropMode === DEFAULT_CROP_MODE
       ) {
         const blob = new Blob([clipBuffer], { type: "video/mp4" });
         objectUrl = URL.createObjectURL(blob);
@@ -202,7 +202,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       logger.error("Error initializing video:", error);
       return null;
     }
-  }, [loadClipVideo]);
+  }, [loadClipVideo, selectedConvertAspectRatio, selectedCropMode]);
 
   const handleAddSecondaryClip = useCallback(async (file: File) => {
     try {
@@ -357,8 +357,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       adjustOverlayBounds();
 
       clipMetaDataRef.current = {
-        aspectRatio: selectedConvertAspectRatio.current,
-        cropMode: selectedCropMode.current,
+        aspectRatio: selectedConvertAspectRatio,
+        cropMode: selectedCropMode,
         dimensions: {
           width: video.videoWidth,
           height: video.videoHeight,
@@ -484,8 +484,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             resolution,
             bitrate,
             customBitrateKbps,
-            convertAspectRatio: selectedConvertAspectRatio.current,
-            cropMode: selectedCropMode.current,
+            convertAspectRatio: selectedConvertAspectRatio,
+            cropMode: selectedCropMode,
           },
           clientDisplaySize,
           targetResolution: targetResolutionDimensions,
@@ -553,8 +553,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   };
 
   const handleSettingsApplied = (aspectRatio: string, cropMode: CropMode) => {
-    selectedConvertAspectRatio.current = aspectRatio;
-    selectedCropMode.current = cropMode;
+    setSelectedConvertAspectRatio(aspectRatio);
+    setSelectedCropMode(cropMode);
     closeAspectRatioModal();
     loadClipVideo();
   };

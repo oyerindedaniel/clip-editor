@@ -7,6 +7,7 @@ import {
   ReactNode,
   RefObject,
   useEffect,
+  useLayoutEffect,
   createContext,
 } from "react";
 
@@ -220,9 +221,19 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     rafId: null,
   });
 
+  const [pendingVideoRef, setPendingVideoRef] = useState<React.RefObject<HTMLVideoElement | null> | null>(null);
+
+  // Synchronize video ref after render to avoid React 18 violations
+  useLayoutEffect(() => {
+    if (pendingVideoRef?.current) {
+      videoRef.current = pendingVideoRef.current;
+    }
+  }, [pendingVideoRef]);
+
   const setVideoRef = useCallback(
     (ref: React.RefObject<HTMLVideoElement | null>) => {
-      videoRef.current = ref.current;
+      // Queue ref update for after render
+      setPendingVideoRef(ref);
     },
     []
   );
