@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import type {
-  ClipToolType,
   AudioTrack,
   ExportSettings,
   CropMode,
@@ -17,8 +16,6 @@ import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
 import { processClip, processClipForExport } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
-import { DraggableTextOverlay } from "./draggable-text-overlay";
-import { DraggableImageOverlay } from "./draggable-image-overlay";
 import * as MediaPlayer from "@/components/ui/media-player";
 import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
@@ -30,16 +27,16 @@ import { ExportNamingDialog } from "./export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { EditorRightPanel } from "./editor-right-panel";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
+import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import DualVideoTracks from "./dual-video-tracks";
+import DualVideoPlayer from "./dual-video-player";
 import EditorHeader from "./editor-header";
 import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "@/hooks/context-store";
+import EditorPanel from "./editor-panel";
+import { Button } from "./ui/button";
+import { Settings } from "lucide-react";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -51,20 +48,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [isExporting, setIsExporting] = useState(false);
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-
-  const [secondaryClip, setSecondaryClip] = useState<DualVideoClip | null>(
-    null
-  );
-  const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
-    {
-      layout: "vertical",
-      outputOrientation: "vertical",
-      primaryAudio: "primary",
-      normalizeAudio: true,
-      primaryVolume: 0.8,
-      secondaryVolume: 0.6,
-    }
-  );
+  const [toolPanelOpen, setToolPanelOpen] = useState(true);
 
   const {
     isOpen: isAspectRatioModalOpen,
@@ -86,13 +70,29 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const clipMetaDataRef = useRef<ClipMetadata | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
 
-  const { textOverlaysRef, imageOverlaysRef, containerRef, setVideoRef } =
-    useShallowSelector(OverlaysContext, (state) => ({
-      containerRef: state.containerRef,
-      textOverlaysRef: state.textOverlaysRef,
-      imageOverlaysRef: state.imageOverlaysRef,
-      setVideoRef: state.setVideoRef,
-    }));
+  const {
+    textOverlaysRef,
+    imageOverlaysRef,
+    containerRef,
+    secondaryContainerRef,
+    setVideoRef,
+    secondaryClip,
+    dualVideoOffsetMs,
+    dualVideoSettings,
+    setDualVideoSettings,
+    setSecondaryClip,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    containerRef: state.containerRef,
+    secondaryContainerRef: state.secondaryContainerRef,
+    textOverlaysRef: state.textOverlaysRef,
+    imageOverlaysRef: state.imageOverlaysRef,
+    setVideoRef: state.setVideoRef,
+    dualVideoSettings: state.dualVideoSettings,
+    dualVideoOffsetMs: state.dualVideoOffsetMs,
+    secondaryClip: state.secondaryClip,
+    setSecondaryClip: state.setSecondaryClip,
+    setDualVideoSettings: state.setDualVideoSettings,
+  }));
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -278,6 +278,17 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   );
 
   useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        setToolPanelOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     let abortController: AbortController | undefined;
 
     const convertUrlToBuffer = async () => {
@@ -363,18 +374,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           height: video.videoHeight,
         },
       };
-
-      logger.log("📹 Video metadata loaded:", {
-        durationMs: video.duration * 1000,
-        videoWidth: video.videoWidth,
-        videoHeight: video.videoHeight,
-        videoSrc: video.currentSrc,
-      });
-
-      logger.log("🧱 Rendered video element dimensions:", {
-        clientWidth: video.clientWidth,
-        clientHeight: video.clientHeight,
-      });
     };
 
     const handleError = (e: Event) => {
@@ -563,6 +562,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed video from:", startTime, "to:", endTime);
   };
 
+  console.log("-----editor itse", toolPanelOpen);
+
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
@@ -578,40 +579,57 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         <ResizablePanelGroup direction="horizontal" className="h-full">
           <ResizablePanel defaultSize={75} minSize={50}>
             <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-              <div
-                ref={containerRef}
-                className="relative w-full aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md flex-shrink-0"
-              >
-                <MediaPlayer.Root>
-                  <MediaPlayer.Video
-                    ref={videoRef}
-                    playsInline
-                    className="w-full aspect-video"
-                    poster={"/thumbnails/video-thumb-2.webp"}
+              <div className="w-full flex items-center gap-4">
+                {/* 16:9 primary player (original) */}
+                <div
+                  ref={containerRef}
+                  className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+                >
+                  <MediaPlayer.Root>
+                    <MediaPlayer.Video
+                      ref={videoRef}
+                      playsInline
+                      className="w-full aspect-video"
+                      poster={"/thumbnails/video-thumb-2.webp"}
+                    />
+                    <MediaPlayer.Loading />
+                    <MediaPlayer.Error />
+                    <MediaPlayer.VolumeIndicator />
+                    <MediaPlayer.Controls>
+                      <MediaPlayer.ControlsOverlay />
+                      <MediaPlayer.Play />
+                      <MediaPlayer.SeekBackward />
+                      <MediaPlayer.SeekForward />
+                      <MediaPlayer.Volume />
+                      <MediaPlayer.Seek />
+                      <MediaPlayer.Time />
+                      <MediaPlayer.PlaybackSpeed />
+                      <MediaPlayer.Loop />
+                      <MediaPlayer.Captions />
+                      <MediaPlayer.PiP />
+                      <MediaPlayer.Fullscreen />
+                      <MediaPlayer.Download />
+                    </MediaPlayer.Controls>
+                  </MediaPlayer.Root>
+
+                  <div ref={traceRef} />
+
+                  <PersistentOverlays duration={duration} />
+                </div>
+
+                {/* 9:16 dual preview (shows primary-only when no secondary) */}
+                <div
+                  ref={secondaryContainerRef}
+                  className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+                >
+                  <DualVideoPlayer
+                    primaryClip={clipData}
+                    secondaryClip={secondaryClip}
+                    offsetMs={dualVideoOffsetMs}
+                    className="w-full"
+                    primarySrc={currentVideoUrl.current || undefined}
                   />
-                  <MediaPlayer.Loading />
-                  <MediaPlayer.Error />
-                  <MediaPlayer.VolumeIndicator />
-                  <MediaPlayer.Controls>
-                    <MediaPlayer.ControlsOverlay />
-                    <MediaPlayer.Play />
-                    <MediaPlayer.SeekBackward />
-                    <MediaPlayer.SeekForward />
-                    <MediaPlayer.Volume />
-                    <MediaPlayer.Seek />
-                    <MediaPlayer.Time />
-                    <MediaPlayer.PlaybackSpeed />
-                    <MediaPlayer.Loop />
-                    <MediaPlayer.Captions />
-                    <MediaPlayer.PiP />
-                    <MediaPlayer.Fullscreen />
-                    <MediaPlayer.Download />
-                  </MediaPlayer.Controls>
-                </MediaPlayer.Root>
-
-                <div ref={traceRef} />
-
-                <PersistentOverlays duration={duration} />
+                </div>
               </div>
 
               <div className="flex-1 min-h-0">
@@ -619,19 +637,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                   <DualVideoTracks
                     primaryDurationMs={duration}
                     secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
-                    initialOffsetMs={secondaryClip.offset || 0}
-                    onOffsetChange={(ms) => {
-                      // live visual only
-                    }}
-                    onCommitOffset={(ms) => {
-                      setSecondaryClip({
-                        ...secondaryClip,
-                        offset: Math.max(0, Math.round(ms)),
-                      });
-                    }}
-                    onCutSecondaryAt={(ms) => {
-                      logger.log("Cut secondary at", ms);
-                    }}
+                    initialOffsetMs={dualVideoOffsetMs}
                     primaryPreviewFrames={primaryFrames}
                     secondaryPreviewFrames={secondaryFrames}
                   />
@@ -646,25 +652,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 )}
               </div>
             </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
-            <EditorRightPanel
-              isVideoLoaded={isVideoLoaded}
-              duration={duration}
-              clipData={clipData}
-              audioTracks={audioTracks}
-              onAudioTrackUpdate={updateAudioTrack}
-              onAudioTrackDelete={deleteAudioTrack}
-              onAddAudioTrack={addAudioTrack}
-              secondaryClip={secondaryClip}
-              dualVideoSettings={dualVideoSettings}
-              onSecondaryClipChange={handleSecondaryClipChange}
-              onDualVideoSettingsChange={handleDualVideoSettingsChange}
-              onAddSecondaryClip={handleAddSecondaryClip}
-            />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
@@ -681,6 +668,50 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         streamerName={clipData.metadata.streamerName}
         onExport={handleExport}
       />
+
+      <EditorPanel.Root
+        open={toolPanelOpen}
+        onOpenChange={setToolPanelOpen}
+        side="right"
+        disablePortal={false}
+      >
+        <EditorPanel.Portal>
+          <EditorPanel.Content className="w-[300px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
+            <EditorPanel.Header className="py-2 px-2 bg-background">
+              <div />
+              <EditorPanel.CloseButton size="sm" />
+            </EditorPanel.Header>
+            <EditorPanel.Body className="p-0 h-full">
+              <EditorRightPanel
+                isVideoLoaded={isVideoLoaded}
+                duration={duration}
+                clipData={clipData}
+                audioTracks={audioTracks}
+                onAudioTrackUpdate={updateAudioTrack}
+                onAudioTrackDelete={deleteAudioTrack}
+                onAddAudioTrack={addAudioTrack}
+                secondaryClip={secondaryClip}
+                dualVideoSettings={dualVideoSettings}
+                onSecondaryClipChange={handleSecondaryClipChange}
+                onDualVideoSettingsChange={handleDualVideoSettingsChange}
+                onAddSecondaryClip={handleAddSecondaryClip}
+              />
+            </EditorPanel.Body>
+          </EditorPanel.Content>
+        </EditorPanel.Portal>
+      </EditorPanel.Root>
+
+      <Button
+        type="button"
+        onClick={() => setToolPanelOpen(true)}
+        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl"
+        size="sm"
+        variant="default"
+        aria-label="Open Tools (T)"
+      >
+        <Settings size={14} className="mr-2" />
+        Tools
+      </Button>
     </div>
   );
 };

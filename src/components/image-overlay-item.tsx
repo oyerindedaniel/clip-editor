@@ -58,130 +58,38 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
   return (
     <div
       className={cn(
-        "py-2 px-3 rounded-lg text-sm",
+        "group rounded-lg border text-sm overflow-hidden",
         selectedOverlay === overlay.id
-          ? "bg-primary/10"
-          : "border-gray-700/50 bg-surface-secondary"
+          ? "border-primary/60 bg-primary/5"
+          : "border-subtle bg-surface-secondary"
       )}
-      onClick={() => setIsExpanded(!isExpanded)}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center min-w-0 space-x-2">
-          <img
-            src={objectUrl.current}
-            alt={overlay.file.name}
-            className="w-8 h-8 object-cover rounded"
-          />
-          <span className="font-medium flex-1 min-w-0 truncate text-foreground-default text-sm">
-            {overlay.file.name}
-          </span>
-        </div>
-        <div className="flex items-center space-x-1 shrink-0">
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              updateImageOverlay(overlay.id, { visible: !overlay.visible });
-            }}
-            className={cn(
-              "p-1",
-              overlay.visible ? "text-accent-primary" : "text-foreground-muted"
-            )}
-            variant="ghost"
-            size="icon"
-          >
-            {overlay.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-          </Button>
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="p-1"
-            variant="ghost"
-            size="icon"
-          >
-            <Maximize2 size={14} />
-          </Button>
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-surface-tertiary">
+        <img
+          src={objectUrl.current}
+          alt={overlay.file.name}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 flex items-start justify-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             onClick={(e) => {
               e.stopPropagation();
               deleteImageOverlay(overlay.id);
             }}
-            className="p-1 text-error hover:text-error/80"
+            className="h-7 w-7 p-0 text-foreground-on-accent bg-error/90 hover:bg-error"
             variant="ghost"
             size="icon"
+            aria-label="Remove image overlay"
           >
             <Trash2 size={14} />
           </Button>
         </div>
       </div>
-
-      {isExpanded && (
-        <div className="space-y-3 pt-2 border-t border-gray-700/50">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-foreground-subtle mb-1">
-                Start Time
-              </label>
-              <Input
-                type="number"
-                min="0"
-                max={Math.floor(duration / 1000)}
-                value={Math.floor(overlay.startTime / 1000)}
-                onChange={(e) => handleTimeChange("startTime", e.target.value)}
-                className="px-2 py-1 text-xs"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-foreground-subtle mb-1">
-                End Time
-              </label>
-              <Input
-                type="number"
-                min="0"
-                max={Math.floor(duration / 1000)}
-                value={Math.floor(overlay.endTime / 1000)}
-                onChange={(e) => handleTimeChange("endTime", e.target.value)}
-                className="px-2 py-1 text-xs"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-foreground-subtle mb-1">
-              Opacity
-            </label>
-            <Input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={overlay.opacity}
-              onChange={(e) => handleOpacityChange(e.target.value)}
-              className="h-7"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-foreground-subtle mb-1">
-              Scale
-            </label>
-            <Input
-              type="number"
-              min="0.1"
-              max="3"
-              step="0.1"
-              value={overlay.scale}
-              onChange={(e) => handleScaleChange(e.target.value)}
-              className="px-2 py-1 text-xs"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+      <div className="px-2 py-2">
+        <div className="font-medium text-foreground-default text-xs truncate">
+          {overlay.file.name}
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -205,16 +113,20 @@ const ImageOverlayItemContainer = ({
     deleteImageOverlay: state.deleteImageOverlay,
   }));
 
-  return imageOverlays.map((imageOverlay) => (
-    <ImageOverlayItem
-      key={imageOverlay.id}
-      overlay={imageOverlay}
-      selectedOverlay={selectedOverlay}
-      duration={duration}
-      updateImageOverlay={updateImageOverlay}
-      deleteImageOverlay={deleteImageOverlay}
-    />
-  ));
+  return (
+    <div className="grid grid-cols-2 @md:grid-cols-3 gap-3">
+      {imageOverlays.map((imageOverlay) => (
+        <ImageOverlayItem
+          key={imageOverlay.id}
+          overlay={imageOverlay}
+          selectedOverlay={selectedOverlay}
+          duration={duration}
+          updateImageOverlay={updateImageOverlay}
+          deleteImageOverlay={deleteImageOverlay}
+        />
+      ))}
+    </div>
+  );
 };
 
 export default memo(ImageOverlayItemContainer);

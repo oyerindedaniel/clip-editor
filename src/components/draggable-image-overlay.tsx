@@ -6,6 +6,8 @@ import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { useShallowSelector } from "@/hooks/context-store";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface DraggableImageOverlayProps {
   overlay: ImageOverlay;
@@ -23,10 +25,12 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
   onRotationStart,
 }) => {
   const elementRef = useRef<HTMLDivElement | null>(null);
-  const { registerImageOverlayRef } = useShallowSelector(
+
+  const { registerImageOverlayRef, deleteImageOverlay } = useShallowSelector(
     OverlaysContext,
     (state) => ({
       registerImageOverlayRef: state.registerImageOverlayRef,
+      deleteImageOverlay: state.deleteImageOverlay,
     })
   );
 
@@ -57,6 +61,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
   return (
     <div
       ref={elementRef}
+      data-selected={isSelected ? "" : undefined}
       className={cn(
         "absolute top-0 left-0 cursor-move select-none pointer-events-auto origin-center will-change-transform",
         "w-[var(--width)] h-[var(--height)] opacity-[var(--opacity)]",
@@ -100,6 +105,26 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
           </div>
         </>
       )}
+
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        onClick={(e) => {
+          e.stopPropagation();
+          deleteImageOverlay(overlay.id);
+        }}
+        className="
+        absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-10
+        opacity-0 blur-[1px]
+        transition-[opacity,filter] duration-300 ease-out
+        [[data-selected]_&]:opacity-100
+        [[data-selected]_&]:blur-none
+      "
+      >
+        <X size={12} />
+        Remove
+      </Button>
     </div>
   );
 };

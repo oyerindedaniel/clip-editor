@@ -3,38 +3,42 @@ import { Skeleton } from "@/components/ui/skeleton";
 function EditPageSkeleton() {
   return (
     <div className="flex flex-col h-dvh bg-surface-primary text-foreground-default text-sm">
-      <div className="w-full">
-        <div className="flex items-center justify-between p-4 bg-surface-secondary border-b border-gray-700/50">
-          <Skeleton className="h-8 w-32" />
-          <div className="flex items-center space-x-2">
-            <Skeleton className="h-8 w-20" />
-            <Skeleton className="h-8 w-20" />
+      {/* Header skeleton */}
+      <div className="sticky top-0 z-50 w-full bg-surface-secondary">
+        <div className="flex relative items-center justify-between px-5 py-2">
+          <Skeleton className="h-14 w-14 rounded-full" />
+          <div />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-8 w-20" />
+            </div>
             <Skeleton className="h-8 w-24" />
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-1 p-4 space-x-4 overflow-hidden">
-          <div className="flex-1 space-y-4">
-            <Skeleton className="w-full aspect-video rounded-lg" />
+      {/* Main content skeleton */}
+      <div className="flex-1 min-h-0">
+        <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+          {/* Video players section */}
+          <div className="flex gap-4">
+            {/* 16:9 primary player */}
+            <div className="relative w-full aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md flex-shrink-0">
+              <Skeleton className="w-full h-full rounded-lg" />
+            </div>
 
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-20 w-full rounded-md" />
+            {/* 9:16 secondary preview */}
+            <div className="relative flex items-center aspect-[9/16] w-[250px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md flex-shrink-0">
+              <Skeleton className="w-full h-full rounded-lg" />
             </div>
           </div>
 
-          <div className="w-80 flex flex-col bg-surface-secondary rounded-lg shadow-md overflow-hidden border border-gray-700/50">
-            <div className="flex border-b border-gray-700/50">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="flex-1 h-10" />
-              ))}
-            </div>
-            <div className="flex-1 p-4">
-              <div className="space-y-4">
-                <Skeleton className="h-6 w-24" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
-              </div>
+          {/* Timeline section */}
+          <div className="flex-1 min-h-0">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-20 w-full rounded-md" />
             </div>
           </div>
         </div>

@@ -15,6 +15,8 @@ import {
   getScrollState,
 } from "@/utils/timeline-utils";
 import { flushSync } from "react-dom";
+import { useShallowSelector } from "@/hooks/context-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -31,12 +33,15 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryDurationMs,
   secondaryDurationMs,
   initialOffsetMs,
-  onOffsetChange,
-  onCommitOffset,
-  onCutSecondaryAt,
   primaryPreviewFrames,
   secondaryPreviewFrames,
 }) => {
+  const { onOffsetChange: onCommitOffset, onCutSecondaryAt } =
+    useShallowSelector(OverlaysContext, (state) => ({
+      onCutSecondaryAt: state.onCutSecondaryAt,
+      onOffsetChange: state.onOffsetChange,
+    }));
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const playheadRef = useRef<HTMLDivElement | null>(null);
@@ -198,7 +203,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           currentOffsetRef.current = newOffset;
           renderBlocks();
 
-          onOffsetChange?.(newOffset);
+          // onOffsetChange?.(newOffset);
 
           if (tooltipContentRef.current) {
             const text = `Offset: ${formatDurationDisplay(newOffset)}`;
@@ -261,7 +266,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
             currentOffsetRef.current = newOffset;
             renderBlocks();
-            onOffsetChange?.(newOffset);
+            // onOffsetChange?.(newOffset);
 
             if (tooltipContentRef.current) {
               const text = `Offset: ${formatDurationDisplay(newOffset)}`;
@@ -293,7 +298,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.addEventListener("mouseup", onUp);
     },
     [
-      onOffsetChange,
+      // onOffsetChange,
       onCommitOffset,
       pxPerMsRef,
       renderBlocks,
@@ -424,7 +429,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const playheadLeft = parseFloat(playheadRef.current.style.left || "0");
     const timeMs = pxToMs(playheadLeft, pxPerMsRef.current);
     onCutSecondaryAt?.(Math.round(timeMs));
-  }, [onCutSecondaryAt, pxPerMsRef]);
+  }, [onCutSecondaryAt, onCutSecondaryAt, pxPerMsRef]);
 
   return (
     <div className="flex relative flex-col gap-2 w-full h-[250px]">

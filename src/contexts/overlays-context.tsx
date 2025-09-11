@@ -10,7 +10,13 @@ import {
   createContext,
 } from "react";
 
-import { TextOverlay, ImageOverlay, Overlay } from "@/types/app";
+import {
+  TextOverlay,
+  ImageOverlay,
+  Overlay,
+  DualVideoClip,
+  DualVideoSettings,
+} from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
@@ -86,6 +92,7 @@ type OverlaysContextValue = {
     imageOverlays: ImageOverlay[];
   };
   containerRef: RefObject<HTMLDivElement | null>;
+  secondaryContainerRef: RefObject<HTMLDivElement | null>;
   startDrag: (overlayId: string, e: React.MouseEvent) => void;
   startResize: (
     overlayId: string,
@@ -99,68 +106,19 @@ type OverlaysContextValue = {
 
   videoRef: RefObject<HTMLVideoElement | null>;
   setVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
+  secondaryClip: DualVideoClip | null;
+  dualVideoSettings: DualVideoSettings;
+  dualVideoOffsetMs: number;
+  setSecondaryClip: React.Dispatch<React.SetStateAction<DualVideoClip | null>>;
+  setDualVideoSettings: React.Dispatch<React.SetStateAction<DualVideoSettings>>;
+  setDualVideoOffsetMs: React.Dispatch<React.SetStateAction<number>>;
+  onOffsetChange: (offsetMs: number) => void;
+  onCutSecondaryAt: (timeMs: number) => void;
+  getActiveContainer: () => HTMLDivElement | null;
 };
 
 export const OverlaysContext =
   createContext<StoreApi<OverlaysContextValue> | null>(null);
-
-function getImageOverlaySizeByArea(
-  containerWidth: number,
-  containerHeight: number,
-  imageWidth: number,
-  imageHeight: number,
-  scaleFactor: number = 0.1
-): { width: number; height: number } {
-  if (
-    containerWidth <= 0 ||
-    containerHeight <= 0 ||
-    imageWidth <= 0 ||
-    imageHeight <= 0
-  ) {
-    return { width: 0, height: 0 };
-  }
-
-  const containerArea = containerWidth * containerHeight;
-  const targetArea = containerArea * scaleFactor;
-
-  const aspectRatio = imageWidth / imageHeight;
-
-  const height = Math.sqrt(targetArea / aspectRatio);
-  const width = height * aspectRatio;
-
-  return { width, height };
-}
-
-function getTransformPosition(target: HTMLElement): {
-  x: number;
-  y: number;
-} {
-  const style: CSSStyleDeclaration = window.getComputedStyle(target);
-  const transformMatrix: string = style.transform;
-  let x = 0;
-  let y = 0;
-
-  if (transformMatrix && transformMatrix !== "none") {
-    const matrixValues: RegExpMatchArray | null = transformMatrix.match(
-      /matrix3d\((.+)\)|matrix\((.+)\)/
-    );
-
-    if (matrixValues) {
-      const values: string = matrixValues[1] || matrixValues[2];
-      const parsedValues: number[] = values.split(",").map(Number);
-
-      if (matrixValues[1]) {
-        x = parsedValues[12];
-        y = parsedValues[13];
-      } else {
-        x = parsedValues[4];
-        y = parsedValues[5];
-      }
-    }
-  }
-
-  return { x, y };
-}
 
 export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -168,6 +126,22 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [imageOverlays, setImageOverlays] = useState<ImageOverlay[]>([]);
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null);
+
+  const [secondaryClip, setSecondaryClip] = useState<DualVideoClip | null>(
+    null
+  );
+  const secondaryClipRef = useLatestValue(secondaryClip);
+  const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
+    {
+      layout: "vertical",
+      outputOrientation: "vertical",
+      primaryAudio: "primary",
+      normalizeAudio: true,
+      primaryVolume: 0.8,
+      secondaryVolume: 0.6,
+    }
+  );
+  const [dualVideoOffsetMs, setDualVideoOffsetMs] = useState<number>(0);
 
   const textOverlaysRef = useLatestValue(textOverlays);
   const imageOverlaysRef = useLatestValue(imageOverlays);
@@ -180,6 +154,14 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const secondaryContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const getActiveContainer = useCallback(() => {
+    return secondaryClipRef.current
+      ? secondaryContainerRef.current
+      : containerRef.current;
+  }, []);
+
   const dragRef = useRef<DragState>({
     isDragging: false,
     startX: 0,
@@ -282,17 +264,21 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         );
         return;
       }
-      const { width: videoWidth } = getVideoBoundingBox(video);
+      const { x, y, width: videoWidth } = getVideoBoundingBox(video);
+      const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
+        overlayX: x,
+        overlayY: y,
+      });
       const newOverlay: TextOverlay = {
         type: "text",
         id: `text_${Date.now()}`,
         text: "New Text",
         startTime: currentTime,
         endTime: duration ?? Infinity,
-        x: 0,
-        y: 0,
-        normX: 0,
-        normY: 0,
+        x,
+        y,
+        normX,
+        normY,
         fontSize: 24,
         fontFamily: "var(--font-inter), sans-serif",
         letterSpacing: "-0.03em",
@@ -322,8 +308,17 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      const { width: videoWidth, height: videoHeight } =
-        getVideoBoundingBox(video);
+      const {
+        x,
+        y,
+        width: videoWidth,
+        height: videoHeight,
+      } = getVideoBoundingBox(video);
+      const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
+        overlayX: x,
+        overlayY: y,
+      });
+
       const url = URL.createObjectURL(file);
 
       const img = new Image();
@@ -342,10 +337,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           file,
           startTime: currentTime,
           endTime: duration ?? Infinity,
-          x: 0,
-          y: 0,
-          normX: 0,
-          normY: 0,
+          x,
+          y,
+          normX,
+          normY,
           width,
           height,
           opacity: 1,
@@ -412,11 +407,17 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const video = videoRef.current;
       if (!video) return;
 
+      if (
+        textOverlayRefs.current.size === 0 &&
+        imageOverlayRefs.current.size === 0
+      ) {
+        return;
+      }
+
       textOverlayRefs.current.forEach((element, id) => {
-        const computedStyle = window.getComputedStyle(element);
-        const transform = computedStyle.transform;
-        if (transform && transform !== "none") {
-          const { x, y } = getTransformPosition(element);
+        const overlay = textOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const { x, y } = overlay;
           const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
             overlayX: x,
             overlayY: y,
@@ -426,43 +427,47 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       });
 
       imageOverlayRefs.current.forEach((element, id) => {
-        const computedStyle = window.getComputedStyle(element);
-        const transform = computedStyle.transform;
-        if (transform && transform !== "none") {
-          const { x, y } = getTransformPosition(element);
+        const overlay = imageOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const { x, y, width, height } = overlay;
           const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
             overlayX: x,
             overlayY: y,
           });
-          const width = parseFloat(element.style.width);
-          const height = parseFloat(element.style.height);
           updateImageOverlay(id, { x, y, normX, normY, width, height });
         }
       });
     }, 300),
-    [updateTextOverlay, updateImageOverlay, videoRef]
+    [updateTextOverlay, updateImageOverlay]
   );
 
   const rafIdRef = useRef<number | null>(null);
 
   const handleWindowResize = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const container = getActiveContainer();
+    if (!container) return;
 
-    const { width: newVideoWidth, height: newVideoHeight } =
-      video.getBoundingClientRect();
+    if (
+      textOverlayRefs.current.size === 0 &&
+      imageOverlayRefs.current.size === 0
+    ) {
+      return;
+    }
+
+    const { width: newContainerWidth, height: newContainerHeight } =
+      container.getBoundingClientRect();
     const prevDimensions = previousVideoDimensions.current;
 
     if (!prevDimensions) {
       previousVideoDimensions.current = {
-        width: newVideoWidth,
-        height: newVideoHeight,
+        width: newContainerWidth,
+        height: newContainerHeight,
       };
       return;
     }
 
-    const scaleX = newVideoWidth / prevDimensions.width;
-    const scaleY = newVideoHeight / prevDimensions.height;
+    const scaleX = newContainerWidth / prevDimensions.width;
+    const scaleY = newContainerHeight / prevDimensions.height;
 
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
@@ -470,60 +475,69 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
     rafIdRef.current = requestAnimationFrame(() => {
       textOverlayRefs.current.forEach((element, id) => {
-        const { x: currentX, y: currentY } = getTransformPosition(element);
+        const overlay = textOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const { x: currentX, y: currentY } = overlay;
 
-        const finalLeft = currentX * scaleX;
-        const finalTop = currentY * scaleY;
+          const finalLeft = currentX * scaleX;
+          const finalTop = currentY * scaleY;
 
-        const elementRect = element.getBoundingClientRect();
-        const constrainedLeft = Math.max(
-          0,
-          Math.min(newVideoWidth - elementRect.width, finalLeft)
-        );
-        const constrainedTop = Math.max(
-          0,
-          Math.min(newVideoHeight - elementRect.height, finalTop)
-        );
+          const elementRect = element.getBoundingClientRect();
+          const constrainedLeft = Math.max(
+            0,
+            Math.min(newContainerWidth - elementRect.width, finalLeft)
+          );
+          const constrainedTop = Math.max(
+            0,
+            Math.min(newContainerHeight - elementRect.height, finalTop)
+          );
 
-        element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
-        element.style.maxWidth = calculateMaxWidth(newVideoWidth);
+          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(0deg) scale(1)`;
+          element.style.maxWidth = calculateMaxWidth(newContainerWidth);
+        }
       });
 
       imageOverlayRefs.current.forEach((element, id) => {
-        const { x: currentX, y: currentY } = getTransformPosition(element);
+        const overlay = imageOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const {
+            x: currentX,
+            y: currentY,
+            scale,
+            rotation,
+            width: currentWidth,
+            height: currentHeight,
+          } = overlay;
 
-        const rect = element.getBoundingClientRect();
-        const currentWidth = rect.width;
-        const currentHeight = rect.height;
+          const finalLeft = currentX * scaleX;
+          const finalTop = currentY * scaleY;
 
-        const finalLeft = currentX * scaleX;
-        const finalTop = currentY * scaleY;
+          const targetWidth = currentWidth * scaleX;
+          const targetHeight = currentHeight * scaleY;
 
-        const targetWidth = currentWidth * scaleX;
-        const targetHeight = currentHeight * scaleY;
+          const constrainedLeft = Math.max(
+            0,
+            Math.min(newContainerWidth - targetWidth, finalLeft)
+          );
+          const constrainedTop = Math.max(
+            0,
+            Math.min(newContainerHeight - targetHeight, finalTop)
+          );
 
-        const constrainedLeft = Math.max(
-          0,
-          Math.min(newVideoWidth - targetWidth, finalLeft)
-        );
-        const constrainedTop = Math.max(
-          0,
-          Math.min(newVideoHeight - targetHeight, finalTop)
-        );
-
-        element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0)`;
-        element.style.width = `${targetWidth}px`;
-        element.style.height = `${targetHeight}px`;
+          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
+          element.style.width = `${targetWidth}px`;
+          element.style.height = `${targetHeight}px`;
+        }
       });
 
       previousVideoDimensions.current = {
-        width: newVideoWidth,
-        height: newVideoHeight,
+        width: newContainerWidth,
+        height: newContainerHeight,
       };
     });
 
     debouncedUpdateNormalizedCoords();
-  }, [debouncedUpdateNormalizedCoords]);
+  }, [debouncedUpdateNormalizedCoords, getActiveContainer]);
 
   useEffect(() => {
     window.addEventListener("resize", handleWindowResize);
@@ -568,7 +582,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const startDrag = useCallback(
     (overlayId: string, e: React.MouseEvent) => {
       const target = e.currentTarget as HTMLElement;
-      const container = containerRef.current;
+      const container = getActiveContainer();
       if (!container) return;
       ensureGuides(container);
 
@@ -607,7 +621,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         if (!drag.isDragging || !drag.element) return;
         const dx = ev.clientX - drag.startX;
         const dy = ev.clientY - drag.startY;
-        const container = containerRef.current;
+        const container = getActiveContainer();
         if (!container) return;
         const containerRect = container.getBoundingClientRect();
         const elementRect = drag.element.getBoundingClientRect();
@@ -707,14 +721,14 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateTextOverlay, updateImageOverlay]
+    [updateTextOverlay, updateImageOverlay, getActiveContainer]
   );
 
   const startResize = useCallback(
     (overlayId: string, handle: Position, e: React.MouseEvent) => {
       e.stopPropagation();
       const target = e.currentTarget.parentElement as HTMLElement;
-      const container = containerRef.current;
+      const container = getActiveContainer();
       if (!container) return;
 
       const elementRect = target.getBoundingClientRect();
@@ -752,9 +766,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
         const dx = ev.clientX - resize.startX;
         const dy = ev.clientY - resize.startY;
-        if (!containerRef.current) return;
 
-        const containerRect = containerRef.current.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         let newWidth = resize.startWidth;
         let newHeight = resize.startHeight;
         let newLeft = resize.startLeft;
@@ -855,7 +868,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateImageOverlay]
+    [updateImageOverlay, getActiveContainer]
   );
 
   const startRotation = useCallback(
@@ -939,6 +952,14 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     [updateImageOverlay]
   );
 
+  const onOffsetChange = useCallback((offsetMs: number) => {
+    setDualVideoOffsetMs(offsetMs);
+  }, []);
+
+  const onCutSecondaryAt = useCallback((timeMs: number) => {
+    logger.log("Cut secondary video at:", timeMs);
+  }, []);
+
   const contextValue = {
     videoRef,
     setVideoRef,
@@ -956,11 +977,21 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     deleteImageOverlay,
     getTimeBasedOverlays,
     containerRef,
+    secondaryContainerRef,
     startDrag,
     startResize,
     startRotation,
     textOverlaysRef,
     imageOverlaysRef,
+    secondaryClip,
+    dualVideoSettings,
+    dualVideoOffsetMs,
+    setSecondaryClip,
+    setDualVideoSettings,
+    setDualVideoOffsetMs,
+    onOffsetChange,
+    onCutSecondaryAt,
+    getActiveContainer,
   };
 
   const overlaysStore = useContextStore(contextValue);
@@ -971,3 +1002,62 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     </OverlaysContext.Provider>
   );
 };
+
+function getImageOverlaySizeByArea(
+  containerWidth: number,
+  containerHeight: number,
+  imageWidth: number,
+  imageHeight: number,
+  scaleFactor: number = 0.1
+): { width: number; height: number } {
+  if (
+    containerWidth <= 0 ||
+    containerHeight <= 0 ||
+    imageWidth <= 0 ||
+    imageHeight <= 0
+  ) {
+    return { width: 0, height: 0 };
+  }
+
+  const containerArea = containerWidth * containerHeight;
+  const targetArea = containerArea * scaleFactor;
+
+  const aspectRatio = imageWidth / imageHeight;
+
+  const height = Math.sqrt(targetArea / aspectRatio);
+  const width = height * aspectRatio;
+
+  return { width, height };
+}
+
+function getTransformPosition(target: HTMLElement): {
+  x: number;
+  y: number;
+} {
+  const style: CSSStyleDeclaration = window.getComputedStyle(target);
+  const transformMatrix: string = // @ts-ignore
+    style.transform || style.webkitTransform || style.mozTransform;
+  let x = 0;
+  let y = 0;
+
+  if (transformMatrix && transformMatrix !== "none") {
+    const matrixValues: RegExpMatchArray | null = transformMatrix.match(
+      /matrix3d\((.+)\)|matrix\((.+)\)/
+    );
+
+    if (matrixValues) {
+      const values: string = matrixValues[1] || matrixValues[2];
+      const parsedValues: number[] = values.split(",").map(Number);
+
+      if (matrixValues[1]) {
+        x = parsedValues[12];
+        y = parsedValues[13];
+      } else {
+        x = parsedValues[4];
+        y = parsedValues[5];
+      }
+    }
+  }
+
+  return { x, y };
+}

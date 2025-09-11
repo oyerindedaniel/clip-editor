@@ -25,7 +25,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
 }) => {
   return (
     <div className="sticky top-0 z-50 w-full bg-surface-secondary">
-      <div className="flex relative items-center justify-between px-5 py-1">
+      <div className="flex relative items-center justify-between px-5 py-2">
         <Link className="absolute top-2/4 -translate-y-2/4" href="/">
           <Image
             src="/logo/zinc_norms_white.webp"

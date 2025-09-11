@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import type { S3ClipData as ClipData } from "@/types/app";
 import Link from "next/link";
+import { LoaderIcon } from "@/icons/loader";
 
 interface ClipGridProps {
   initialClips: ClipData[];
@@ -13,36 +14,108 @@ interface ClipGridProps {
 
 export default function ClipGrid({ initialClips }: ClipGridProps) {
   const router = useRouter();
+  const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(
+    new Set()
+  );
+  const processedThumbnailsRef = useRef<Set<string>>(new Set());
 
-  const generateThumbnail = (videoUrl: string, canvas: HTMLCanvasElement) => {
-    const video = document.createElement("video");
-    video.crossOrigin = "anonymous";
-    video.src = videoUrl;
+  const generateThumbnail = useCallback(
+    (videoUrl: string, canvas: HTMLCanvasElement, clipId: string) => {
+      if (processedThumbnailsRef.current.has(clipId)) return;
 
-    const container = canvas.parentElement;
-    if (!container) return;
+      processedThumbnailsRef.current.add(clipId);
+      setLoadingThumbnails((prev) => new Set(prev).add(clipId));
 
-    const { width, height } = container.getBoundingClientRect();
-    canvas.width = width;
-    canvas.height = height;
+      const video = document.createElement("video");
+      video.crossOrigin = "anonymous";
+      video.src = videoUrl;
+      video.preload = "metadata";
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      const container = canvas.parentElement;
+      if (!container) {
+        setLoadingThumbnails((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(clipId);
+          return newSet;
+        });
+        return;
+      }
 
-    const onSeeked = () => {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      video.removeEventListener("seeked", onSeeked);
-      video.pause();
-      video.src = "";
-    };
+      const { width, height } = container.getBoundingClientRect();
+      canvas.width = width;
+      canvas.height = height;
 
-    video.addEventListener("loadeddata", () => {
-      video.currentTime = 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setLoadingThumbnails((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(clipId);
+          return newSet;
+        });
+        return;
+      }
+
+      const cleanup = () => {
+        video.removeEventListener("seeked", onSeeked);
+        video.removeEventListener("loadeddata", onLoadedData);
+        video.removeEventListener("error", onError);
+        video.pause();
+        video.src = "";
+        video.load();
+      };
+
+      const onSeeked = () => {
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } catch (error) {
+          console.warn(`Failed to draw thumbnail for ${clipId}:`, error);
+        }
+
+        setLoadingThumbnails((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(clipId);
+          return newSet;
+        });
+        cleanup();
+      };
+
+      const onError = () => {
+        console.warn(`Failed to load video for thumbnail: ${clipId}`);
+        processedThumbnailsRef.current.delete(clipId);
+        setLoadingThumbnails((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(clipId);
+          return newSet;
+        });
+        cleanup();
+      };
+
+      const onLoadedData = () => {
+        video.currentTime = Math.min(1, video.duration * 0.1);
+      };
+
+      video.addEventListener("loadeddata", onLoadedData);
       video.addEventListener("seeked", onSeeked);
-    });
+      video.addEventListener("error", onError);
 
-    video.load();
-  };
+      video.load();
+    },
+    []
+  );
+
+  const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
+  const setCanvasRef = useCallback(
+    (clipId: string, videoUrl: string) => {
+      return (el: HTMLCanvasElement | null) => {
+        if (el && !canvasRefs.current.has(clipId)) {
+          canvasRefs.current.set(clipId, el);
+          generateThumbnail(videoUrl, el, clipId);
+        }
+      };
+    },
+    [generateThumbnail]
+  );
 
   if (initialClips.length === 0) {
     return (
@@ -72,11 +145,14 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
               <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
                 <div className="aspect-video bg-gray-800 relative overflow-hidden">
                   <canvas
-                    ref={(el) => {
-                      if (el) generateThumbnail(clip.url, el);
-                    }}
+                    ref={setCanvasRef(clip.metadata.clipId, clip.url)}
                     className="w-full h-full object-cover"
                   />
+                  {loadingThumbnails.has(clip.metadata.clipId) && (
+                    <div className="absolute inset-0 bg-gray-800/80 flex items-center justify-center">
+                      <LoaderIcon className="text-white" size={32} />
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="flex space-x-2">
                       <Button

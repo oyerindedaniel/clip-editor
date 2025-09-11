@@ -74,10 +74,6 @@ export function DualVideoControls({
     [secondaryClip, onSecondaryClipChange]
   );
 
-  const removeSecondaryClip = useCallback(() => {
-    onSecondaryClipChange(null);
-  }, [onSecondaryClipChange]);
-
   if (!secondaryClip) {
     return (
       <div className="space-y-3">
@@ -147,8 +143,10 @@ export function DualVideoControls({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="vertical">Vertical</SelectItem>
-                    <SelectItem value="horizontal">Horizontal</SelectItem>
+                    <SelectItem value="vertical">Vertical (9:16)</SelectItem>
+                    <SelectItem value="horizontal">
+                      Horizontal (16:9)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -174,7 +172,7 @@ export function DualVideoControls({
           <Button
             variant="destructive"
             size="icon"
-            onClick={removeSecondaryClip}
+            onClick={() => onSecondaryClipChange(null)}
           >
             <Trash2 size={14} />
           </Button>

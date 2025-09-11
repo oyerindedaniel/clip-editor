@@ -113,8 +113,9 @@ export function EditorRightPanel({
       case "clips":
         return (
           <div className="space-y-4">
-            <h3 className="text-base font-semibold text-foreground-default">
-              🎬
+            <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
+              <Scissors size={16} />
+              <span>Clips</span>
             </h3>
             {[
               {
@@ -137,12 +138,13 @@ export function EditorRightPanel({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground-default">
-                🅰️
+              <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
+                <Type size={16} />
+                <span>Text</span>
               </h3>
               <Button
                 onClick={() => addTextOverlay(0, duration)}
-                className="p-1.5"
+                className="h-7 w-7 p-0"
                 variant="default"
                 size="icon"
               >
@@ -157,8 +159,9 @@ export function EditorRightPanel({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground-default">
-                🖼️
+              <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
+                <ImageIcon size={16} />
+                <span>Image</span>
               </h3>
             </div>
             <FileUpload
@@ -175,12 +178,13 @@ export function EditorRightPanel({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground-default">
-                🎵
+              <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
+                <Music size={16} />
+                <span>Audio</span>
               </h3>
               <Button
                 onClick={onAddAudioTrack}
-                className="p-1.5"
+                className="h-7 w-7 p-0"
                 variant="default"
                 size="icon"
               >
@@ -190,7 +194,7 @@ export function EditorRightPanel({
             {audioTracks.map((track) => (
               <div
                 key={track.id}
-                className="p-3 rounded-lg border border-gray-700/50 bg-surface-secondary"
+                className="p-3 rounded-lg border border-subtle bg-surface-secondary"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium truncate text-foreground-default text-sm">
@@ -204,7 +208,7 @@ export function EditorRightPanel({
                         })
                       }
                       className={cn(
-                        "p-1 rounded",
+                        "h-7 w-7 p-0",
                         track.visible
                           ? "text-accent-primary"
                           : "text-foreground-muted"
@@ -216,7 +220,7 @@ export function EditorRightPanel({
                     </Button>
                     <Button
                       onClick={() => onAudioTrackDelete(track.id)}
-                      className="p-1 text-error hover:text-error/80"
+                      className="h-7 w-7 p-0 text-error hover:text-error/80"
                       variant="ghost"
                       size="icon"
                     >
@@ -327,7 +331,9 @@ export function EditorRightPanel({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">{renderTabContent()}</div>
+      <div className="flex-1 overflow-y-auto p-4 h-full">
+        {renderTabContent()}
+      </div>
     </div>
   );
 }
