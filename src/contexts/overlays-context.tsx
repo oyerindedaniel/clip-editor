@@ -1035,8 +1035,7 @@ function getTransformPosition(target: HTMLElement): {
   y: number;
 } {
   const style: CSSStyleDeclaration = window.getComputedStyle(target);
-  const transformMatrix: string = // @ts-ignore
-    style.transform || style.webkitTransform || style.mozTransform;
+  const transformMatrix: string = style.transform;
   let x = 0;
   let y = 0;
 

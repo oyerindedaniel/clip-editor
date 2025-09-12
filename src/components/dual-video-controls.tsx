@@ -59,7 +59,10 @@ export function DualVideoControls({
   );
 
   const updateSetting = useCallback(
-    (key: keyof DualVideoSettings, value: any) => {
+    <K extends keyof DualVideoSettings>(
+      key: K,
+      value: DualVideoSettings[K]
+    ) => {
       onSettingsChange({ ...settings, [key]: value });
     },
     [settings, onSettingsChange]

@@ -250,6 +250,8 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
   }
 );
 
+EditorPanelRoot.displayName = "EditorPanel.Root";
+
 const EditorPanelTrigger = forwardRef<
   HTMLButtonElement,
   EditorPanelTriggerProps
@@ -289,6 +291,8 @@ const EditorPanelTrigger = forwardRef<
   );
 });
 
+EditorPanelTrigger.displayName = "EditorPanel.Trigger";
+
 const EditorPanelPortal: React.FC<EditorPanelPortalProps> = ({
   children,
   container,
@@ -304,6 +308,8 @@ const EditorPanelPortal: React.FC<EditorPanelPortalProps> = ({
   const portalContainer = container || document.body;
   return createPortal(children, portalContainer);
 };
+
+EditorPanelPortal.displayName = "EditorPanel.Portal";
 
 const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
   (
@@ -463,6 +469,8 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
   }
 );
 
+EditorPanelContent.displayName = "EditorPanel.Content";
+
 const EditorPanelHeader = forwardRef<
   HTMLDivElement,
   React.ComponentPropsWithoutRef<"div">
@@ -481,6 +489,8 @@ const EditorPanelHeader = forwardRef<
     {children}
   </div>
 ));
+
+EditorPanelHeader.displayName = "EditorPanel.Header";
 
 const EditorPanelTitle = forwardRef<
   HTMLHeadingElement,
@@ -504,6 +514,8 @@ const EditorPanelTitle = forwardRef<
     </h2>
   );
 });
+
+EditorPanelTitle.displayName = "EditorPanel.Title";
 
 const EditorPanelCloseButton = forwardRef<
   HTMLButtonElement,
@@ -536,6 +548,8 @@ const EditorPanelCloseButton = forwardRef<
   );
 });
 
+EditorPanelCloseButton.displayName = "EditorPanel.CloseButton";
+
 const EditorPanelBody = forwardRef<
   HTMLDivElement,
   React.ComponentPropsWithoutRef<"div">
@@ -553,6 +567,8 @@ const EditorPanelBody = forwardRef<
     </div>
   );
 });
+
+EditorPanelBody.displayName = "EditorPanel.Body";
 
 const EditorPanelFooter = forwardRef<
   HTMLDivElement,
@@ -572,6 +588,8 @@ const EditorPanelFooter = forwardRef<
     {children}
   </div>
 ));
+
+EditorPanelFooter.displayName = "EditorPanel.Footer";
 
 const EditorPanel = {
   Root: EditorPanelRoot,
