@@ -152,19 +152,27 @@ const createPanelStyles = () => {
       }
       
       .panel-enter-right {
-        animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transform: translateX(100%);
+          opacity: 0;
+        animation: slide-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
       
-      .panel-enter-left {
-        animation: slide-in-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+     .panel-enter-left {
+      transform: translateX(-100%); 
+       opacity: 0;
+        animation: slide-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
       
       .panel-exit-right {
-        animation: slide-out-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          transform: translateX(0);
+          opacity: 1;
+        animation: slide-out-right 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
       }
       
       .panel-exit-left {
-        animation: slide-out-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transform: translateX(0);
+          opacity: 1;
+        animation: slide-out-left 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
       }
     `;
   document.head.appendChild(style);
@@ -204,13 +212,13 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       return new Promise<void>((resolve) => {
         if (presence) {
           setAnimationState("entering");
-          setTimeout(resolve, 400);
+          resolve();
         } else {
           setAnimationState("exiting");
           setTimeout(() => {
             setAnimationState("idle");
             resolve();
-          }, 300);
+          }, 350);
         }
       });
     }, []);
@@ -220,7 +228,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       animateOnInitialLoad: false,
     });
 
-    // console.log({ shouldRender, open });
+    console.log({ shouldRender, open, animationState });
 
     useEffect(() => {
       createPanelStyles();
@@ -425,6 +433,8 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     }, [open]);
 
     if (!shouldRender && !forceMount) return null;
+
+    // if (animationState === "idle") return null;
 
     const sideClasses = {
       right: "right-0",

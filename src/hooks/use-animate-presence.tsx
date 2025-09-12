@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useStableHandler } from "./use-stable-handler";
+import logger from "@/utils/logger";
 
 interface AnimatePresenceOptions {
   animateOnInitialLoad?: boolean;
@@ -13,72 +14,82 @@ export function useAnimatePresence(
   onAnimate: (presence: boolean) => Promise<void>,
   options: AnimatePresenceOptions = {}
 ): boolean {
+  const { animateOnInitialLoad = true, timeout = 400 } = options;
+
   const [internalPresence, setInternalPresence] =
     useState<boolean>(externalPresence);
+
   const isInitialRender = useRef(true);
-  const animationTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const isAnimatingRef = useRef(false);
-
-  const {
-    animateOnInitialLoad = true,
-    timeout = 400, // Default timeout matching our CSS animations
-  } = options;
-
   const onAnimateRef = useStableHandler(onAnimate);
 
-  const handleAnimation = useCallback(
-    async (presence: boolean): Promise<void> => {
-      if (isAnimatingRef.current) {
-        if (animationTimeoutRef.current) {
-          clearTimeout(animationTimeoutRef.current);
-        }
-      }
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentAnimationIdRef = useRef<number>(0);
 
-      isAnimatingRef.current = true;
+  const clearAnimationTimeout = useCallback((): void => {
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleAnimation = useCallback(
+    async (presence: boolean, animationId: number): Promise<void> => {
+      clearAnimationTimeout();
 
       try {
         await Promise.race([
           onAnimateRef(presence),
-          new Promise((_, reject) => {
+          new Promise<void>((_, reject) => {
             animationTimeoutRef.current = setTimeout(() => {
-              reject(new Error("Animation timeout"));
+              reject(
+                new Error(
+                  `Animation timeout after ${timeout}ms for presence=${presence}`
+                )
+              );
             }, timeout);
           }),
         ]);
-      } catch {
-        setInternalPresence(presence);
-      } finally {
-        if (animationTimeoutRef.current) {
-          clearTimeout(animationTimeoutRef.current);
+
+        if (currentAnimationIdRef.current === animationId) {
+          setInternalPresence(presence);
         }
-        isAnimatingRef.current = false;
+      } catch (error) {
+        logger.warn("Animation failed:", error);
+        if (currentAnimationIdRef.current === animationId) {
+          setInternalPresence(presence);
+        }
+      } finally {
+        clearAnimationTimeout();
       }
     },
-    [onAnimateRef, timeout]
+    [onAnimateRef, timeout, clearAnimationTimeout]
   );
 
   useEffect(() => {
     if (isInitialRender.current) {
       isInitialRender.current = false;
       if (!animateOnInitialLoad) {
-        setInternalPresence(externalPresence);
         return;
       }
     }
 
-    handleAnimation(externalPresence).then(() => {
-      setInternalPresence(externalPresence);
-    });
+    const animationId = ++currentAnimationIdRef.current;
+    handleAnimation(externalPresence, animationId);
 
-    return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current);
-      }
+    return (): void => {
+      clearAnimationTimeout();
+      currentAnimationIdRef.current++;
     };
-  }, [animateOnInitialLoad, externalPresence, handleAnimation]);
+  }, [
+    externalPresence,
+    animateOnInitialLoad,
+    handleAnimation,
+    clearAnimationTimeout,
+  ]);
 
-  return useMemo(
-    () => internalPresence || externalPresence,
-    [externalPresence, internalPresence]
-  );
+  return useMemo(() => {
+    return externalPresence
+      ? internalPresence && externalPresence
+      : internalPresence || externalPresence;
+  }, [externalPresence, internalPresence]);
 }
