@@ -228,8 +228,6 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       animateOnInitialLoad: false,
     });
 
-    console.log({ shouldRender, open, animationState });
-
     useEffect(() => {
       createPanelStyles();
     }, []);
