@@ -562,8 +562,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed video from:", startTime, "to:", endTime);
   };
 
-  console.log("-----editor itse", toolPanelOpen);
-
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
