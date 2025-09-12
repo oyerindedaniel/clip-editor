@@ -27,7 +27,6 @@ import { ExportNamingDialog } from "./export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { EditorRightPanel } from "./editor-right-panel";
-import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import DualVideoTracks from "./dual-video-tracks";
 import DualVideoPlayer from "./dual-video-player";
 import EditorHeader from "./editor-header";
@@ -574,84 +573,80 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       />
 
       <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={75} minSize={50}>
-            <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-              <div className="w-full flex items-center gap-4">
-                {/* 16:9 primary player (original) */}
-                <div
-                  ref={containerRef}
-                  className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-                >
-                  <MediaPlayer.Root>
-                    <MediaPlayer.Video
-                      ref={videoRef}
-                      playsInline
-                      className="w-full aspect-video"
-                      poster={"/thumbnails/video-thumb-2.webp"}
-                    />
-                    <MediaPlayer.Loading />
-                    <MediaPlayer.Error />
-                    <MediaPlayer.VolumeIndicator />
-                    <MediaPlayer.Controls>
-                      <MediaPlayer.ControlsOverlay />
-                      <MediaPlayer.Play />
-                      <MediaPlayer.SeekBackward />
-                      <MediaPlayer.SeekForward />
-                      <MediaPlayer.Volume />
-                      <MediaPlayer.Seek />
-                      <MediaPlayer.Time />
-                      <MediaPlayer.PlaybackSpeed />
-                      <MediaPlayer.Loop />
-                      <MediaPlayer.Captions />
-                      <MediaPlayer.PiP />
-                      <MediaPlayer.Fullscreen />
-                      <MediaPlayer.Download />
-                    </MediaPlayer.Controls>
-                  </MediaPlayer.Root>
+        <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+          <div className="w-full flex items-center gap-4">
+            {/* 16:9 primary player (original) */}
+            <div
+              ref={containerRef}
+              className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+            >
+              <MediaPlayer.Root>
+                <MediaPlayer.Video
+                  ref={videoRef}
+                  playsInline
+                  className="w-full aspect-video"
+                  poster={"/thumbnails/video-thumb-2.webp"}
+                />
+                <MediaPlayer.Loading />
+                <MediaPlayer.Error />
+                <MediaPlayer.VolumeIndicator />
+                <MediaPlayer.Controls>
+                  <MediaPlayer.ControlsOverlay />
+                  <MediaPlayer.Play />
+                  <MediaPlayer.SeekBackward />
+                  <MediaPlayer.SeekForward />
+                  <MediaPlayer.Volume />
+                  <MediaPlayer.Seek />
+                  <MediaPlayer.Time />
+                  <MediaPlayer.PlaybackSpeed />
+                  <MediaPlayer.Loop />
+                  <MediaPlayer.Captions />
+                  <MediaPlayer.PiP />
+                  <MediaPlayer.Fullscreen />
+                  <MediaPlayer.Download />
+                </MediaPlayer.Controls>
+              </MediaPlayer.Root>
 
-                  <div ref={traceRef} />
+              <div ref={traceRef} />
 
-                  <PersistentOverlays duration={duration} />
-                </div>
-
-                {/* 9:16 dual preview (shows primary-only when no secondary) */}
-                <div
-                  ref={secondaryContainerRef}
-                  className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-                >
-                  <DualVideoPlayer
-                    primaryClip={clipData}
-                    secondaryClip={secondaryClip}
-                    offsetMs={dualVideoOffsetMs}
-                    className="w-full"
-                    primarySrc={currentVideoUrl.current || undefined}
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0">
-                {secondaryClip ? (
-                  <DualVideoTracks
-                    primaryDurationMs={duration}
-                    secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
-                    initialOffsetMs={dualVideoOffsetMs}
-                    primaryPreviewFrames={primaryFrames}
-                    secondaryPreviewFrames={secondaryFrames}
-                  />
-                ) : isVideoLoaded ? (
-                  <Timeline
-                    duration={duration}
-                    onTrim={handleTrim}
-                    frames={primaryFrames}
-                  />
-                ) : (
-                  <TimelineSkeleton />
-                )}
-              </div>
+              <PersistentOverlays duration={duration} />
             </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+
+            {/* 9:16 dual preview (shows primary-only when no secondary) */}
+            <div
+              ref={secondaryContainerRef}
+              className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+            >
+              <DualVideoPlayer
+                primaryClip={clipData}
+                secondaryClip={secondaryClip}
+                offsetMs={dualVideoOffsetMs}
+                className="w-full"
+                primarySrc={currentVideoUrl.current || undefined}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0">
+            {secondaryClip ? (
+              <DualVideoTracks
+                primaryDurationMs={duration}
+                secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
+                initialOffsetMs={dualVideoOffsetMs}
+                primaryPreviewFrames={primaryFrames}
+                secondaryPreviewFrames={secondaryFrames}
+              />
+            ) : isVideoLoaded ? (
+              <Timeline
+                duration={duration}
+                onTrim={handleTrim}
+                frames={primaryFrames}
+              />
+            ) : (
+              <TimelineSkeleton />
+            )}
+          </div>
+        </div>
       </div>
 
       <AspectRatioSelector
