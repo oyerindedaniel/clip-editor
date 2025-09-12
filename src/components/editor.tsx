@@ -47,7 +47,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [isExporting, setIsExporting] = useState(false);
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-  const [toolPanelOpen, setToolPanelOpen] = useState(true);
+  const [toolPanelOpen, setToolPanelOpen] = useState(false);
 
   const {
     isOpen: isAspectRatioModalOpen,
