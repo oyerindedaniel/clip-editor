@@ -7,6 +7,8 @@ import * as MediaPlayer from "@/components/ui/media-player";
 import { Badge } from "@/components/ui/badge";
 import logger from "@/utils/logger";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { useShallowSelector } from "@/hooks/context-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface DualVideoPlayerProps {
   primaryClip: S3ClipData;
@@ -15,6 +17,7 @@ interface DualVideoPlayerProps {
   className?: string;
   primarySrc?: string;
   primaryVideoRef?: React.RefObject<HTMLVideoElement> | null;
+  currentTime?: number;
 }
 
 export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
@@ -24,10 +27,25 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   className,
   primarySrc,
   primaryVideoRef,
+  currentTime = 0,
 }) => {
   const internalPrimaryRef = useRef<HTMLVideoElement>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement>(null);
   const primaryRef = useComposedRefs(internalPrimaryRef, primaryVideoRef);
+
+  const { setDualVideoRef, getTimeBasedOverlays } = useShallowSelector(
+    OverlaysContext,
+    (state) => ({
+      setDualVideoRef: state.setDualVideoRef,
+      getTimeBasedOverlays: state.getTimeBasedOverlays,
+    })
+  );
+
+  useEffect(() => {
+    setDualVideoRef(internalPrimaryRef);
+  }, [setDualVideoRef, primaryRef]);
+
+  // const { textOverlays, imageOverlays } = getTimeBasedOverlays(currentTime);
 
   // Sync secondary video with primary video based on offset
   const syncVideos = useCallback(() => {

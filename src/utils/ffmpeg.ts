@@ -103,28 +103,6 @@ export async function processClip(
       "-y",
       outputFileName,
     ];
-
-    // args = [
-    //   "-i",
-    //   inputFileName,
-    //   ...filterArgs,
-    //   "-c:v",
-    //   "libvpx-vp9",
-    //   "-crf",
-    //   "35",
-    //   "-cpu-used",
-    //   "8",
-    //   "-row-mt",
-    //   "1",
-    //   "-threads",
-    //   "2",
-    //   "-c:a",
-    //   "libopus",
-    //   "-b:a",
-    //   "96k",
-    //   "-y",
-    //   outputFileName,
-    // ];
   } else {
     args = ["-i", inputFileName, "-c", "copy", outputFileName];
   }
@@ -132,12 +110,12 @@ export async function processClip(
   try {
     await ffmpeg.exec(args);
 
-    const data = await ffmpeg.readFile(outputFileName);
+    const data = (await ffmpeg.readFile(outputFileName)) as any;
 
-    const uint8Array = convertFileDataToUint8Array(
-      data
-    ) as Uint8Array<ArrayBuffer>;
-    const blob = new Blob([uint8Array], { type: "video/webm" });
+    // const uint8Array = convertFileDataToUint8Array(
+    //   data
+    // ) as Uint8Array<ArrayBuffer>;
+    const blob = new Blob([data], { type: "video/webm" });
 
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile(outputFileName);

@@ -432,8 +432,6 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
     if (!shouldRender && !forceMount) return null;
 
-    // if (animationState === "idle") return null;
-
     const sideClasses = {
       right: "right-0",
       left: "left-0",

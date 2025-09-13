@@ -43,6 +43,7 @@ interface ClipEditorProps {
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -561,6 +562,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed video from:", startTime, "to:", endTime);
   };
 
+  const handleTimeUpdate = useCallback(() => {
+    const video = videoRef.current;
+    if (video) {
+      setCurrentTime(video.currentTime);
+    }
+  }, []);
+
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
@@ -574,9 +582,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       <div className="flex-1 min-h-0">
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-          <div className="w-full flex items-center gap-4">
+          <div className="w-full flex flex-col lg:flex-row items-center gap-4">
             {/* 16:9 primary player (original) */}
             <div
+              data-container-context="primary"
               ref={containerRef}
               className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
             >
@@ -586,6 +595,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                   playsInline
                   className="w-full aspect-video"
                   poster={"/thumbnails/video-thumb-2.webp"}
+                  // onTimeUpdate={handleTimeUpdate}
                 />
                 <MediaPlayer.Loading />
                 <MediaPlayer.Error />
@@ -612,8 +622,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               <PersistentOverlays duration={duration} />
             </div>
 
-            {/* 9:16 dual preview (shows primary-only when no secondary) */}
+            {/* 9:16 dual preview */}
             <div
+              data-container-context="dual"
               ref={secondaryContainerRef}
               className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
             >
@@ -623,7 +634,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 offsetMs={dualVideoOffsetMs}
                 className="w-full"
                 primarySrc={currentVideoUrl.current || undefined}
+                currentTime={currentTime}
               />
+
+              <PersistentOverlays duration={duration} isDualVideo />
             </div>
           </div>
 

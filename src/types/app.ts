@@ -55,6 +55,12 @@ export interface TextOverlay extends BaseOverlay {
   underline: boolean;
   alignment: "left" | "center" | "right";
   maxWidth: string;
+  // 9:16 dimensions for dual video player
+  dualX: number;
+  dualY: number;
+  dualNormX: number;
+  dualNormY: number;
+  dualMaxWidth: string;
 }
 
 export interface ImageOverlay extends BaseOverlay {
@@ -64,6 +70,13 @@ export interface ImageOverlay extends BaseOverlay {
   height: number;
   rotation: number;
   scale: number;
+  // 9:16 dimensions for dual video player
+  dualX: number;
+  dualY: number;
+  dualNormX: number;
+  dualNormY: number;
+  dualWidth: number;
+  dualHeight: number;
 }
 
 export type Overlay = TextOverlay | ImageOverlay;

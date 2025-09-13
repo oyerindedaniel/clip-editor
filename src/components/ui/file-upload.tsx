@@ -100,7 +100,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={
-          "cursor-pointer px-4 py-6 transition-colors " +
+          "cursor-pointer p-3 transition-colors " +
           (isDragging ? "bg-surface-hover" : "bg-surface-secondary")
         }
         aria-disabled={disabled}
@@ -128,7 +128,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 ? `${selectedFile!.type || "Unknown type"} • ${formatSize(
                     selectedFile!.size
                   )}`
-                : accept}
+                : formatAccept(accept)}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -181,3 +181,35 @@ const FileUpload: React.FC<FileUploadProps> = ({
 };
 
 export { FileUpload };
+
+function formatAccept(accept: string): string {
+  if (!accept) return "Any file";
+
+  return accept
+    .split(",")
+    .map((type) => {
+      type = type.trim();
+
+      if (type.endsWith("/*")) {
+        const category = type.split("/")[0];
+        switch (category) {
+          case "image":
+            return "Image";
+          case "video":
+            return "Video";
+          case "audio":
+            return "Audio";
+          default:
+            return category.charAt(0).toUpperCase() + category.slice(1);
+        }
+      }
+
+      const parts = type.split("/");
+      if (parts.length === 2) {
+        return parts[1].toUpperCase();
+      }
+
+      return type;
+    })
+    .join(", ");
+}

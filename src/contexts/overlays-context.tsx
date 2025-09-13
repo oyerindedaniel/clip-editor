@@ -26,6 +26,8 @@ import { StoreApi, useContextStore } from "@/hooks/context-store";
 
 export type OverlayType = "text" | "image";
 
+export type ContainerContext = "primary" | "dual";
+
 interface DragState {
   isDragging: boolean;
   startX: number;
@@ -37,6 +39,7 @@ interface DragState {
   rafId: number | null;
   finalLeft: number;
   finalTop: number;
+  containerContext: "primary" | "dual";
 }
 
 interface ResizeState {
@@ -54,6 +57,7 @@ interface ResizeState {
   finalHeight: number;
   rafId: number | null;
   overlayId: string | null;
+  containerContext: ContainerContext;
 }
 
 interface RotationState {
@@ -64,6 +68,7 @@ interface RotationState {
   element: HTMLElement | null;
   overlayId: string | null;
   rafId: number | null;
+  containerContext: ContainerContext;
 }
 
 export function calculateMaxWidth(value: number): string {
@@ -93,19 +98,30 @@ type OverlaysContextValue = {
   };
   containerRef: RefObject<HTMLDivElement | null>;
   secondaryContainerRef: RefObject<HTMLDivElement | null>;
-  startDrag: (overlayId: string, e: React.MouseEvent) => void;
+  startDrag: (
+    overlayId: string,
+    e: React.MouseEvent,
+    containerContext?: ContainerContext
+  ) => void;
   startResize: (
     overlayId: string,
     handle: Position,
-    e: React.MouseEvent
+    e: React.MouseEvent,
+    containerContext?: ContainerContext
   ) => void;
-  startRotation: (overlayId: string, e: React.MouseEvent) => void;
+  startRotation: (
+    overlayId: string,
+    e: React.MouseEvent,
+    containerContext?: ContainerContext
+  ) => void;
 
   textOverlaysRef: RefObject<TextOverlay[]>;
   imageOverlaysRef: RefObject<ImageOverlay[]>;
 
   videoRef: RefObject<HTMLVideoElement | null>;
   setVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
+  dualVideoRef: RefObject<HTMLVideoElement | null>;
+  setDualVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
   secondaryClip: DualVideoClip | null;
   dualVideoSettings: DualVideoSettings;
   dualVideoOffsetMs: number;
@@ -117,11 +133,14 @@ type OverlaysContextValue = {
   getActiveContainer: () => HTMLDivElement | null;
 };
 
+export type Orientation = "portrait" | "horizontal";
+
 export const OverlaysContext =
   createContext<StoreApi<OverlaysContextValue> | null>(null);
 
 export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const dualVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [imageOverlays, setImageOverlays] = useState<ImageOverlay[]>([]);
@@ -157,10 +176,20 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const secondaryContainerRef = useRef<HTMLDivElement | null>(null);
 
   const getActiveContainer = useCallback(() => {
-    return secondaryClipRef.current
-      ? secondaryContainerRef.current
-      : containerRef.current;
+    // return secondaryClipRef.current
+    //   ? secondaryContainerRef.current
+    //   : containerRef.current;
+    return containerRef.current;
   }, []);
+
+  const getContainer = useCallback(
+    (containerContext: ContainerContext = "primary") => {
+      return containerContext === "dual"
+        ? secondaryContainerRef.current
+        : containerRef.current;
+    },
+    []
+  );
 
   const dragRef = useRef<DragState>({
     isDragging: false,
@@ -173,6 +202,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     rafId: null,
     finalLeft: 0,
     finalTop: 0,
+    containerContext: "primary",
   });
 
   const resizeRef = useRef<ResizeState>({
@@ -190,6 +220,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     finalWidth: 0,
     rafId: null,
     overlayId: null,
+    containerContext: "primary",
   });
 
   const rotationRef = useRef<RotationState>({
@@ -200,11 +231,19 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     element: null,
     overlayId: null,
     rafId: null,
+    containerContext: "primary",
   });
 
   const setVideoRef = useCallback(
     (ref: React.RefObject<HTMLVideoElement | null>) => {
       videoRef.current = ref.current;
+    },
+    []
+  );
+
+  const setDualVideoRef = useCallback(
+    (ref: React.RefObject<HTMLVideoElement | null>) => {
+      dualVideoRef.current = ref.current;
     },
     []
   );
@@ -241,34 +280,57 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  function removeGuides(): void {
+    if (hGuideRef.current) {
+      hGuideRef.current.remove();
+      hGuideRef.current = null;
+    }
+
+    if (vGuideRef.current) {
+      vGuideRef.current.remove();
+      vGuideRef.current = null;
+    }
+  }
+
   useEffect(() => {
     return () => {
-      if (hGuideRef.current) {
-        hGuideRef.current.remove();
-        hGuideRef.current = null;
-      }
-
-      if (vGuideRef.current) {
-        vGuideRef.current.remove();
-        vGuideRef.current = null;
-      }
+      removeGuides();
     };
   }, []);
 
   const addTextOverlay = useCallback(
     (currentTime: number = 0, duration?: number) => {
       const video = videoRef.current;
-      if (!video) {
+      const dualVideo = dualVideoRef.current;
+
+      if (!video || !dualVideo) {
         logger.warn(
-          "⚠️ Cannot add text overlay: video element is not available."
+          "⚠️ Cannot add text overlay: video elements are not available."
         );
         return;
       }
+
+      // For 16:9 video
       const { x, y, width: videoWidth } = getVideoBoundingBox(video);
       const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
         overlayX: x,
         overlayY: y,
       });
+
+      // For 9:16 dual video
+      const {
+        x: dualX,
+        y: dualY,
+        width: dualVideoWidth,
+      } = getVideoBoundingBox(dualVideo);
+      const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+        dualVideo,
+        {
+          overlayX: dualX,
+          overlayY: dualY,
+        }
+      );
+
       const newOverlay: TextOverlay = {
         type: "text",
         id: `text_${Date.now()}`,
@@ -291,7 +353,15 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         alignment: "left",
         visible: true,
         maxWidth: calculateMaxWidth(videoWidth),
+        // 9:16 dimensions
+        dualX,
+        dualY,
+        dualNormX,
+        dualNormY,
+        dualMaxWidth: calculateMaxWidth(dualVideoWidth),
       };
+
+      console.log("newOverlay", newOverlay);
       setTextOverlays((prev) => [...prev, newOverlay]);
       setSelectedOverlay(newOverlay.id);
     },
@@ -301,13 +371,16 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const addImageOverlay = useCallback(
     (file: File, currentTime: number = 0, duration?: number) => {
       const video = videoRef.current;
-      if (!video) {
+      const dualVideo = dualVideoRef.current;
+
+      if (!video || !dualVideo) {
         logger.warn(
-          "⚠️ Cannot add image overlay: video element is not available."
+          "⚠️ Cannot add image overlay: video elements are not available."
         );
         return;
       }
 
+      // For 16:9 video
       const {
         x,
         y,
@@ -318,6 +391,21 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         overlayX: x,
         overlayY: y,
       });
+
+      // For 9:16 dual video
+      const {
+        x: dualX,
+        y: dualY,
+        width: dualVideoWidth,
+        height: dualVideoHeight,
+      } = getVideoBoundingBox(dualVideo);
+      const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+        dualVideo,
+        {
+          overlayX: dualX,
+          overlayY: dualY,
+        }
+      );
 
       const url = URL.createObjectURL(file);
 
@@ -330,6 +418,14 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           img.naturalWidth,
           img.naturalHeight
         );
+
+        const { width: dualWidth, height: dualHeight } =
+          getImageOverlaySizeByArea(
+            dualVideoWidth,
+            dualVideoHeight,
+            img.naturalWidth,
+            img.naturalHeight
+          );
 
         const newOverlay: ImageOverlay = {
           type: "image",
@@ -347,6 +443,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           visible: true,
           rotation: 0,
           scale: 1,
+          // 9:16 dimensions
+          dualX,
+          dualY,
+          dualNormX,
+          dualNormY,
+          dualWidth,
+          dualHeight,
         };
 
         setImageOverlays((prev) => [...prev, newOverlay]);
@@ -355,7 +458,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         URL.revokeObjectURL(url);
       };
     },
-    [videoRef]
+    []
   );
 
   const registerTextOverlayRef = useCallback(
@@ -443,6 +546,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
   const rafIdRef = useRef<number | null>(null);
 
+  // TODO: Review this function
   const handleWindowResize = useCallback(() => {
     const container = getActiveContainer();
     if (!container) return;
@@ -580,9 +684,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const startDrag = useCallback(
-    (overlayId: string, e: React.MouseEvent) => {
+    (
+      overlayId: string,
+      e: React.MouseEvent,
+      containerContext: ContainerContext = "primary"
+    ) => {
       const target = e.currentTarget as HTMLElement;
-      const container = getActiveContainer();
+      const container = getContainer(containerContext);
       if (!container) return;
       ensureGuides(container);
 
@@ -591,9 +699,16 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         ...textOverlaysRef.current,
       ].find((o) => o.id === overlayId);
 
+      console.log("overlay", overlay);
+
       if (!overlay) return;
 
-      const { x: currentX, y: currentY } = overlay;
+      const {
+        x: currentX,
+        y: currentY,
+        dualX: currentDualX,
+        dualY: currentDualY,
+      } = overlay;
       let scale = 1;
       let rotation = 0;
 
@@ -607,12 +722,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         startX: e.clientX,
         startY: e.clientY,
         element: target,
-        offsetX: currentX,
-        offsetY: currentY,
+        offsetX: containerContext === "dual" ? currentDualX : currentX,
+        offsetY: containerContext === "dual" ? currentDualY : currentY,
         overlayId,
         rafId: null,
-        finalLeft: currentX,
-        finalTop: currentY,
+        finalLeft: containerContext === "dual" ? currentDualX : currentX,
+        finalTop: containerContext === "dual" ? currentDualY : currentY,
+        containerContext,
       };
       setSelectedOverlay(overlayId);
 
@@ -621,7 +737,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         if (!drag.isDragging || !drag.element) return;
         const dx = ev.clientX - drag.startX;
         const dy = ev.clientY - drag.startY;
-        const container = getActiveContainer();
+        const container = getContainer(drag.containerContext);
         if (!container) return;
         const containerRect = container.getBoundingClientRect();
         const elementRect = drag.element.getBoundingClientRect();
@@ -673,65 +789,86 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         const drag = dragRef.current;
         drag.isDragging = false;
 
-        if (videoRef?.current && drag.overlayId) {
-          const { x: normX, y: normY } = getOverlayNormalizedCoords(
-            videoRef.current,
-            {
+        if (drag.overlayId) {
+          const video =
+            containerContext === "dual"
+              ? dualVideoRef.current
+              : videoRef.current;
+          if (video) {
+            const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
               overlayX: drag.finalLeft,
               overlayY: drag.finalTop,
-            }
-          );
-          const textOverlay = textOverlaysRef.current.find(
-            (o) => o.id === drag.overlayId
-          );
-          const imageOverlay = imageOverlaysRef.current.find(
-            (o) => o.id === drag.overlayId
-          );
-          if (textOverlay) {
-            updateTextOverlay(drag.overlayId, {
-              x: drag.finalLeft,
-              y: drag.finalTop,
-              normX,
-              normY,
             });
-          } else if (imageOverlay) {
-            updateImageOverlay(drag.overlayId, {
+
+            const textOverlay = textOverlaysRef.current.find(
+              (o) => o.id === drag.overlayId
+            );
+            const imageOverlay = imageOverlaysRef.current.find(
+              (o) => o.id === drag.overlayId
+            );
+
+            if (textOverlay) {
+              const updates =
+                containerContext === "dual"
+                  ? {
+                      dualX: drag.finalLeft,
+                      dualY: drag.finalTop,
+                      dualNormX: normX,
+                      dualNormY: normY,
+                    }
+                  : { x: drag.finalLeft, y: drag.finalTop, normX, normY };
+              updateTextOverlay(drag.overlayId, updates);
+            } else if (imageOverlay) {
+              const updates =
+                containerContext === "dual"
+                  ? {
+                      dualX: drag.finalLeft,
+                      dualY: drag.finalTop,
+                      dualNormX: normX,
+                      dualNormY: normY,
+                    }
+                  : { x: drag.finalLeft, y: drag.finalTop, normX, normY };
+              updateImageOverlay(drag.overlayId, updates);
+            }
+
+            logger.log("[Overlay Position]", {
+              container: containerContext,
               x: drag.finalLeft,
               y: drag.finalTop,
               normX,
               normY,
             });
           }
-          logger.log("[Overlay Position]", {
-            x: drag.finalLeft,
-            y: drag.finalTop,
-            normX,
-            normY,
-          });
         }
-        if (vGuideRef.current) vGuideRef.current.style.display = "none";
-        if (hGuideRef.current) hGuideRef.current.style.display = "none";
+
+        removeGuides();
         drag.element = null;
         drag.overlayId = null;
         drag.finalLeft = 0;
         drag.finalTop = 0;
+        drag.offsetX = 0;
+        drag.offsetY = 0;
+        drag.containerContext = "primary";
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateTextOverlay, updateImageOverlay, getActiveContainer]
+    [updateTextOverlay, updateImageOverlay, getContainer]
   );
 
   const startResize = useCallback(
-    (overlayId: string, handle: Position, e: React.MouseEvent) => {
+    (
+      overlayId: string,
+      handle: Position,
+      e: React.MouseEvent,
+      containerContext: ContainerContext = "primary"
+    ) => {
       e.stopPropagation();
       const target = e.currentTarget.parentElement as HTMLElement;
-      const container = getActiveContainer();
+      const container = getContainer(containerContext);
       if (!container) return;
-
-      const elementRect = target.getBoundingClientRect();
 
       const overlay = imageOverlaysRef.current.find(
         (overlay) => overlay.id === overlayId
@@ -739,23 +876,39 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
       if (!overlay) return;
 
-      const { x: currentX, y: currentY, rotation, scale } = overlay;
+      const {
+        x: currentX,
+        y: currentY,
+        width: currentWidth,
+        height: currentHeight,
+        dualWidth: currentDualWidth,
+        dualHeight: currentDualHeight,
+        rotation,
+        scale,
+        dualX: currentDualX,
+        dualY: currentDualY,
+      } = overlay;
 
       resizeRef.current = {
         isResizing: true,
         handle,
         startX: e.clientX,
         startY: e.clientY,
-        startWidth: elementRect.width,
-        startHeight: elementRect.height,
-        startLeft: currentX,
-        startTop: currentY,
-        finalWidth: elementRect.width,
-        finalHeight: elementRect.height,
-        finalLeft: currentX,
-        finalTop: currentY,
+        startWidth:
+          containerContext === "dual" ? currentDualWidth : currentWidth,
+        startHeight:
+          containerContext === "dual" ? currentDualHeight : currentHeight,
+        startLeft: containerContext === "dual" ? currentDualX : currentX,
+        startTop: containerContext === "dual" ? currentDualY : currentY,
+        finalWidth:
+          containerContext === "dual" ? currentDualWidth : currentWidth,
+        finalHeight:
+          containerContext === "dual" ? currentDualHeight : currentHeight,
+        finalLeft: containerContext === "dual" ? currentDualX : currentX,
+        finalTop: containerContext === "dual" ? currentDualY : currentY,
         rafId: null,
         overlayId,
+        containerContext,
       };
 
       setSelectedOverlay(overlayId);
@@ -842,23 +995,38 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           resize;
         resize.isResizing = false;
 
-        if (overlayId && videoRef?.current) {
-          const { x: normX, y: normY } = getOverlayNormalizedCoords(
-            videoRef.current,
-            {
+        if (overlayId) {
+          const video =
+            containerContext === "dual"
+              ? dualVideoRef.current
+              : videoRef.current;
+          if (video) {
+            const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
               overlayX: finalLeft,
               overlayY: finalTop,
-            }
-          );
+            });
 
-          updateImageOverlay(overlayId, {
-            width: finalWidth,
-            height: finalHeight,
-            x: finalLeft,
-            y: finalTop,
-            normX,
-            normY,
-          });
+            const updates =
+              containerContext === "dual"
+                ? {
+                    dualWidth: finalWidth,
+                    dualHeight: finalHeight,
+                    dualX: finalLeft,
+                    dualY: finalTop,
+                    dualNormX: normX,
+                    dualNormY: normY,
+                  }
+                : {
+                    width: finalWidth,
+                    height: finalHeight,
+                    x: finalLeft,
+                    y: finalTop,
+                    normX,
+                    normY,
+                  };
+
+            updateImageOverlay(overlayId, updates);
+          }
         }
 
         document.removeEventListener("mousemove", onMouseMove);
@@ -868,14 +1036,19 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateImageOverlay, getActiveContainer]
+    [updateImageOverlay, getContainer]
   );
 
   const startRotation = useCallback(
-    (overlayId: string, e: React.MouseEvent) => {
+    (
+      overlayId: string,
+      e: React.MouseEvent,
+      containerContext: ContainerContext = "primary"
+    ) => {
       e.stopPropagation();
       const target = e.currentTarget.parentElement as HTMLElement;
-      if (!target) return;
+      const container = getContainer(containerContext);
+      if (!target || !container) return;
 
       const imageOverlay = imageOverlaysRef.current.find(
         (o) => o.id === overlayId
@@ -899,6 +1072,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         element: target,
         overlayId,
         rafId: null,
+        containerContext,
       };
 
       setSelectedOverlay(overlayId);
@@ -937,6 +1111,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
         rotation.element = null;
         rotation.overlayId = null;
+        rotation.containerContext = "primary";
         if (rotation.rafId) {
           cancelAnimationFrame(rotation.rafId);
           rotation.rafId = null;
@@ -963,6 +1138,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const contextValue = {
     videoRef,
     setVideoRef,
+    dualVideoRef,
+    setDualVideoRef,
     textOverlays,
     imageOverlays,
     selectedOverlay,
@@ -1030,30 +1207,33 @@ function getImageOverlaySizeByArea(
   return { width, height };
 }
 
-function getTransformPosition(target: HTMLElement): {
+export function getTransformPosition(target: HTMLElement): {
   x: number;
   y: number;
 } {
-  const style: CSSStyleDeclaration = window.getComputedStyle(target);
-  const transformMatrix: string = style.transform;
+  const style = window.getComputedStyle(target);
+  const transform = style.transform;
   let x = 0;
   let y = 0;
 
-  if (transformMatrix && transformMatrix !== "none") {
-    const matrixValues: RegExpMatchArray | null = transformMatrix.match(
-      /matrix3d\((.+)\)|matrix\((.+)\)/
-    );
+  if (transform && transform !== "none") {
+    const matrixValues = transform.match(/matrix3d\((.+)\)|matrix\((.+)\)/);
 
     if (matrixValues) {
-      const values: string = matrixValues[1] || matrixValues[2];
-      const parsedValues: number[] = values.split(",").map(Number);
+      const values = (matrixValues[1] || matrixValues[2])
+        ?.split(",")
+        .map((v) => parseFloat(v.trim()));
 
-      if (matrixValues[1]) {
-        x = parsedValues[12];
-        y = parsedValues[13];
-      } else {
-        x = parsedValues[4];
-        y = parsedValues[5];
+      if (values) {
+        if (matrixValues[1]) {
+          // matrix3d
+          x = values[12] || 0;
+          y = values[13] || 0;
+        } else {
+          // matrix
+          x = values[4] || 0;
+          y = values[5] || 0;
+        }
       }
     }
   }

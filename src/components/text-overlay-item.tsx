@@ -226,8 +226,8 @@ const TextOverlayItem = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="flex flex-col gap-3">
+            <div className="space-y-1.5 w-full">
               <label className="block text-xs text-foreground-subtle">
                 Text color
               </label>
@@ -238,7 +238,7 @@ const TextOverlayItem = ({
                 }
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 w-full">
               <label className="block text-xs text-foreground-subtle">
                 Background
               </label>

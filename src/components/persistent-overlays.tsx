@@ -7,9 +7,13 @@ import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface PersistentOverlaysProps {
   duration: number;
+  isDualVideo?: boolean;
 }
 
-export function PersistentOverlays({ duration }: PersistentOverlaysProps) {
+export function PersistentOverlays({
+  duration,
+  isDualVideo = false,
+}: PersistentOverlaysProps) {
   const {
     selectedOverlay,
     textOverlays,
@@ -48,47 +52,51 @@ export function PersistentOverlays({ duration }: PersistentOverlaysProps) {
     [imageOverlays, duration]
   );
 
+  const containerContext = isDualVideo ? "dual" : "primary";
+
   const handleMouseDown = useCallback(
     (overlayId: string, event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      startDrag(overlayId, event);
+      startDrag(overlayId, event, containerContext);
     },
-    [startDrag]
+    [startDrag, containerContext]
   );
 
   const handleResizeStart = useCallback(
     (overlayId: string, handle: Position, event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      startResize(overlayId, handle, event);
+      startResize(overlayId, handle, event, containerContext);
     },
-    [startResize]
+    [startResize, containerContext]
   );
 
   const handleRotationStart = useCallback(
     (overlayId: string, event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      startRotation(overlayId, event);
+      startRotation(overlayId, event, containerContext);
     },
-    [startRotation]
+    [startRotation, containerContext]
   );
 
   return (
     <>
       {persistentTextOverlays.map((overlay) => (
         <DraggableTextOverlay
-          key={`persistent-${overlay.id}`}
+          key={`persistent-${overlay.id}-${containerContext}`}
           overlay={overlay}
           isSelected={selectedOverlay === overlay.id}
           onMouseDown={(e) => handleMouseDown(overlay.id, e)}
+          isDualVideo={isDualVideo}
+          containerContext={containerContext}
         />
       ))}
 
       {persistentImageOverlays.map((overlay) => (
         <DraggableImageOverlay
-          key={`persistent-${overlay.id}`}
+          key={`persistent-${overlay.id}-${containerContext}`}
           overlay={overlay}
           isSelected={selectedOverlay === overlay.id}
           onMouseDown={(e) => handleMouseDown(overlay.id, e)}
@@ -96,6 +104,8 @@ export function PersistentOverlays({ duration }: PersistentOverlaysProps) {
             handleResizeStart(overlay.id, handle, e)
           }
           onRotationStart={(e) => handleRotationStart(overlay.id, e)}
+          isDualVideo={isDualVideo}
+          containerContext={containerContext}
         />
       ))}
     </>
