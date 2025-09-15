@@ -22,7 +22,7 @@ import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Position } from "@/components/resize-handle";
 import { debounce } from "@/utils/app";
-import { StoreApi, useContextStore } from "@/hooks/context-store";
+import { type StoreApi, useContextStore } from "react-shallow-store";
 
 export type OverlayType = "text" | "image";
 

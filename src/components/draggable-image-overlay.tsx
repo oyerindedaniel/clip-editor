@@ -5,7 +5,7 @@ import { ResizeHandle } from "./resize-handle";
 import { Position } from "./resize-handle";
 import { cn } from "@/lib/utils";
 import { ContainerContext, OverlaysContext } from "@/contexts/overlays-context";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

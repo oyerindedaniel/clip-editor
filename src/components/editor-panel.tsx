@@ -207,8 +207,8 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     const [animationState, setAnimationState] =
       useState<AnimationState>("idle");
 
-    // TODO: toogle idle out actual animation/transition end
-    const handleAnimation = useCallback(async (presence: boolean) => {
+    // TODO: toogle "idle" out based on actual animation/transition end
+    const handleAnimation = async (presence: boolean) => {
       return new Promise<void>((resolve) => {
         if (presence) {
           setAnimationState("entering");
@@ -221,7 +221,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
           }, 350);
         }
       });
-    }, []);
+    };
 
     const shouldRender = useAnimatePresence(open, handleAnimation, {
       timeout: 400,

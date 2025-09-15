@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { TextOverlay } from "@/types/app";
 import { cn } from "@/lib/utils";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { ContainerContext, OverlaysContext } from "@/contexts/overlays-context";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";

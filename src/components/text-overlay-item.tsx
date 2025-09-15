@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface TextOverlayItemProps {

@@ -15,7 +15,7 @@ import {
   getScrollState,
 } from "@/utils/timeline-utils";
 import { flushSync } from "react-dom";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface DualVideoTracksProps {

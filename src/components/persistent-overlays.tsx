@@ -2,7 +2,7 @@ import React, { useMemo, useCallback } from "react";
 import { DraggableTextOverlay } from "./draggable-text-overlay";
 import { DraggableImageOverlay } from "./draggable-image-overlay";
 import { Position } from "./resize-handle";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface PersistentOverlaysProps {

@@ -2,12 +2,11 @@
 
 import React, { useEffect, useState, memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Trash2, RotateCw, Maximize2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { ImageOverlay } from "@/types/app";
 import { cn } from "@/lib/utils";
 import { OverlaysContext } from "@/contexts/overlays-context";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 
 interface ImageOverlayItemProps {
   overlay: ImageOverlay;

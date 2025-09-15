@@ -32,7 +32,7 @@ import DualVideoPlayer from "./dual-video-player";
 import EditorHeader from "./editor-header";
 import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 import { PersistentOverlays } from "./persistent-overlays";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "./ui/button";
 import { Settings } from "lucide-react";
@@ -685,7 +685,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         <EditorPanel.Portal>
           <EditorPanel.Content className="w-[300px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
-              <div />
+              <div className="pointer-events-none" />
               <EditorPanel.CloseButton size="sm" />
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">

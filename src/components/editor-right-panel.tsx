@@ -27,7 +27,7 @@ import type {
 } from "@/types/app";
 import { formatTime } from "@/utils/app";
 import { toast } from "sonner";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface EditorRightPanelProps {
@@ -257,7 +257,7 @@ export function EditorRightPanel({
                       <Input
                         type="number"
                         min="0"
-                        max={duration}
+                        max={(duration - 1000) / 1000}
                         value={Math.floor(track.startTime / 1000)}
                         onChange={(e) =>
                           onAudioTrackUpdate(track.id, {
@@ -274,7 +274,7 @@ export function EditorRightPanel({
                       <Input
                         type="number"
                         min="0"
-                        max={duration}
+                        max={duration / 1000}
                         value={Math.floor(track.endTime / 1000)}
                         onChange={(e) =>
                           onAudioTrackUpdate(track.id, {

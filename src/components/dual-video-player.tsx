@@ -7,7 +7,7 @@ import * as MediaPlayer from "@/components/ui/media-player";
 import { Badge } from "@/components/ui/badge";
 import logger from "@/utils/logger";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import { useShallowSelector } from "@/hooks/context-store";
+import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 
 interface DualVideoPlayerProps {

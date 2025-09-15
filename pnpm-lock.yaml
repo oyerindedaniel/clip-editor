@@ -74,6 +74,9 @@ importers:
       react-resizable-panels:
         specifier: ^3.0.5
         version: 3.0.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react-shallow-store:
+        specifier: ^0.1.2
+        version: 0.1.2(react@19.1.0)
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
@@ -2463,6 +2466,11 @@ packages:
     peerDependencies:
       react: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+
+  react-shallow-store@0.1.2:
+    resolution: {integrity: sha512-EAV4hGdpYH5w4GX/wCqlwFUW0PJvaO3GIAFBTW63hSnYW65uLQ+eBn5VET4kfZatFAP/irl0ydN5sKC72T9Z1g==}
+    peerDependencies:
+      react: '>=18.0.0'
 
   react-style-singleton@2.2.3:
     resolution: {integrity: sha512-b6jSvxvVnyptAiLjbkWLE/lOnR4lfTtDAl+eUC7RZy+QQWc6wRzIV2CE6xBuMmDxc2qIihtDCZD5NPOFl7fRBQ==}
@@ -5726,6 +5734,10 @@ snapshots:
     dependencies:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
+
+  react-shallow-store@0.1.2(react@19.1.0):
+    dependencies:
+      react: 19.1.0
 
   react-style-singleton@2.2.3(@types/react@19.1.11)(react@19.1.0):
     dependencies:
