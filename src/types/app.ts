@@ -208,6 +208,7 @@ export type FontStyle = "normal" | "italic" | "oblique";
 export interface ClipOptions {
   convertAspectRatio?: string;
   cropMode?: "letterbox" | "crop" | "stretch";
+  padColor?: string; // used when cropMode is letterbox
 }
 
 export interface ClipResponse {

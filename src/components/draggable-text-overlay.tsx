@@ -82,8 +82,7 @@ export const DraggableTextOverlay = ({
         }}
         className="
     absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-10
-    opacity-0 blur-[1px]
-    transition-[opacity,filter,transform] duration-300 ease-out
+    opacity-0 blur-[1px] scale-100 transition-all duration-300 ease-in-out
     hover:scale-105
     [[data-selected]_&]:opacity-100
     [[data-selected]_&]:blur-none

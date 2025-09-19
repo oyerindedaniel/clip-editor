@@ -13,6 +13,16 @@ import logger from "./logger";
 
 let ffmpeg: FFmpeg | null = null;
 
+type ProgressListener = (progress: number, time?: number) => void;
+const progressListeners = new Set<ProgressListener>();
+
+export function onFFmpegProgress(listener: ProgressListener): () => void {
+  progressListeners.add(listener);
+  return () => {
+    progressListeners.delete(listener);
+  };
+}
+
 export const initFFmpeg = async (): Promise<FFmpeg> => {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
 
@@ -26,6 +36,11 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
     logger.log(
       `FFmpeg progress: ${(progress * 100).toFixed(2)}% (time: ${time}s)`
     );
+    progressListeners.forEach((cb) => {
+      try {
+        cb(progress ?? 0, time);
+      } catch {}
+    });
   });
 
   // const baseURL = "/ffmpeg";
@@ -47,8 +62,10 @@ export async function processClip(
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
-  const inputFileName = "input.webm";
-  const outputFileName = "output.webm";
+  console.log({ options, videoDimensions });
+
+  const inputFileName = "input.mp4";
+  const outputFileName = "output.mp4";
 
   await ffmpeg.writeFile(inputFileName, new Uint8Array(clipData));
 
@@ -68,7 +85,8 @@ export async function processClip(
         const padW = Math.round(inputH * targetRatio);
         const padH = inputH;
         const scaleExpr = `scale='if(gt(a,${targetRatio}),${padW},-1)':'if(gt(a,${targetRatio}),-1,${padH})'`;
-        const padExpr = `pad=${padW}:${padH}:(ow-iw)/2:(oh-ih)/2:color=white`;
+        const padColor = options.padColor || "white";
+        const padExpr = `pad=${padW}:${padH}:(ow-iw)/2:(oh-ih)/2:color=${padColor}`;
         filterArgs = ["-vf", `${scaleExpr},${padExpr}`];
 
         logger.log("📐 Letterbox scale and pad expressions:", {
@@ -98,6 +116,12 @@ export async function processClip(
       "-i",
       inputFileName,
       ...filterArgs,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "23",
       "-c:a",
       "copy",
       "-y",
@@ -109,6 +133,8 @@ export async function processClip(
 
   try {
     await ffmpeg.exec(args);
+
+    console.log(args);
 
     const data = (await ffmpeg.readFile(outputFileName)) as any;
 

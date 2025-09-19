@@ -14,7 +14,11 @@ import type {
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
-import { processClip, processClipForExport } from "@/utils/ffmpeg";
+import {
+  processClip,
+  processClipForExport,
+  onFFmpegProgress,
+} from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
 import * as MediaPlayer from "@/components/ui/media-player";
 import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
@@ -64,6 +68,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const selectedConvertAspectRatio = useRef<string>(DEFAULT_ASPECT_RATIO);
   const selectedCropMode = useRef<CropMode>(DEFAULT_CROP_MODE);
+  const padColorRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
   const trimRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -113,6 +118,61 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     });
   }, []);
 
+  const withProgressToast = useCallback(
+    async <T,>(
+      label: string,
+      task: () => Promise<T>,
+      toastId?: string
+    ): Promise<T> => {
+      const id = toastId || `${clipData.metadata.clipId}-${Date.now()}`;
+
+      const render = (percent: number) =>
+        toast.custom(
+          () => (
+            <div className="w-72 rounded-md bg-primary/70 backdrop-blur-xl shadow-md p-3 text-foreground">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium">{label}</span>
+                <span className="text-[10px] tabular-nums text-foreground/70">
+                  {percent}%
+                </span>
+              </div>
+              <div className="w-full h-2 rounded bg-foreground/10 overflow-hidden">
+                <div
+                  className="h-full bg-foreground/70 transition-all duration-150"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
+          ),
+          { id }
+        );
+
+      render(0);
+
+      let unsub: (() => void) | null = null;
+      try {
+        unsub = onFFmpegProgress((p) => {
+          const percent = Math.max(
+            0,
+            Math.min(100, Math.round((p || 0) * 100))
+          );
+          render(percent);
+        });
+        const result = await task();
+        toast.dismiss(id);
+        toast.success(`${label} done`);
+        return result;
+      } catch (e) {
+        const msg = normalizeError(e).message;
+        toast.error(`${label} failed: ${msg}`);
+        throw e;
+      } finally {
+        if (unsub) unsub();
+      }
+    },
+    [clipData.metadata.clipId]
+  );
+
   const adjustOverlayBounds = useCallback(() => {
     const video = videoRef.current;
     const container = containerRef.current;
@@ -147,13 +207,19 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     });
 
     try {
-      const processedBlob = await processClip(
-        clipBuffer,
-        {
-          convertAspectRatio: selectedConvertAspectRatio.current,
-          cropMode: selectedCropMode.current,
-        },
-        clipMetaDataRef.current!.dimensions
+      const processedBlob = await withProgressToast<Blob>(
+        "Processing clip",
+        () =>
+          processClip(
+            clipBuffer,
+            {
+              convertAspectRatio: selectedConvertAspectRatio.current,
+              cropMode: selectedCropMode.current,
+              ...(padColorRef.current ? { padColor: padColorRef.current } : {}),
+            },
+            clipMetaDataRef.current!.dimensions
+          ),
+        `process-${clipData.metadata.clipId}`
       );
 
       if (processedBlob && processedBlob.size > 0) {
@@ -511,9 +577,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
         console.log({ exportClip, exportData });
 
-        const processedBlob = await processClipForExport(
-          exportClip,
-          exportData
+        const processedBlob = await withProgressToast<Blob>(
+          "Exporting clip",
+          () => processClipForExport(exportClip, exportData),
+          `export-${clipData.metadata.clipId}`
         );
 
         console.log("export", processedBlob);
@@ -550,9 +617,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     });
   };
 
-  const handleSettingsApplied = (aspectRatio: string, cropMode: CropMode) => {
+  const handleSettingsApplied = (
+    aspectRatio: string,
+    cropMode: CropMode,
+    padColor: string
+  ) => {
     selectedConvertAspectRatio.current = aspectRatio;
     selectedCropMode.current = cropMode;
+    padColorRef.current = padColor;
     closeAspectRatioModal();
     loadClipVideo();
   };
@@ -711,7 +783,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       <Button
         type="button"
         onClick={() => setToolPanelOpen(true)}
-        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl"
+        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl hover:scale-105 transition-transform duration-200 ease-in-out"
         size="sm"
         variant="default"
         aria-label="Open Tools (T)"

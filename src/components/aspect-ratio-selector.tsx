@@ -21,11 +21,16 @@ import React from "react";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
 import type { CropMode } from "@/types/app";
 import { cn } from "@/lib/utils";
+import ColorPalette from "@/components/color-palette";
 
 interface AspectRatioSelectorProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSettingsApplied: (convertAspectRatio: string, cropMode: CropMode) => void;
+  onSettingsApplied: (
+    convertAspectRatio: string,
+    cropMode: CropMode,
+    padColor: string
+  ) => void;
 }
 
 const AspectRatioSelector = ({
@@ -36,6 +41,7 @@ const AspectRatioSelector = ({
   const [convertAspectRatio, setConvertAspectRatio] =
     useState(DEFAULT_ASPECT_RATIO);
   const [cropMode, setCropMode] = useState(DEFAULT_CROP_MODE);
+  const [padColor, setPadColor] = useState<string>("white");
 
   const aspectRatios = [
     { value: "original", label: "Keep Original", description: "No conversion" },
@@ -133,12 +139,38 @@ const AspectRatioSelector = ({
               </div>
             </div>
           )}
+
+          {convertAspectRatio !== "original" && cropMode === "letterbox" && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label className="text-right text-xs">Pad Color</label>
+              <div className="col-span-3">
+                <ColorPalette value={padColor} onChange={setPadColor}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs flex items-center gap-2"
+                  >
+                    <span
+                      className="h-4 w-4 rounded border"
+                      style={{ backgroundColor: padColor }}
+                    />
+                    <span>{padColor}</span>
+                  </Button>
+                </ColorPalette>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button
             onClick={() => {
-              onSettingsApplied(convertAspectRatio, cropMode as CropMode);
+              onSettingsApplied(
+                convertAspectRatio,
+                cropMode as CropMode,
+                padColor
+              );
               onOpenChange(false);
             }}
             className="w-full"

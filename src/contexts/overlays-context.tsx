@@ -361,7 +361,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         dualMaxWidth: calculateMaxWidth(dualVideoWidth),
       };
 
-      console.log("newOverlay", newOverlay);
       setTextOverlays((prev) => [...prev, newOverlay]);
       setSelectedOverlay(newOverlay.id);
     },
@@ -698,8 +697,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         ...imageOverlaysRef.current,
         ...textOverlaysRef.current,
       ].find((o) => o.id === overlayId);
-
-      console.log("overlay", overlay);
 
       if (!overlay) return;
 
