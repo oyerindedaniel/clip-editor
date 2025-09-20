@@ -62,12 +62,11 @@ export async function processClip(
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
-  console.log({ options, videoDimensions });
-
   const inputFileName = "input.mp4";
   const outputFileName = "output.mp4";
 
-  await ffmpeg.writeFile(inputFileName, new Uint8Array(clipData));
+  const clonedInput = (clipData as ArrayBuffer).slice(0);
+  await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedInput));
 
   let args: string[] = [];
 
@@ -133,9 +132,6 @@ export async function processClip(
 
   try {
     await ffmpeg.exec(args);
-
-    console.log(args);
-
     const data = (await ffmpeg.readFile(outputFileName)) as any;
 
     // const uint8Array = convertFileDataToUint8Array(
@@ -171,7 +167,8 @@ export async function processClipForExport(
   const inputFileName = "input.webm";
   const outputFileName = `output.${data.exportSettings.format}`;
 
-  await ffmpeg.writeFile(inputFileName, new Uint8Array(clip.blob));
+  const clonedExportInput = (clip.blob as ArrayBuffer).slice(0);
+  await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedExportInput));
 
   const startSeconds = data.startTime / 1000;
   const duration = (data.endTime - data.startTime) / 1000;

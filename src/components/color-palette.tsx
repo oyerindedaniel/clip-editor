@@ -25,6 +25,13 @@ const DEFAULT_COLORS = [
   "#8b5cf6",
 ];
 
+function getTotalDuration(count: number, duration: number, stagger: number) {
+  // Adds a small buffer to ensure the parent stays visible a bit longer
+  const buffer = 10;
+  if (count <= 0) return 0;
+  return duration + (count - 1) * stagger + buffer;
+}
+
 export function ColorPalette({
   value,
   onChange,
@@ -38,11 +45,29 @@ export function ColorPalette({
     setOpen(false);
   };
 
+  const DELAY = 50;
+  const DURATION = 300;
+
+  // Radix PopoverPresence does not account for child animations.
+  // Using totalDuration ensures the popover stays mounted until all child transitions complete.
+  const totalDuration = React.useMemo(
+    () => getTotalDuration(DEFAULT_COLORS.length, DURATION, DELAY),
+    [DEFAULT_COLORS.length]
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
 
-      <PopoverContent className="w-auto p-3" sideOffset={4} forceMount>
+      <PopoverContent
+        className="w-auto p-3 !duration-(--total-duration)"
+        forceMount
+        style={
+          {
+            "--total-duration": `${totalDuration}ms`,
+          } as React.CSSProperties
+        }
+      >
         <div className="grid grid-cols-5 gap-2">
           {colors.map((color, idx) => {
             const isSelected =
@@ -63,10 +88,10 @@ export function ColorPalette({
                   [[data-state=open]_&]:opacity-100
                   [[data-state=open]_&]:translate-y-0
                   [[data-state=open]_&]:scale-100
-                  transition-[opacity,transform]
-                  [[data-state=open]_&]:delay-(--delay)
-                  [[data-state=open]_&]:duration-(--duration) 
-                   ease-in-out relative
+                  transition-all
+                  delay-(--delay)
+                  duration-(--duration)
+                  ease-in-out relative
                   data-[selected]:ring-2
                   data-[selected]:ring-offset-1
                   data-[selected]:ring-foreground/80
@@ -75,8 +100,8 @@ export function ColorPalette({
                   {
                     "--index": idx,
                     "--bg": color,
-                    "--delay": `calc(var(--index) * 500ms)`,
-                    "--duration": `300ms`,
+                    "--delay": `calc(var(--index) * ${DELAY}ms)`,
+                    "--duration": `${DURATION}ms`,
                   } as React.CSSProperties
                 }
                 title={color}

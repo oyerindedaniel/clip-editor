@@ -41,7 +41,7 @@ const AspectRatioSelector = ({
   const [convertAspectRatio, setConvertAspectRatio] =
     useState(DEFAULT_ASPECT_RATIO);
   const [cropMode, setCropMode] = useState(DEFAULT_CROP_MODE);
-  const [padColor, setPadColor] = useState<string>("white");
+  const [padColor, setPadColor] = useState<string>("#ffffff");
 
   const aspectRatios = [
     { value: "original", label: "Keep Original", description: "No conversion" },

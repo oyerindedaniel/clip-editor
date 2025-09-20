@@ -207,7 +207,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     const [animationState, setAnimationState] =
       useState<AnimationState>("idle");
 
-    // TODO: toogle "idle" out based on actual animation/transition end
+    // TODO: toogle "idle" out based on actual animation end
     const handleAnimation = async (presence: boolean) => {
       return new Promise<void>((resolve) => {
         if (presence) {

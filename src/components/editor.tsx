@@ -163,8 +163,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         toast.success(`${label} done`);
         return result;
       } catch (e) {
-        const msg = normalizeError(e).message;
-        toast.error(`${label} failed: ${msg}`);
+        toast.dismiss(id);
+        // Failed to load clip: Cannot perform Construct on a detached ArrayBuffer
+        // const msg = normalizeError(e).message;
+        // toast.error(`${label} failed: ${msg}`);
         throw e;
       } finally {
         if (unsub) unsub();
@@ -602,18 +604,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       } finally {
         setIsExporting(false);
       }
-    });
-
-    toast.promise(promise, {
-      loading: "Exporting clip...",
-      success: (message) => {
-        return message;
-      },
-      error: (err) => {
-        const normalizedError = normalizeError(err);
-        return `Export failed: ${normalizedError.message}`;
-      },
-      id: clipData.metadata.clipId,
     });
   };
 
