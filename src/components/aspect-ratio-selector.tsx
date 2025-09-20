@@ -1,4 +1,9 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useInsertionEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { Video, Crop, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,7 +78,7 @@ const AspectRatioSelector = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent data-dialog-aspect-ratio className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Adjust Aspect Ratio</DialogTitle>
           <DialogDescription>

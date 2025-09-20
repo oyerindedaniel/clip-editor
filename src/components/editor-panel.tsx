@@ -131,7 +131,7 @@ const createPanelStyles = () => {
         }
       }
 
-       @keyframes slide-in-right-bounce {
+      @keyframes slide-in-right-bounce {
         0% {
           transform: translateX(100%);
           opacity: 0;
@@ -152,27 +152,19 @@ const createPanelStyles = () => {
       }
       
       .panel-enter-right {
-      transform: translateX(100%);
-          opacity: 0;
-        animation: slide-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: slide-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       
-     .panel-enter-left {
-      transform: translateX(-100%); 
-       opacity: 0;
-        animation: slide-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      .panel-enter-left {
+        animation: slide-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       
       .panel-exit-right {
-          transform: translateX(0);
-          opacity: 1;
-        animation: slide-out-right 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
+        animation: slide-out-right 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
       }
       
       .panel-exit-left {
-        transform: translateX(0);
-          opacity: 1;
-        animation: slide-out-left 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
+        animation: slide-out-left 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
       }
     `;
   document.head.appendChild(style);
@@ -400,7 +392,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
       if (open) {
         const focusableElements = content.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
         const firstFocusable = focusableElements[0] as HTMLElement;
         firstFocusable?.focus();

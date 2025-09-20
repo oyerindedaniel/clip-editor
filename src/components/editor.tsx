@@ -514,97 +514,93 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     setIsExporting(true);
 
-    const promise = new Promise<string>(async (resolve, reject) => {
-      try {
-        const { width: clientWidth, height: clientHeight } =
-          getVideoBoundingBox(video);
-        const clientDisplaySize = { width: clientWidth, height: clientHeight };
+    try {
+      const { width: clientWidth, height: clientHeight } =
+        getVideoBoundingBox(video);
+      const clientDisplaySize = { width: clientWidth, height: clientHeight };
 
-        const videoAspectRatio =
-          clipMetaDataRef.current!.dimensions.width /
-          clipMetaDataRef.current!.dimensions.height;
-        const targetResolutionDimensions = getTargetVideoDimensions(
-          resolution!,
-          videoAspectRatio
-        );
+      const videoAspectRatio =
+        clipMetaDataRef.current!.dimensions.width /
+        clipMetaDataRef.current!.dimensions.height;
+      const targetResolutionDimensions = getTargetVideoDimensions(
+        resolution!,
+        videoAspectRatio
+      );
 
-        console.log("export ----------------");
+      console.log("export ----------------");
 
-        const exportData: ClipExportData = {
-          id: clipData.metadata.clipId,
-          startTime: trimRef.current.start || 0,
-          endTime: trimRef.current.end || duration,
-          outputName,
-          textOverlays: textOverlaysRef.current.filter(
-            (overlay) => overlay.visible
-          ),
-          imageOverlays: imageOverlaysRef.current.filter(
-            (overlay) => overlay.visible
-          ),
-          audioTracks: audioTracks.filter((track) => track.visible),
-          exportSettings: {
-            preset,
-            crf,
-            fps,
-            format,
-            resolution,
-            bitrate,
-            customBitrateKbps,
-            convertAspectRatio: selectedConvertAspectRatio.current,
-            cropMode: selectedCropMode.current,
-          },
-          clientDisplaySize,
-          targetResolution: targetResolutionDimensions,
-          ...(secondaryClip && {
-            dualVideo: {
-              primaryClip: {
-                id: clipData.metadata.clipId,
-                url: clipData.url,
-                buffer: clipBufferRef.current,
-                metadata: clipData.metadata,
-                offset: 0,
-                volume: 1,
-                visible: true,
-              },
-              secondaryClip,
-              settings: dualVideoSettings,
+      const exportData: ClipExportData = {
+        id: clipData.metadata.clipId,
+        startTime: trimRef.current.start || 0,
+        endTime: trimRef.current.end || duration,
+        outputName,
+        textOverlays: textOverlaysRef.current.filter(
+          (overlay) => overlay.visible
+        ),
+        imageOverlays: imageOverlaysRef.current.filter(
+          (overlay) => overlay.visible
+        ),
+        audioTracks: audioTracks.filter((track) => track.visible),
+        exportSettings: {
+          preset,
+          crf,
+          fps,
+          format,
+          resolution,
+          bitrate,
+          customBitrateKbps,
+          convertAspectRatio: selectedConvertAspectRatio.current,
+          cropMode: selectedCropMode.current,
+        },
+        clientDisplaySize,
+        targetResolution: targetResolutionDimensions,
+        ...(secondaryClip && {
+          dualVideo: {
+            primaryClip: {
+              id: clipData.metadata.clipId,
+              url: clipData.url,
+              buffer: clipBufferRef.current,
+              metadata: clipData.metadata,
+              offset: 0,
+              volume: 1,
+              visible: true,
             },
-          }),
-        };
+            secondaryClip,
+            settings: dualVideoSettings,
+          },
+        }),
+      };
 
-        const exportClip: ExportClip = {
-          blob: clipBufferRef.current!,
-          metadata: clipMetaDataRef.current,
-        };
+      const exportClip: ExportClip = {
+        blob: clipBufferRef.current!,
+        metadata: clipMetaDataRef.current,
+      };
 
-        console.log({ exportClip, exportData });
+      console.log({ exportClip, exportData });
 
-        const processedBlob = await withProgressToast<Blob>(
-          "Exporting clip",
-          () => processClipForExport(exportClip, exportData),
-          `export-${clipData.metadata.clipId}`
-        );
+      const processedBlob = await withProgressToast<Blob>(
+        "Exporting clip",
+        () => processClipForExport(exportClip, exportData),
+        `export-${clipData.metadata.clipId}`
+      );
 
-        console.log("export", processedBlob);
+      console.log("export", processedBlob);
 
-        const downloadUrl = URL.createObjectURL(processedBlob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = `${outputName}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(downloadUrl);
+      const downloadUrl = URL.createObjectURL(processedBlob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `${outputName}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
 
-        closeAspectRatioModal();
-        resolve(`Downloaded ${outputName}.${format}`);
-      } catch (error) {
-        logger.error("Export error:", error);
-        reject(error);
-      } finally {
-        setIsExporting(false);
-      }
-    });
+      closeAspectRatioModal();
+    } catch (error) {
+      logger.error("Export error:", error);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSettingsApplied = (
