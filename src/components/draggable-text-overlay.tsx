@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useRef } from "react";
 import type { TextOverlay } from "@/types/app";
 import { cn } from "@/lib/utils";

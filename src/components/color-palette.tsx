@@ -5,26 +5,14 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COLORS } from "@/constants/app";
 
 interface ColorPaletteProps {
   value?: string;
   onChange?: (color: string) => void;
-  colors?: string[];
+  colors?: typeof DEFAULT_COLORS;
   children: React.ReactNode;
 }
-
-const DEFAULT_COLORS = [
-  "#ffffff",
-  "#000000",
-  "#ef4444",
-  "#f59e0b",
-  "#fbbf24",
-  "#10b981",
-  "#22c55e",
-  "#06b6d4",
-  "#3b82f6",
-  "#8b5cf6",
-];
 
 function getTotalDuration(count: number, duration: number, stagger: number) {
   // Adds a small buffer to ensure the parent stays visible a bit longer

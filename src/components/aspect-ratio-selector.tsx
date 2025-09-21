@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useInsertionEffect,
-  useLayoutEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 import { Video, Crop, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,30 +18,38 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import React from "react";
-import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
-import type { CropMode } from "@/types/app";
+import { formatOptions } from "@/constants/app";
+import type {
+  CropMode,
+  ExportSettings,
+  Settings,
+  VideoFormat,
+} from "@/types/app";
 import { cn } from "@/lib/utils";
 import ColorPalette from "@/components/color-palette";
+import { useLatestValue } from "@/hooks/use-latest-value";
 
 interface AspectRatioSelectorProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSettingsApplied: (
-    convertAspectRatio: string,
-    cropMode: CropMode,
-    padColor: string
-  ) => void;
+  settings: Settings;
+  onSettingsApplied: (settings: Settings) => void;
 }
 
 const AspectRatioSelector = ({
   isOpen,
   onOpenChange,
+  settings,
   onSettingsApplied,
 }: AspectRatioSelectorProps) => {
-  const [convertAspectRatio, setConvertAspectRatio] =
-    useState(DEFAULT_ASPECT_RATIO);
-  const [cropMode, setCropMode] = useState(DEFAULT_CROP_MODE);
-  const [padColor, setPadColor] = useState<string>("#ffffff");
+  const [convertAspectRatio, setConvertAspectRatio] = useState(
+    settings.aspectRatio
+  );
+  const [cropMode, setCropMode] = useState(settings.cropMode);
+  const [padColor, setPadColor] = useState<string>(settings.padColor);
+  const [format, setFormat] = useState<VideoFormat>(settings.format);
+
+  const settingsRef = useLatestValue(settings);
 
   const aspectRatios = [
     { value: "original", label: "Keep Original", description: "No conversion" },
@@ -75,6 +78,15 @@ const AspectRatioSelector = ({
       icon: <Video size={16} />,
     },
   ];
+
+  useEffect(() => {
+    return () => {
+      setConvertAspectRatio(settingsRef.current.aspectRatio);
+      setCropMode(settingsRef.current.cropMode);
+      setFormat(settingsRef.current.format);
+      setPadColor(settingsRef.current.padColor);
+    };
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -125,7 +137,7 @@ const AspectRatioSelector = ({
                 {cropModes.map((mode) => (
                   <Button
                     key={mode.value}
-                    onClick={() => setCropMode(mode.value)}
+                    onClick={() => setCropMode(mode.value as CropMode)}
                     className={cn(
                       "flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-colors space-y-1 border",
                       cropMode === mode.value
@@ -166,16 +178,48 @@ const AspectRatioSelector = ({
               </div>
             </div>
           )}
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="format" className="text-right text-xs">
+              Format
+            </label>
+            <Select
+              value={format}
+              onValueChange={(value) =>
+                setFormat(value as ExportSettings["format"])
+              }
+            >
+              <SelectTrigger
+                id="format"
+                className="col-span-3 h-auto px-2 py-1 text-xs"
+              >
+                <SelectValue placeholder="Select format" />
+              </SelectTrigger>
+              <SelectContent>
+                {formatOptions.map((f) => (
+                  <SelectItem key={f.value} value={f.value}>
+                    <div className="flex items-center justify-between w-full">
+                      <span>{f.label}</span>
+                      <Badge variant="secondary" className="ml-2">
+                        {f.description}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <DialogFooter>
           <Button
             onClick={() => {
-              onSettingsApplied(
-                convertAspectRatio,
-                cropMode as CropMode,
-                padColor
-              );
+              onSettingsApplied({
+                aspectRatio: convertAspectRatio,
+                cropMode: cropMode as CropMode,
+                padColor,
+                format,
+              });
               onOpenChange(false);
             }}
             className="w-full"

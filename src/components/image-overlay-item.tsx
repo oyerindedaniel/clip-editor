@@ -23,8 +23,6 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
   updateImageOverlay,
   deleteImageOverlay,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const objectUrl = useRef(URL.createObjectURL(overlay.file));
 
   useEffect(() => {

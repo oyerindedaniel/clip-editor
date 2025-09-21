@@ -1,11 +1,12 @@
 import { FFmpeg, FileData } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import type {
-  ClipOptions,
+  Settings,
   ClipExportData,
   TextOverlay,
   ImageOverlay,
-  ExportClip,
+  WorkerResponse,
+  VideoFormat,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 import { WorkerType } from "@/types/app";
@@ -57,25 +58,25 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
 
 export async function processClip(
   clipData: ArrayBuffer,
-  options: ClipOptions = {},
+  options: Settings,
   videoDimensions: { width: number; height: number }
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
   const inputFileName = "input.mp4";
-  const outputFileName = "output.mp4";
+
+  const outputExt = options.format ?? "mp4";
+  const outputFileName = `output.${outputExt}`;
 
   const clonedInput = (clipData as ArrayBuffer).slice(0);
   await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedInput));
 
   let args: string[] = [];
 
-  if (options.convertAspectRatio && options.convertAspectRatio !== "original") {
+  if (options.aspectRatio && options.aspectRatio !== "original") {
     const { width: _, height: inputH } = videoDimensions;
 
-    const [targetW, targetH] = options.convertAspectRatio
-      .split(":")
-      .map(Number);
+    const [targetW, targetH] = options.aspectRatio.split(":").map(Number);
     const targetRatio = targetW / targetH;
 
     let filterArgs: string[] = [];
@@ -115,14 +116,11 @@ export async function processClip(
       "-i",
       inputFileName,
       ...filterArgs,
-      "-c:v",
-      "libx264",
+      ...getCodecArgs(outputExt),
       "-preset",
       "ultrafast",
       "-crf",
       "23",
-      "-c:a",
-      "copy",
       "-y",
       outputFileName,
     ];
@@ -132,12 +130,9 @@ export async function processClip(
 
   try {
     await ffmpeg.exec(args);
-    const data = (await ffmpeg.readFile(outputFileName)) as any;
+    const outputData = (await ffmpeg.readFile(outputFileName)) as any;
 
-    // const uint8Array = convertFileDataToUint8Array(
-    //   data
-    // ) as Uint8Array<ArrayBuffer>;
-    const blob = new Blob([data], { type: "video/webm" });
+    const blob = new Blob([outputData], { type: "video/webm" });
 
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile(outputFileName);
@@ -156,111 +151,106 @@ export async function processClip(
 }
 
 export async function processClipForExport(
-  clip: ExportClip,
   data: ClipExportData
 ): Promise<Blob> {
-  // console.log("fit -----------------------");
   const ffmpeg = await initFFmpeg();
 
-  // console.log("fit ----------------------- after");
+  const { dualVideo, exportSettings } = data;
+  const { primaryClip } = dualVideo ?? {};
 
-  const inputFileName = "input.webm";
-  const outputFileName = `output.${data.exportSettings.format}`;
-
-  const clonedExportInput = (clip.blob as ArrayBuffer).slice(0);
-  await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedExportInput));
-
-  const startSeconds = data.startTime / 1000;
-  const duration = (data.endTime - data.startTime) / 1000;
-
-  const args = [
-    "-ss",
-    startSeconds.toString(),
-    "-i",
-    inputFileName,
-    "-t",
-    duration.toString(),
-    "-c:v",
-    "libx264",
-    "-c:a",
-    "aac",
-    "-preset",
-    data.exportSettings.preset,
-    "-crf",
-    data.exportSettings.crf.toString(),
-    "-r",
-    data.exportSettings.fps.toString(),
-    "-b:v",
-    `${getBitrate(data.exportSettings)}k`,
-  ];
-
-  if (data.targetResolution) {
-    args.push(
-      "-s",
-      `${data.targetResolution.width}x${data.targetResolution.height}`
-    );
+  if (!primaryClip?.buffer) {
+    throw new Error("No valid primary clip buffer found for export.");
   }
 
-  if (data.textOverlays && data.textOverlays.length > 0) {
-    logger.log("Generating text overlay frames...");
-    const overlayFrames = await generateOverlayFrames(
-      data.textOverlays,
-      data.imageOverlays || [],
-      data
-    );
-    const overlayDir = "overlay_frames";
+  const inputExt = primaryClip.format ?? "mp4";
+  const inputFileName = `input.${inputExt}`;
 
-    for (let i = 0; i < overlayFrames.length; i++) {
-      await ffmpeg.writeFile(
-        `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
-        overlayFrames[i]
+  const format = exportSettings.format;
+  const outputFileName = `output.${format}`;
+
+  try {
+    const clonedExportInput = primaryClip.buffer.slice(0);
+    await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedExportInput));
+
+    const startSeconds = data.startTime / 1000;
+    const duration = (data.endTime - data.startTime) / 1000;
+
+    const args: string[] = [
+      "-ss",
+      startSeconds.toString(),
+      "-i",
+      inputFileName,
+      "-t",
+      duration.toString(),
+    ];
+
+    const textOverlays = data.textOverlays ?? [];
+    const imageOverlays = data.imageOverlays ?? [];
+    const hasText = textOverlays.length > 0;
+    const hasImage = imageOverlays.length > 0;
+
+    if (hasText || hasImage) {
+      const overlayFrames = await generateOverlayFrames(
+        textOverlays,
+        imageOverlays,
+        data
+      );
+
+      await ffmpeg.createDir("overlay_frames");
+
+      for (let i = 0; i < overlayFrames.length; i++) {
+        const frameData = new Uint8Array(overlayFrames[i]);
+        await ffmpeg.writeFile(
+          `overlay_frames/overlay_${i.toString().padStart(4, "0")}.png`,
+          frameData
+        );
+      }
+
+      args.push("-i", "overlay_frames/overlay_%04d.png");
+      args.push(
+        "-filter_complex",
+        `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
       );
     }
 
-    args.push("-i", `${overlayDir}/overlay_%04d.png`);
+    const codecArgs = getCodecArgs(format);
+
+    args.push(...codecArgs);
     args.push(
-      "-filter_complex",
-      `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
+      "-preset",
+      exportSettings.preset,
+      "-crf",
+      exportSettings.crf.toString(),
+      "-r",
+      exportSettings.fps.toString(),
+      "-b:v",
+      `${getBitrate(exportSettings)}k`
     );
-  } else if (data.imageOverlays && data.imageOverlays.length > 0) {
-    logger.log("Generating image overlay frames...");
 
-    const overlayFrames = await generateOverlayFrames(
-      [],
-      data.imageOverlays,
-      data
-    );
-    const overlayDir = "overlay_frames";
-
-    for (let i = 0; i < overlayFrames.length; i++) {
-      await ffmpeg.writeFile(
-        `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
-        overlayFrames[i]
+    if (data.targetResolution) {
+      args.push(
+        "-s",
+        `${data.targetResolution.width}x${data.targetResolution.height}`
       );
     }
 
-    args.push("-i", `${overlayDir}/overlay_%04d.png`);
-    args.push(
-      "-filter_complex",
-      `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
-    );
-  } else {
-    logger.log(
-      "No text or image overlays provided, skipping overlay generation."
-    );
+    args.push("-y", outputFileName);
+
+    await ffmpeg.exec(args);
+    const outputData = (await ffmpeg.readFile(outputFileName)) as any;
+
+    return new Blob([outputData], {
+      type: `video/${format}`,
+    });
+  } catch (error) {
+    logger.error("Export failed:", error);
+    throw error;
+  } finally {
+    try {
+      await ffmpeg.deleteFile(inputFileName);
+      await ffmpeg.deleteFile(outputFileName);
+    } catch {}
   }
-
-  args.push("-y", outputFileName);
-
-  await ffmpeg.exec(args);
-  const outputData = await ffmpeg.readFile(outputFileName);
-
-  const uint8Array = convertFileDataToUint8Array(
-    outputData
-  ) as Uint8Array<ArrayBuffer>;
-  return new Blob([uint8Array], {
-    type: `video/${data.exportSettings.format}`,
-  });
 }
 
 async function generateOverlayFrames(
@@ -273,7 +263,7 @@ async function generateOverlayFrames(
   );
 
   return new Promise((resolve, reject) => {
-    worker.onmessage = (e) => {
+    worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       if (e.data.type === WorkerType.FRAMES) {
         resolve(e.data.frames);
       }
@@ -307,6 +297,19 @@ function getBitrate(settings: ClipExportData["exportSettings"]): number {
     return fpsBitrates?.min || 4000;
   } else {
     return fpsBitrates?.standard || 8000;
+  }
+}
+
+function getCodecArgs(format: VideoFormat): string[] {
+  switch (format) {
+    case "mp4":
+      return ["-c:v", "libx264", "-c:a", "aac"];
+    case "mov":
+      return ["-c:v", "prores_ks", "-c:a", "pcm_s16le"];
+    case "webm":
+      return ["-c:v", "libvpx-vp9", "-c:a", "libopus"];
+    default:
+      throw new Error(`Unsupported export format: ${format}`);
   }
 }
 

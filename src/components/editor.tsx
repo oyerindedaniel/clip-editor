@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
 import type {
   AudioTrack,
   ExportSettings,
-  CropMode,
   ClipExportData,
   ClipMetadata,
-  ExportClip,
   S3ClipData as ClipData,
   DualVideoClip,
   DualVideoSettings,
+  Settings as SettingsType,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
@@ -21,10 +21,14 @@ import {
 } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
 import * as MediaPlayer from "@/components/ui/media-player";
-import { getVideoBoundingBox, getTargetVideoDimensions } from "@/utils/video";
+import {
+  getVideoBoundingBox,
+  getTargetVideoDimensions,
+  getFormatFromSrc,
+} from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_ASPECT_RATIO, DEFAULT_CROP_MODE } from "@/constants/app";
+import { DEFAULT_CLIP_METADATA, DEFAULT_COLORS } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "./export-naming-dialog";
@@ -66,13 +70,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     open: openExportNamingModal,
   } = useDisclosure();
 
-  const selectedConvertAspectRatio = useRef<string>(DEFAULT_ASPECT_RATIO);
-  const selectedCropMode = useRef<CropMode>(DEFAULT_CROP_MODE);
-  const padColorRef = useRef<string | null>(null);
+  const padColorRef = useRef<string>(DEFAULT_COLORS[0]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
   const trimRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
-  const clipMetaDataRef = useRef<ClipMetadata | null>(null);
+  const primaryClipMetaDataRef = useRef<ClipMetadata | null>(
+    DEFAULT_CLIP_METADATA
+  );
   const traceRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -103,7 +107,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const showTraceRef = useLatestValue(showTrace);
 
   const clipBufferRef = useRef<ArrayBuffer | null>(null);
-  const currentVideoUrl = useRef<string | null>(null);
+  const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -164,15 +168,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         return result;
       } catch (e) {
         toast.dismiss(id);
-        // Failed to load clip: Cannot perform Construct on a detached ArrayBuffer
-        // const msg = normalizeError(e).message;
-        // toast.error(`${label} failed: ${msg}`);
         throw e;
       } finally {
         if (unsub) unsub();
       }
     },
-    [clipData.metadata.clipId]
+    []
   );
 
   const adjustOverlayBounds = useCallback(() => {
@@ -198,79 +199,62 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     trace.style.zIndex = "15";
   }, [showTraceRef]);
 
-  const loadClipVideo = useCallback(async (): Promise<string | null> => {
-    const video = videoRef.current;
-    const clipBuffer = clipBufferRef.current;
-    if (!video || !clipBuffer) return null;
+  const loadClipVideo = useCallback(
+    async (settings: SettingsType): Promise<string | null> => {
+      const video = videoRef.current;
+      const clipBuffer = clipBufferRef.current;
+      if (!video || !clipBuffer) return null;
 
-    logger.log("Loading clip video from buffer:", {
-      clipId: clipData.metadata.clipId,
-      hasBuffer: !!clipBuffer,
-    });
+      const { aspectRatio, cropMode, padColor, format } = settings;
 
-    try {
-      const processedBlob = await withProgressToast<Blob>(
-        "Processing clip",
-        () =>
-          processClip(
-            clipBuffer,
-            {
-              convertAspectRatio: selectedConvertAspectRatio.current,
-              cropMode: selectedCropMode.current,
-              ...(padColorRef.current ? { padColor: padColorRef.current } : {}),
-            },
-            clipMetaDataRef.current!.dimensions
-          ),
-        `process-${clipData.metadata.clipId}`
-      );
+      logger.log("Attempting to load clip video:", {
+        clipId: clipData.metadata.clipId,
+      });
 
-      if (processedBlob && processedBlob.size > 0) {
+      try {
+        const processedBlob = await withProgressToast<Blob>(
+          "Processing clip",
+          () =>
+            processClip(
+              clipBuffer,
+              {
+                aspectRatio,
+                cropMode,
+                padColor,
+                format,
+              },
+              primaryClipMetaDataRef.current!.dimensions
+            ),
+          `process-${clipData.metadata.clipId}`
+        );
+
+        if (!processedBlob || processedBlob.size === 0) {
+          logger.error("Failed to get valid clip blob:", { processedBlob });
+          toast.error("No valid clip data found");
+          return null;
+        }
+
+        primaryClipMetaDataRef.current = {
+          ...primaryClipMetaDataRef.current!,
+          aspectRatio,
+          cropMode,
+          format,
+        };
+        padColorRef.current = padColor;
+
         const objectUrl = URL.createObjectURL(processedBlob);
         video.src = objectUrl;
         logger.log("Set video src to blob URL:", objectUrl);
         return objectUrl;
-      } else {
-        logger.error("Failed to get valid clip blob:", { processedBlob });
-        toast.error("No valid clip data found");
+      } catch (err) {
+        const errorMsg = normalizeError(err).message;
+        logger.error("Error loading clip blob:", err);
+        toast.error(`Failed to load clip: ${errorMsg}`);
         return null;
       }
-    } catch (err) {
-      const errorMsg = normalizeError(err).message;
-      logger.error("Error loading clip blob:", err);
-      toast.error(`Failed to load clip: ${errorMsg}`);
-      return null;
-    }
-  }, [clipData.metadata.clipId]);
-
-  const initializeVideo = useCallback(async () => {
-    const video = videoRef.current;
-    const clipBuffer = clipBufferRef.current;
-    if (!video || !clipBuffer) return null;
-
-    setVideoRef(videoRef);
-    let objectUrl: string | null = null;
-
-    try {
-      if (
-        selectedConvertAspectRatio.current === DEFAULT_ASPECT_RATIO &&
-        selectedCropMode.current === DEFAULT_CROP_MODE
-      ) {
-        const blob = new Blob([clipBuffer], { type: "video/mp4" });
-        objectUrl = URL.createObjectURL(blob);
-        video.src = objectUrl;
-        logger.log(
-          "Loaded video directly from buffer with default settings:",
-          objectUrl
-        );
-      } else {
-        objectUrl = await loadClipVideo();
-      }
-      return objectUrl;
-    } catch (error) {
-      logger.error("Error initializing video:", error);
-      return null;
-    }
-  }, [loadClipVideo]);
+    },
+    [clipData.metadata.clipId]
+  );
 
   const handleAddSecondaryClip = useCallback(async (file: File) => {
     try {
@@ -334,11 +318,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     []
   );
 
-  const primaryFrames = useVideoThumbnails(
-    videoRef.current?.src || undefined,
-    24,
-    isVideoLoaded
-  );
+  const primaryFrames = useVideoThumbnails(primaryUrl, 24, isVideoLoaded);
   const secondaryFrames = useVideoThumbnails(
     secondaryClip?.url,
     24,
@@ -347,11 +327,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "t") {
+      if (e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
         setToolPanelOpen((v) => !v);
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
@@ -385,9 +366,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           clipId: clipData.metadata.clipId,
           bufferSize: buffer.byteLength,
         });
-
-        const videoUrl = await initializeVideo();
-        currentVideoUrl.current = videoUrl;
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           logger.log("Buffer conversion aborted");
@@ -410,12 +388,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         abortController.abort();
       }
 
-      if (currentVideoUrl.current) {
-        URL.revokeObjectURL(currentVideoUrl.current);
-        currentVideoUrl.current = null;
+      if (primaryUrl) {
+        URL.revokeObjectURL(primaryUrl);
       }
     };
-  }, [clipData.url, clipData.metadata.clipId, initializeVideo]);
+  }, [clipData.url, clipData.metadata.clipId]);
 
   useEffect(() => {
     return () => {
@@ -434,9 +411,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setDuration(video.duration * 1000);
       adjustOverlayBounds();
 
-      clipMetaDataRef.current = {
-        aspectRatio: selectedConvertAspectRatio.current,
-        cropMode: selectedCropMode.current,
+      primaryClipMetaDataRef.current = {
+        ...primaryClipMetaDataRef.current!,
+        format: getFormatFromSrc(video.currentSrc),
         dimensions: {
           width: video.videoWidth,
           height: video.videoHeight,
@@ -510,7 +487,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     const video = videoRef.current;
 
-    if (!video || !clipMetaDataRef.current || !clipBufferRef.current) return;
+    if (!video || !primaryClipMetaDataRef.current || !clipBufferRef.current)
+      return;
 
     setIsExporting(true);
 
@@ -520,14 +498,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       const clientDisplaySize = { width: clientWidth, height: clientHeight };
 
       const videoAspectRatio =
-        clipMetaDataRef.current!.dimensions.width /
-        clipMetaDataRef.current!.dimensions.height;
+        primaryClipMetaDataRef.current!.dimensions.width /
+        primaryClipMetaDataRef.current!.dimensions.height;
       const targetResolutionDimensions = getTargetVideoDimensions(
         resolution!,
         videoAspectRatio
       );
-
-      console.log("export ----------------");
 
       const exportData: ClipExportData = {
         id: clipData.metadata.clipId,
@@ -549,38 +525,38 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           resolution,
           bitrate,
           customBitrateKbps,
-          convertAspectRatio: selectedConvertAspectRatio.current,
-          cropMode: selectedCropMode.current,
+          convertAspectRatio: primaryClipMetaDataRef.current.aspectRatio,
+          cropMode: primaryClipMetaDataRef.current.cropMode,
         },
         clientDisplaySize,
         targetResolution: targetResolutionDimensions,
-        ...(secondaryClip && {
-          dualVideo: {
-            primaryClip: {
-              id: clipData.metadata.clipId,
-              url: clipData.url,
-              buffer: clipBufferRef.current,
-              metadata: clipData.metadata,
-              offset: 0,
-              volume: 1,
-              visible: true,
-            },
-            secondaryClip,
-            settings: dualVideoSettings,
+        dualVideo: {
+          primaryClip: {
+            id: clipData.metadata.clipId,
+            url: clipData.url,
+            buffer: clipBufferRef.current,
+            metadata: clipData.metadata,
+            ...primaryClipMetaDataRef.current,
+            offset: 0,
+            volume: 1,
+            visible: true,
           },
-        }),
+          ...(secondaryClip && {
+            secondaryClip: {
+              ...secondaryClip,
+              ...primaryClipMetaDataRef.current,
+              format: getFormatFromSrc(secondaryClip.url),
+            },
+          }),
+          settings: dualVideoSettings,
+        },
       };
 
-      const exportClip: ExportClip = {
-        blob: clipBufferRef.current!,
-        metadata: clipMetaDataRef.current,
-      };
-
-      console.log({ exportClip, exportData });
+      console.log({ exportData });
 
       const processedBlob = await withProgressToast<Blob>(
         "Exporting clip",
-        () => processClipForExport(exportClip, exportData),
+        () => processClipForExport(exportData),
         `export-${clipData.metadata.clipId}`
       );
 
@@ -603,16 +579,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     }
   };
 
-  const handleSettingsApplied = (
-    aspectRatio: string,
-    cropMode: CropMode,
-    padColor: string
-  ) => {
-    selectedConvertAspectRatio.current = aspectRatio;
-    selectedCropMode.current = cropMode;
-    padColorRef.current = padColor;
+  const handleSettingsApplied = async (settings: SettingsType) => {
     closeAspectRatioModal();
-    loadClipVideo();
+    const videoUrl = await loadClipVideo(settings);
+    if (videoUrl) setPrimaryUrl(videoUrl);
   };
 
   const handleTrim = (startTime: number, endTime: number) => {
@@ -626,6 +596,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setCurrentTime(video.currentTime);
     }
   }, []);
+
+  const settings = useMemo(() => {
+    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
+    return {
+      ...settings,
+      padColor: padColorRef.current,
+    } as SettingsType;
+  }, [isAspectRatioModalOpen]);
 
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
@@ -649,7 +627,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             >
               <MediaPlayer.Root>
                 <MediaPlayer.Video
-                  ref={videoRef}
+                  src={primaryUrl}
+                  ref={(el) => {
+                    videoRef.current = el;
+                    setVideoRef(el);
+                  }}
                   playsInline
                   className="w-full aspect-video"
                   poster={"/thumbnails/video-thumb-2.webp"}
@@ -687,11 +669,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
             >
               <DualVideoPlayer
-                primaryClip={clipData}
+                primaryClip={{ ...clipData, url: primaryUrl! }}
                 secondaryClip={secondaryClip}
                 offsetMs={dualVideoOffsetMs}
-                className="w-full"
-                primarySrc={currentVideoUrl.current || undefined}
                 currentTime={currentTime}
               />
 
@@ -724,6 +704,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       <AspectRatioSelector
         isOpen={isAspectRatioModalOpen}
         onOpenChange={closeAspectRatioModal}
+        settings={settings}
         onSettingsApplied={handleSettingsApplied}
       />
 
@@ -743,7 +724,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         <EditorPanel.Portal>
           <EditorPanel.Content className="w-[300px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
-              <div className="pointer-events-none" />
+              <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
+                Shift+T
+              </kbd>
+
               <EditorPanel.CloseButton size="sm" />
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">

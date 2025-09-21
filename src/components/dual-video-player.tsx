@@ -14,8 +14,6 @@ interface DualVideoPlayerProps {
   primaryClip: S3ClipData;
   secondaryClip: DualVideoClip | null;
   offsetMs: number;
-  className?: string;
-  primarySrc?: string;
   primaryVideoRef?: React.RefObject<HTMLVideoElement> | null;
   currentTime?: number;
 }
@@ -24,8 +22,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   primaryClip,
   secondaryClip,
   offsetMs,
-  className,
-  primarySrc,
   primaryVideoRef,
   currentTime = 0,
 }) => {
@@ -111,15 +107,14 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   return (
     <div
       className={cn(
-        "relative bg-black rounded-lg overflow-hidden aspect-[9/16] flex flex-col justify-center w-full",
-        className
+        "relative bg-black rounded-lg overflow-hidden aspect-[9/16] flex flex-col justify-center w-full"
       )}
     >
       <div className="relative">
         <MediaPlayer.Root className="rounded-none">
           <MediaPlayer.Video
             ref={primaryRef}
-            src={primarySrc || primaryClip.url}
+            src={primaryClip.url}
             className="w-full h-full object-cover"
             muted={false}
             playsInline

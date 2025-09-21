@@ -1,5 +1,3 @@
-import { CSSProperties } from "react";
-
 /**
  * Represents a marked clip segment in the recording.
  */
@@ -93,8 +91,17 @@ export interface AudioTrack {
 
 export type CropMode = "letterbox" | "crop" | "stretch";
 
+export type VideoFormat = "mp4" | "webm" | "mov";
+
+export type Settings = {
+  aspectRatio: string;
+  cropMode: CropMode;
+  padColor: string;
+  format: VideoFormat;
+};
+
 export interface ExportSettings {
-  format: "mp4" | "webm" | "mov";
+  format: VideoFormat;
   resolution: "720p" | "1080p" | "1440p" | "4k";
   fps: 24 | 30 | 60;
   bitrate: "recommended" | "high" | "min" | "custom";
@@ -114,6 +121,13 @@ export interface ExportSettings {
   cropMode?: CropMode;
 }
 
+export interface ClipMetadata extends Omit<Settings, "padColor"> {
+  dimensions: {
+    width: number;
+    height: number;
+  };
+}
+
 /**
  * Information required to export a clip.
  */
@@ -129,8 +143,8 @@ export interface ClipExportData {
   clientDisplaySize: { width: number; height: number };
   targetResolution?: { width: number; height: number };
   dualVideo?: {
-    primaryClip: DualVideoClip;
-    secondaryClip: DualVideoClip;
+    primaryClip: DualVideoClip & ClipMetadata;
+    secondaryClip?: DualVideoClip & ClipMetadata;
     settings: DualVideoSettings;
   };
 }
@@ -170,20 +184,6 @@ export interface RecordedChunk {
   timestamp: number;
 }
 
-export interface ClipMetadata {
-  aspectRatio: string;
-  cropMode: CropMode;
-  dimensions: {
-    width: number;
-    height: number;
-  };
-}
-
-export interface ExportClip {
-  blob: ArrayBuffer;
-  metadata: ClipMetadata | null;
-}
-
 export interface FontDefinition {
   family: string;
   weight?: FontWeight;
@@ -204,12 +204,6 @@ export type FontWeight =
   | "normal";
 
 export type FontStyle = "normal" | "italic" | "oblique";
-
-export interface ClipOptions {
-  convertAspectRatio?: string;
-  cropMode?: "letterbox" | "crop" | "stretch";
-  padColor?: string; // used when cropMode is letterbox
-}
 
 export interface ClipResponse {
   success: boolean;

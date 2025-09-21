@@ -172,7 +172,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
         name={name}
         accept={accept}
         disabled={disabled}
-        onChange={onChange}
+        onChange={(e) => {
+          onChange(e);
+          e.currentTarget.value = "";
+        }}
         onBlur={onBlur}
         className="hidden"
       />

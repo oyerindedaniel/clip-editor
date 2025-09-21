@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import logger from "@/utils/logger";
 
 export function useVideoThumbnails(
-  src: string | undefined,
+  src?: string,
   frameCount: number = 24,
   enabled: boolean = true
 ) {

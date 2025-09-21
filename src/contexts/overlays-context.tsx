@@ -58,6 +58,8 @@ interface ResizeState {
   rafId: number | null;
   overlayId: string | null;
   containerContext: ContainerContext;
+  aspectRatio: number;
+  preserveAspectRatio: boolean;
 }
 
 interface RotationState {
@@ -119,7 +121,7 @@ type OverlaysContextValue = {
   imageOverlaysRef: RefObject<ImageOverlay[]>;
 
   videoRef: RefObject<HTMLVideoElement | null>;
-  setVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
+  setVideoRef: (element: HTMLVideoElement | null) => void;
   dualVideoRef: RefObject<HTMLVideoElement | null>;
   setDualVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
   secondaryClip: DualVideoClip | null;
@@ -221,6 +223,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     rafId: null,
     overlayId: null,
     containerContext: "primary",
+    aspectRatio: 1,
+    preserveAspectRatio: false,
   });
 
   const rotationRef = useRef<RotationState>({
@@ -234,12 +238,9 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     containerContext: "primary",
   });
 
-  const setVideoRef = useCallback(
-    (ref: React.RefObject<HTMLVideoElement | null>) => {
-      videoRef.current = ref.current;
-    },
-    []
-  );
+  const setVideoRef = useCallback((element: HTMLVideoElement | null) => {
+    videoRef.current = element;
+  }, []);
 
   const setDualVideoRef = useCallback(
     (ref: React.RefObject<HTMLVideoElement | null>) => {
@@ -756,9 +757,9 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         const containerCenterY = containerRect.height / 2;
         const elementCenterX = newLeft + elementWidth / 2;
         const elementCenterY = newTop + elementHeight / 2;
-        const threshold = 2;
+        const THRESHOLD = 2;
         if (vGuideRef.current) {
-          if (Math.abs(elementCenterX - containerCenterX) <= threshold) {
+          if (Math.abs(elementCenterX - containerCenterX) <= THRESHOLD) {
             vGuideRef.current.style.left = `${containerCenterX}px`;
             vGuideRef.current.style.display = "block";
           } else {
@@ -766,7 +767,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           }
         }
         if (hGuideRef.current) {
-          if (Math.abs(elementCenterY - containerCenterY) <= threshold) {
+          if (Math.abs(elementCenterY - containerCenterY) <= THRESHOLD) {
             hGuideRef.current.style.top = `${containerCenterY}px`;
             hGuideRef.current.style.display = "block";
           } else {
@@ -846,6 +847,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         drag.offsetX = 0;
         drag.offsetY = 0;
         drag.containerContext = "primary";
+        drag.rafId = null;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
@@ -870,7 +872,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const overlay = imageOverlaysRef.current.find(
         (overlay) => overlay.id === overlayId
       );
-
       if (!overlay) return;
 
       const {
@@ -886,26 +887,30 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         dualY: currentDualY,
       } = overlay;
 
+      const startWidth =
+        containerContext === "dual" ? currentDualWidth : currentWidth;
+      const startHeight =
+        containerContext === "dual" ? currentDualHeight : currentHeight;
+      const aspectRatio = startWidth / startHeight;
+
       resizeRef.current = {
         isResizing: true,
         handle,
         startX: e.clientX,
         startY: e.clientY,
-        startWidth:
-          containerContext === "dual" ? currentDualWidth : currentWidth,
-        startHeight:
-          containerContext === "dual" ? currentDualHeight : currentHeight,
+        startWidth,
+        startHeight,
         startLeft: containerContext === "dual" ? currentDualX : currentX,
         startTop: containerContext === "dual" ? currentDualY : currentY,
-        finalWidth:
-          containerContext === "dual" ? currentDualWidth : currentWidth,
-        finalHeight:
-          containerContext === "dual" ? currentDualHeight : currentHeight,
+        finalWidth: startWidth,
+        finalHeight: startHeight,
         finalLeft: containerContext === "dual" ? currentDualX : currentX,
         finalTop: containerContext === "dual" ? currentDualY : currentY,
         rafId: null,
         overlayId,
         containerContext,
+        aspectRatio,
+        preserveAspectRatio: false,
       };
 
       setSelectedOverlay(overlayId);
@@ -923,41 +928,88 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         let newLeft = resize.startLeft;
         let newTop = resize.startTop;
 
-        switch (resize.handle) {
-          case "nw":
-            newWidth = Math.max(50, resize.startWidth - dx);
-            newHeight = Math.max(50, resize.startHeight - dy);
-            newLeft = resize.startLeft + (resize.startWidth - newWidth);
-            newTop = resize.startTop + (resize.startHeight - newHeight);
-            break;
-          case "ne":
-            newWidth = Math.max(50, resize.startWidth + dx);
-            newHeight = Math.max(50, resize.startHeight - dy);
-            newTop = resize.startTop + (resize.startHeight - newHeight);
-            break;
-          case "sw":
-            newWidth = Math.max(50, resize.startWidth - dx);
-            newHeight = Math.max(50, resize.startHeight + dy);
-            newLeft = resize.startLeft + (resize.startWidth - newWidth);
-            break;
-          case "se":
-            newWidth = Math.max(50, resize.startWidth + dx);
-            newHeight = Math.max(50, resize.startHeight + dy);
-            break;
-          case "n":
-            newHeight = Math.max(50, resize.startHeight - dy);
-            newTop = resize.startTop + (resize.startHeight - newHeight);
-            break;
-          case "s":
-            newHeight = Math.max(50, resize.startHeight + dy);
-            break;
-          case "w":
-            newWidth = Math.max(50, resize.startWidth - dx);
-            newLeft = resize.startLeft + (resize.startWidth - newWidth);
-            break;
-          case "e":
-            newWidth = Math.max(50, resize.startWidth + dx);
-            break;
+        resize.preserveAspectRatio = ev.shiftKey;
+
+        const MIN_OVERLAY_SIZE = 50;
+
+        if (resize.preserveAspectRatio) {
+          switch (resize.handle) {
+            case "nw":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newHeight = newWidth / resize.aspectRatio;
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "ne":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              newHeight = newWidth / resize.aspectRatio;
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "sw":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newHeight = newWidth / resize.aspectRatio;
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              break;
+            case "se":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              newHeight = newWidth / resize.aspectRatio;
+              break;
+            case "n":
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight - dy);
+              newWidth = newHeight * resize.aspectRatio;
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "s":
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight + dy);
+              newWidth = newHeight * resize.aspectRatio;
+              break;
+            case "w":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newHeight = newWidth / resize.aspectRatio;
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              break;
+            case "e":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              newHeight = newWidth / resize.aspectRatio;
+              break;
+          }
+        } else {
+          switch (resize.handle) {
+            case "nw":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight - dy);
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "ne":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight - dy);
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "sw":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight + dy);
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              break;
+            case "se":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight + dy);
+              break;
+            case "n":
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight - dy);
+              newTop = resize.startTop + (resize.startHeight - newHeight);
+              break;
+            case "s":
+              newHeight = Math.max(MIN_OVERLAY_SIZE, resize.startHeight + dy);
+              break;
+            case "w":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth - dx);
+              newLeft = resize.startLeft + (resize.startWidth - newWidth);
+              break;
+            case "e":
+              newWidth = Math.max(MIN_OVERLAY_SIZE, resize.startWidth + dx);
+              break;
+          }
         }
 
         newLeft = Math.max(
@@ -1026,6 +1078,11 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
+        resize.overlayId = null;
+        resize.containerContext = "primary";
+        resize.aspectRatio = 1;
+        resize.preserveAspectRatio = false;
+        resize.rafId = null;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };

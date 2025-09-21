@@ -17,7 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import type { ExportSettings } from "@/types/app";
-import { EXPORT_BITRATE_MAP } from "@/constants/app";
+import {
+  crfValues,
+  EXPORT_BITRATE_MAP,
+  formatOptions,
+  fpsOptions,
+  presets,
+  resolutionOptions,
+} from "@/constants/app";
 
 interface ExportNamingDialogProps {
   isOpen: boolean;
@@ -38,101 +45,6 @@ interface ExportNamingDialogProps {
   ) => void;
 }
 
-const presets: {
-  value: ExportSettings["preset"];
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "fast",
-    label: "Fast",
-    description: "Good balance between quality and speed.",
-  },
-  {
-    value: "medium",
-    label: "Medium",
-    description: "Slightly better quality, slightly slower.",
-  },
-  {
-    value: "slow",
-    label: "Slow",
-    description: "Higher quality, significantly slower.",
-  },
-];
-
-const crfValues: {
-  value: ExportSettings["crf"];
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: 23,
-    label: "23 (Default)",
-    description: "Good quality for most uses.",
-  },
-  {
-    value: 18,
-    label: "18 (High Quality)",
-    description: "Visually lossless or near-lossless.",
-  },
-  {
-    value: 28,
-    label: "28 (Lower Quality)",
-    description: "More compression, lower file size.",
-  },
-];
-
-const fpsOptions: {
-  value: ExportSettings["fps"];
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: 24,
-    label: "24 FPS",
-    description: "Cinematic look, smaller file size.",
-  },
-  { value: 30, label: "30 FPS", description: "Standard video frame rate." },
-  {
-    value: 60,
-    label: "60 FPS",
-    description: "Smoother motion, larger file size.",
-  },
-];
-
-const formatOptions: {
-  value: ExportSettings["format"];
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "mp4",
-    label: "MP4",
-    description: "Widely compatible video format.",
-  },
-  {
-    value: "webm",
-    label: "WebM",
-    description: "Open-source format, good for web.",
-  },
-  {
-    value: "mov",
-    label: "MOV",
-    description: "Apple QuickTime format, high quality.",
-  },
-];
-
-const resolutionOptions: {
-  value: ExportSettings["resolution"];
-  label: string;
-  description: string;
-}[] = [
-  { value: "720p", label: "720p", description: "Standard HD (1280x720)" },
-  { value: "1080p", label: "1080p", description: "Full HD (1920x1080)" },
-  { value: "1440p", label: "1440p", description: "Quad HD (2560x1440)" },
-  { value: "4k", label: "4K", description: "Ultra HD (3840x2160)" },
-];
-
 export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   isOpen,
   onOpenChange,
@@ -146,10 +58,10 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
   const [preset, setPreset] = useState<ExportSettings["preset"]>("fast");
   const [crf, setCrf] = useState<ExportSettings["crf"]>(23);
-  const [fps, setFps] = useState<ExportSettings["fps"]>(60);
+  const [fps, setFps] = useState<ExportSettings["fps"]>(30);
   const [format, setFormat] = useState<ExportSettings["format"]>("mp4");
   const [resolution, setResolution] =
-    useState<ExportSettings["resolution"]>("1080p");
+    useState<ExportSettings["resolution"]>("720p");
   const [bitrate, setBitrate] =
     useState<ExportSettings["bitrate"]>("recommended");
   const [customBitrateKbps, setCustomBitrateKbps] = useState<number>(8000);
@@ -175,28 +87,8 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
         if (streamerNameRef.current)
           streamerNameRef.current.value = streamerName || "UnknownStreamer";
-
-        setPreset("fast");
-        setCrf(23);
-        setFps(30);
-        setFormat("mp4");
-        setResolution("720p");
-        setBitrate("recommended");
-        setCustomBitrateKbps(getRecommendedBitrate());
       }, 0);
     }
-
-    return () => {
-      const dateRefValue = dateRef.current;
-      const timeRefValue = timeRef.current;
-      const clipTitleRefValue = clipTitleRef.current;
-      const streamerNameRefValue = streamerNameRef.current;
-
-      if (dateRefValue) dateRefValue.value = "";
-      if (timeRefValue) timeRefValue.value = "";
-      if (clipTitleRefValue) clipTitleRefValue.value = "";
-      if (streamerNameRefValue) streamerNameRefValue.value = "";
-    };
   }, [isOpen]);
 
   const handleExportClick = () => {

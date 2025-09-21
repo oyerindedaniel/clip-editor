@@ -98,6 +98,7 @@ export function EditorRightPanel({
 
   const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log(file);
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {

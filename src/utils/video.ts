@@ -114,9 +114,26 @@ function getTargetVideoDimensions(
     height: targetHeight,
   };
 }
+
+function getExtensionFromMime(mime: string): string {
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("webm")) return "webm";
+  if (mime.includes("quicktime") || mime.includes("mov")) return "mov";
+  return "mp4";
+}
+
+function getFormatFromSrc(src: string): "mp4" | "webm" | "mov" {
+  const match = src.match(/\.(mp4|webm|mov)(\?|#|$)/i);
+  if (match) {
+    return match[1].toLowerCase() as "mp4" | "webm" | "mov";
+  }
+  return "mp4";
+}
+
 export {
   getVideoBoundingBox,
   getOverlayNormalizedCoords,
   getTargetVideoDimensions,
+  getExtensionFromMime,
+  getFormatFromSrc,
 };
-

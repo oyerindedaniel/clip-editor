@@ -159,7 +159,6 @@ async function generateOverlayFrames(
       visibleOverlays.forEach((overlay) => {
         if ("text" in overlay) {
           renderTextOverlay(
-            canvas,
             ctx,
             overlay,
             renderDimensions,
@@ -168,7 +167,6 @@ async function generateOverlayFrames(
           );
         } else if ("file" in overlay) {
           renderImageOverlay(
-            canvas,
             ctx,
             overlay,
             renderDimensions,
@@ -292,7 +290,6 @@ function calculateScaleFactor(
 }
 
 function renderTextOverlay(
-  canvas: OffscreenCanvas,
   ctx: OffscreenCanvasRenderingContext2D,
   overlay: TextOverlay,
   videoDimensions: { width: number; height: number },
@@ -428,7 +425,6 @@ function renderTextOverlay(
         textX,
         textY,
         scaledLetterSpacing,
-        overlay.alignment,
         actualContentWidth
       );
     } else {
@@ -468,14 +464,13 @@ function renderTextOverlay(
   logger.log("✅ Text overlay rendering completed.\n");
 }
 
-function renderImageOverlay(
-  canvas: OffscreenCanvas,
+async function renderImageOverlay(
   ctx: OffscreenCanvasRenderingContext2D,
   overlay: ImageOverlay,
   videoDimensions: { width: number; height: number },
   scaleFactor: number = 1.0,
   targetResolution?: { width: number; height: number }
-): void {
+): Promise<void> {
   if (!overlay.visible) {
     logger.log("⛔ Overlay not visible, skipping render.");
     return;
@@ -506,10 +501,9 @@ function renderImageOverlay(
     imageSize: { width: scaledWidth, height: scaledHeight },
   });
 
-  const blobUrl = URL.createObjectURL(overlay.file);
-  const image = new Image();
+  try {
+    const imageBitmap = await createImageBitmap(overlay.file);
 
-  image.onload = () => {
     ctx.save();
     ctx.globalAlpha = overlay.opacity;
     ctx.translate(
@@ -520,7 +514,7 @@ function renderImageOverlay(
     ctx.scale(overlay.scale, overlay.scale);
 
     ctx.drawImage(
-      image,
+      imageBitmap,
       -scaledWidth / 2,
       -scaledHeight / 2,
       scaledWidth,
@@ -533,15 +527,10 @@ function renderImageOverlay(
       `🖼️ Rendered image overlay from ${overlay.file.name} at (${clampedDivX}, ${clampedDivY})`
     );
 
-    URL.revokeObjectURL(blobUrl);
-  };
-
-  image.onerror = (e) => {
-    logger.error(`❌ Failed to load image ${overlay.file.name}:`, e);
-    URL.revokeObjectURL(blobUrl);
-  };
-
-  image.src = blobUrl;
+    imageBitmap.close();
+  } catch (error) {
+    logger.error(`❌ Failed to load image ${overlay.file.name}:`, error);
+  }
 }
 
 function wrapText(
@@ -609,7 +598,6 @@ function renderTextWithSpacing(
   x: number,
   y: number,
   letterSpacing: number,
-  alignment: TextOverlay["alignment"],
   maxWidth: number
 ): void {
   const totalWidth = measureTextWithSpacing(ctx, text, letterSpacing);

@@ -43,6 +43,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
   return (
     <div
+      title="Hold Shift to preserve aspect ratio"
       className="absolute w-2 h-2 bg-primary border border-white rounded-full shadow-sm z-10"
       style={{
         ...getPositionStyles(),
