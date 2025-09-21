@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import React from "react";
-import { formatOptions } from "@/constants/app";
+import { FORMAT_OPTIONS } from "@/constants/app";
 import type {
   CropMode,
   ExportSettings,
@@ -28,12 +28,14 @@ import type {
 import { cn } from "@/lib/utils";
 import ColorPalette from "@/components/color-palette";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import InfoTooltip from "@/components/info-tooltip";
 
 interface AspectRatioSelectorProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   settings: Settings;
   onSettingsApplied: (settings: Settings) => void;
+  isBufferDownloaded: boolean;
 }
 
 const AspectRatioSelector = ({
@@ -41,6 +43,7 @@ const AspectRatioSelector = ({
   onOpenChange,
   settings,
   onSettingsApplied,
+  isBufferDownloaded,
 }: AspectRatioSelectorProps) => {
   const [convertAspectRatio, setConvertAspectRatio] = useState(
     settings.aspectRatio
@@ -81,10 +84,13 @@ const AspectRatioSelector = ({
 
   useEffect(() => {
     return () => {
-      setConvertAspectRatio(settingsRef.current.aspectRatio);
-      setCropMode(settingsRef.current.cropMode);
-      setFormat(settingsRef.current.format);
-      setPadColor(settingsRef.current.padColor);
+      // Delay state reset slightly on unmount to prevent UI flash
+      setTimeout(() => {
+        setConvertAspectRatio(settingsRef.current.aspectRatio);
+        setCropMode(settingsRef.current.cropMode);
+        setFormat(settingsRef.current.format);
+        setPadColor(settingsRef.current.padColor);
+      }, 50);
     };
   }, [isOpen]);
 
@@ -196,7 +202,7 @@ const AspectRatioSelector = ({
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent>
-                {formatOptions.map((f) => (
+                {FORMAT_OPTIONS.map((f) => (
                   <SelectItem key={f.value} value={f.value}>
                     <div className="flex items-center justify-between w-full">
                       <span>{f.label}</span>
@@ -212,22 +218,33 @@ const AspectRatioSelector = ({
         </div>
 
         <DialogFooter>
-          <Button
-            onClick={() => {
-              onSettingsApplied({
-                aspectRatio: convertAspectRatio,
-                cropMode: cropMode as CropMode,
-                padColor,
-                format,
-              });
-              onOpenChange(false);
-            }}
-            className="w-full"
-            variant="default"
-            size="sm"
-          >
-            Apply Settings
-          </Button>
+          <div className="flex items-center gap-2 w-full">
+            <Button
+              onClick={() => {
+                onSettingsApplied({
+                  aspectRatio: convertAspectRatio,
+                  cropMode: cropMode as CropMode,
+                  padColor,
+                  format,
+                });
+                onOpenChange(false);
+              }}
+              className="flex-1"
+              variant="default"
+              size="sm"
+              disabled={!isBufferDownloaded}
+            >
+              Apply Settings
+            </Button>
+            <InfoTooltip
+              content={
+                isBufferDownloaded
+                  ? "Apply aspect ratio and crop settings to the video"
+                  : "Please wait for the video buffer to finish downloading before applying settings"
+              }
+              disabled={isBufferDownloaded}
+            />
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

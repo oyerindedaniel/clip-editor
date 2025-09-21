@@ -34,7 +34,7 @@ export const EXPORT_BITRATE_MAP: Record<
   },
 };
 
-export const presets: {
+export const PRESETS: {
   value: ExportSettings["preset"];
   label: string;
   description: string;
@@ -56,7 +56,7 @@ export const presets: {
   },
 ];
 
-export const crfValues: {
+export const CRF_VALUES: {
   value: ExportSettings["crf"];
   label: string;
   description: string;
@@ -78,7 +78,7 @@ export const crfValues: {
   },
 ];
 
-export const fpsOptions: {
+export const FPS_OPTIONS: {
   value: ExportSettings["fps"];
   label: string;
   description: string;
@@ -96,7 +96,7 @@ export const fpsOptions: {
   },
 ];
 
-export const formatOptions: {
+export const FORMAT_OPTIONS: {
   value: ExportSettings["format"];
   label: string;
   description: string;
@@ -118,7 +118,7 @@ export const formatOptions: {
   },
 ];
 
-export const resolutionOptions: {
+export const RESOLUTION_OPTIONS: {
   value: ExportSettings["resolution"];
   label: string;
   description: string;
@@ -141,6 +141,51 @@ export const DEFAULT_COLORS = [
   "#3b82f6",
   "#8b5cf6",
 ] as const;
+
+export const FONT_OPTIONS = [
+  {
+    value: "Inter",
+    label: "Inter",
+  },
+  {
+    value: "Roboto",
+    label: "Roboto",
+  },
+  {
+    value: "Open Sans",
+    label: "Open Sans",
+  },
+  {
+    value: "Lato",
+    label: "Lato",
+  },
+  {
+    value: "Montserrat",
+    label: "Montserrat",
+  },
+  {
+    value: "Poppins",
+    label: "Poppins",
+  },
+  {
+    value: "Source Sans Pro",
+    label: "Source Sans Pro",
+  },
+  {
+    value: "Nunito",
+    label: "Nunito",
+  },
+  {
+    value: "Raleway",
+    label: "Raleway",
+  },
+  {
+    value: "Ubuntu",
+    label: "Ubuntu",
+  },
+] as const;
+
+export const DEFAULT_FONT = "Inter";
 
 export const DEFAULT_CLIP_METADATA = {
   dimensions: {

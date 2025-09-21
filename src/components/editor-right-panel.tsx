@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DualVideoControls } from "./dual-video-controls";
+import DualVideoControls from "./dual-video-controls";
 import TextOverlayItemContainer from "./text-overlay-item";
 import ImageOverlayItemContainer from "./image-overlay-item";
 import { FileUpload } from "./ui/file-upload";
@@ -98,7 +98,6 @@ export function EditorRightPanel({
 
   const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    console.log(file);
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -137,7 +136,7 @@ export function EditorRightPanel({
 
       case "text":
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-[81px]">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
                 <Type size={16} />
@@ -158,7 +157,7 @@ export function EditorRightPanel({
 
       case "image":
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-[81px]">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-foreground-default flex items-center gap-2">
                 <ImageIcon size={16} />

@@ -46,7 +46,7 @@ export const DraggableTextOverlay = ({
       data-selected={isSelected ? "" : undefined}
       className={cn(
         "absolute top-0 left-0 select-none cursor-move pointer-events-auto will-change-transform",
-        isSelected && "ring-2 ring-primary"
+        isSelected && "ring-2 ring-primary/50 z-10"
       )}
       style={
         {
@@ -72,7 +72,13 @@ export const DraggableTextOverlay = ({
       onMouseDown={(e) => onMouseDown(e)}
       data-overlay-id={overlay.id}
     >
-      {overlay.text}
+      <span
+        className={cn(
+          "[[data-selected]_&]:opacity-95 [[data-selected]_&]:backdrop-blur-lg"
+        )}
+      >
+        {overlay.text}
+      </span>
 
       <Button
         type="button"

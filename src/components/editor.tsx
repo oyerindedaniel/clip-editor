@@ -78,6 +78,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     DEFAULT_CLIP_METADATA
   );
   const traceRef = useRef<HTMLDivElement>(null);
+  const [isBufferDownloaded, setIsBufferDownloaded] = useState(false);
 
   const {
     textOverlaysRef,
@@ -133,7 +134,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       const render = (percent: number) =>
         toast.custom(
           () => (
-            <div className="w-72 rounded-md bg-primary/70 backdrop-blur-xl shadow-md p-3 text-foreground">
+            <div className="w-72 rounded-md bg-primary shadow-md p-3 text-foreground">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium">{label}</span>
                 <span className="text-[10px] tabular-nums text-foreground/70">
@@ -196,7 +197,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? "rgba(255, 0, 0, 0.15)"
       : "transparent";
     trace.style.pointerEvents = "none";
-    trace.style.zIndex = "15";
+    trace.style.zIndex = "99";
   }, [showTraceRef]);
 
   const loadClipVideo = useCallback(
@@ -361,6 +362,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
         const buffer = await response.arrayBuffer();
         clipBufferRef.current = buffer;
+        setIsBufferDownloaded(true);
 
         logger.log("Successfully converted URL to buffer:", {
           clipId: clipData.metadata.clipId,
@@ -533,7 +535,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         dualVideo: {
           primaryClip: {
             id: clipData.metadata.clipId,
-            url: clipData.url,
+            url: primaryUrl,
             buffer: clipBufferRef.current,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
@@ -706,6 +708,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenChange={closeAspectRatioModal}
         settings={settings}
         onSettingsApplied={handleSettingsApplied}
+        isBufferDownloaded={isBufferDownloaded}
       />
 
       <ExportNamingDialog
@@ -713,6 +716,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenChange={closeExportNamingModal}
         streamerName={clipData.metadata.streamerName}
         onExport={handleExport}
+        isBufferDownloaded={isBufferDownloaded}
       />
 
       <EditorPanel.Root
@@ -727,7 +731,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
                 Shift+T
               </kbd>
-
               <EditorPanel.CloseButton size="sm" />
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">

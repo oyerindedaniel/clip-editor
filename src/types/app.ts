@@ -21,6 +21,8 @@ export interface S3ClipMetadata {
   originalFilename?: string;
 }
 
+export type Dimensions = { width: number; height: number };
+
 export type ClipToolType = "clips" | "text" | "image" | "audio" | "dual";
 
 export interface S3ClipData {
@@ -140,8 +142,8 @@ export interface ClipExportData {
   imageOverlays?: ImageOverlay[];
   audioTracks?: AudioTrack[];
   exportSettings: ExportSettings;
-  clientDisplaySize: { width: number; height: number };
-  targetResolution?: { width: number; height: number };
+  clientDisplaySize: Dimensions;
+  targetResolution?: Dimensions;
   dualVideo?: {
     primaryClip: DualVideoClip & ClipMetadata;
     secondaryClip?: DualVideoClip & ClipMetadata;

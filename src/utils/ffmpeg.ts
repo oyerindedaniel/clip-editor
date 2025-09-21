@@ -7,6 +7,7 @@ import type {
   ImageOverlay,
   WorkerResponse,
   VideoFormat,
+  Dimensions,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 import { WorkerType } from "@/types/app";
@@ -59,7 +60,7 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
 export async function processClip(
   clipData: ArrayBuffer,
   options: Settings,
-  videoDimensions: { width: number; height: number }
+  videoDimensions: Dimensions
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
@@ -196,17 +197,18 @@ export async function processClipForExport(
         data
       );
 
-      await ffmpeg.createDir("overlay_frames");
+      const overlayDir = `overlay_frames_${Date.now()}`;
+      await ffmpeg.createDir(overlayDir);
 
       for (let i = 0; i < overlayFrames.length; i++) {
         const frameData = new Uint8Array(overlayFrames[i]);
         await ffmpeg.writeFile(
-          `overlay_frames/overlay_${i.toString().padStart(4, "0")}.png`,
+          `${overlayDir}/overlay_${i.toString().padStart(4, "0")}.png`,
           frameData
         );
       }
 
-      args.push("-i", "overlay_frames/overlay_%04d.png");
+      args.push("-i", `${overlayDir}/overlay_%04d.png`);
       args.push(
         "-filter_complex",
         `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`

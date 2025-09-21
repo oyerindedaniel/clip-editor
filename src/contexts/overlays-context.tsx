@@ -10,12 +10,13 @@ import {
   createContext,
 } from "react";
 
-import {
+import type {
   TextOverlay,
   ImageOverlay,
   Overlay,
   DualVideoClip,
   DualVideoSettings,
+  Dimensions,
 } from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
@@ -23,6 +24,7 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Position } from "@/components/resize-handle";
 import { debounce } from "@/utils/app";
 import { type StoreApi, useContextStore } from "react-shallow-store";
+import { DEFAULT_FONT } from "@/constants/app";
 
 export type OverlayType = "text" | "image";
 
@@ -343,7 +345,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         normX,
         normY,
         fontSize: 24,
-        fontFamily: "var(--font-inter), sans-serif",
+        fontFamily: DEFAULT_FONT,
         letterSpacing: "-0.03em",
         color: "#ffffff",
         backgroundColor: "#000000",
@@ -1240,7 +1242,7 @@ function getImageOverlaySizeByArea(
   imageWidth: number,
   imageHeight: number,
   scaleFactor: number = 0.1
-): { width: number; height: number } {
+): Dimensions {
   if (
     containerWidth <= 0 ||
     containerHeight <= 0 ||

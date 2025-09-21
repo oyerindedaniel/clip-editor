@@ -24,6 +24,7 @@ import { ColorPicker } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
+import FontSelector from "@/components/font-selector";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -108,6 +109,18 @@ const TextOverlayItem = ({
             />
           </div>
 
+          <div className="space-y-1.5">
+            <label className="block text-xs text-foreground-subtle">
+              Font Family
+            </label>
+            <FontSelector
+              value={overlay.fontFamily}
+              onChange={(font) =>
+                updateTextOverlay(overlay.id, { fontFamily: font })
+              }
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="block text-xs text-foreground-subtle">
@@ -124,7 +137,7 @@ const TextOverlayItem = ({
                   }
                 }}
               >
-                <SelectTrigger className="w-full px-2 py-1.5 h-8 text-xs">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Display" />
                 </SelectTrigger>
                 <SelectContent>
@@ -142,7 +155,7 @@ const TextOverlayItem = ({
                   updateTextOverlay(overlay.id, { fontSize: parseInt(value) })
                 }
               >
-                <SelectTrigger className="w-full px-2 py-1.5 h-8 text-xs">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Font size" />
                 </SelectTrigger>
                 <SelectContent>

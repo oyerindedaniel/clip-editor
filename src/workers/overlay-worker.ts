@@ -4,9 +4,12 @@ import type {
   ClipExportData,
   WorkerMessage,
   WorkerResponse,
+  Dimensions,
 } from "@/types/app";
 import logger from "@/utils/logger";
 import { WorkerType } from "@/types/app";
+import { normalizeError } from "@/utils/error-utils";
+import { getVisibleOverlays, msToSeconds } from "@/utils/video";
 
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   if (e.data.type === WorkerType.GENERATE) {
@@ -25,7 +28,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       logger.error("Overlay worker error:", error);
       self.postMessage({
         type: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: normalizeError(error).message,
       });
     }
   }
@@ -36,32 +39,32 @@ async function generateOverlayFrames(
   imageOverlays: ImageOverlay[] | undefined,
   data: ClipExportData
 ): Promise<Uint8Array[]> {
-  const { exportSettings, clientDisplaySize, targetResolution } = data;
+  const { exportSettings, clientDisplaySize, targetResolution, dualVideo } =
+    data;
 
-  if (!data.targetResolution || !clientDisplaySize) {
+  const {
+    primaryClip: { dimensions },
+  } = dualVideo!;
+
+  if (!targetResolution || !clientDisplaySize) {
     throw new Error("Missing target resolution or client display size");
   }
 
-  const totalFrames = Math.ceil(
-    ((data.endTime - data.startTime) / 1000) * exportSettings.fps
-  );
+  const duration = data.endTime - data.startTime;
+
+  const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
   const renderDimensions = targetResolution!;
   const { width: renderWidth, height: renderHeight } = renderDimensions;
+
+  const videoDimensions = dimensions;
 
   const canvas = new OffscreenCanvas(renderWidth, renderHeight);
   const ctx = canvas.getContext("2d")!;
 
-  const scaleFactor = calculateScaleFactor(
-    { width: renderWidth, height: renderHeight },
-    clientDisplaySize
-  );
+  const scaleFactor = calculateScaleFactor(videoDimensions, clientDisplaySize);
 
   logger.log("🧠 Generating overlay frames", {
     totalFrames,
-    fps: exportSettings.fps,
-    duration: (data.endTime - data.startTime) / 1000,
-    dimensions: renderDimensions,
-    clientDisplaySize,
     scaleFactor,
   });
 
@@ -72,11 +75,11 @@ async function generateOverlayFrames(
     textOverlays.forEach((overlay) => {
       const startFrame = Math.max(
         0,
-        Math.floor((overlay.startTime / 1000) * exportSettings.fps)
+        Math.floor(msToSeconds(overlay.startTime) * exportSettings.fps)
       );
       const endFrame = Math.min(
         totalFrames - 1,
-        Math.ceil((overlay.endTime / 1000) * exportSettings.fps)
+        Math.ceil(msToSeconds(overlay.endTime) * exportSettings.fps)
       );
 
       transitionPoints.add(startFrame);
@@ -88,11 +91,11 @@ async function generateOverlayFrames(
     imageOverlays.forEach((overlay) => {
       const startFrame = Math.max(
         0,
-        Math.floor((overlay.startTime / 1000) * exportSettings.fps)
+        Math.floor(msToSeconds(overlay.startTime) * exportSettings.fps)
       );
       const endFrame = Math.min(
         totalFrames - 1,
-        Math.ceil((overlay.endTime / 1000) * exportSettings.fps)
+        Math.ceil(msToSeconds(overlay.endTime) * exportSettings.fps)
       );
 
       transitionPoints.add(startFrame);
@@ -115,30 +118,16 @@ async function generateOverlayFrames(
 
     const currentTimeMs = (frameIndex / exportSettings.fps) * 1000;
 
-    ctx.clearRect(0, 0, renderWidth, renderHeight);
+    ctx.clearRect(0, 0, videoDimensions.width, videoDimensions.height);
 
     const visibleOverlays = [];
 
     if (textOverlays) {
-      visibleOverlays.push(
-        ...textOverlays.filter(
-          (overlay) =>
-            overlay.visible &&
-            currentTimeMs >= overlay.startTime &&
-            currentTimeMs <= overlay.endTime
-        )
-      );
+      visibleOverlays.push(...getVisibleOverlays(textOverlays, currentTimeMs));
     }
 
     if (imageOverlays) {
-      visibleOverlays.push(
-        ...imageOverlays.filter(
-          (overlay) =>
-            overlay.visible &&
-            currentTimeMs >= overlay.startTime &&
-            currentTimeMs <= overlay.endTime
-        )
-      );
+      visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
     // State key based on visible overlays
@@ -161,7 +150,7 @@ async function generateOverlayFrames(
           renderTextOverlay(
             ctx,
             overlay,
-            renderDimensions,
+            videoDimensions,
             scaleFactor,
             targetResolution
           );
@@ -169,7 +158,7 @@ async function generateOverlayFrames(
           renderImageOverlay(
             ctx,
             overlay,
-            renderDimensions,
+            videoDimensions,
             scaleFactor,
             targetResolution
           );
@@ -205,25 +194,11 @@ async function generateOverlayFrames(
     const visibleOverlays = [];
 
     if (textOverlays) {
-      visibleOverlays.push(
-        ...textOverlays.filter(
-          (overlay) =>
-            overlay.visible &&
-            currentTimeMs >= overlay.startTime &&
-            currentTimeMs <= overlay.endTime
-        )
-      );
+      visibleOverlays.push(...getVisibleOverlays(textOverlays, currentTimeMs));
     }
 
     if (imageOverlays) {
-      visibleOverlays.push(
-        ...imageOverlays.filter(
-          (overlay) =>
-            overlay.visible &&
-            currentTimeMs >= overlay.startTime &&
-            currentTimeMs <= overlay.endTime
-        )
-      );
+      visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
     const stateKey = visibleOverlays
@@ -262,8 +237,8 @@ async function generateOverlayFrames(
 }
 
 function calculateScaleFactor(
-  videoDimensions: { width: number; height: number },
-  clientDisplaySize: { width: number; height: number }
+  videoDimensions: Dimensions,
+  clientDisplaySize: Dimensions
 ): number {
   // Calculate scale factor based on the ratio of video to display size
   const videoAspectRatio = videoDimensions.width / videoDimensions.height;
@@ -292,9 +267,9 @@ function calculateScaleFactor(
 function renderTextOverlay(
   ctx: OffscreenCanvasRenderingContext2D,
   overlay: TextOverlay,
-  videoDimensions: { width: number; height: number },
+  videoDimensions: Dimensions,
   scaleFactor: number = 1.0,
-  targetResolution?: { width: number; height: number }
+  targetResolution?: Dimensions
 ): void {
   if (!overlay.visible) {
     logger.log("⛔ Overlay not visible, skipping render.");
@@ -467,9 +442,9 @@ function renderTextOverlay(
 async function renderImageOverlay(
   ctx: OffscreenCanvasRenderingContext2D,
   overlay: ImageOverlay,
-  videoDimensions: { width: number; height: number },
+  videoDimensions: Dimensions,
   scaleFactor: number = 1.0,
-  targetResolution?: { width: number; height: number }
+  targetResolution?: Dimensions
 ): Promise<void> {
   if (!overlay.visible) {
     logger.log("⛔ Overlay not visible, skipping render.");

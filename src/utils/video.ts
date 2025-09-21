@@ -1,3 +1,5 @@
+import type { Dimensions, Overlay } from "@/types/app";
+
 /**
  * Calculate the visible bounding box of a video element inside its container.
  *
@@ -86,7 +88,7 @@ function getOverlayNormalizedCoords(
 function getTargetVideoDimensions(
   resolution: "720p" | "1080p" | "1440p" | "4k",
   aspectRatio: number
-): { width: number; height: number } {
+): Dimensions {
   let targetHeight: number;
 
   switch (resolution) {
@@ -130,10 +132,25 @@ function getFormatFromSrc(src: string): "mp4" | "webm" | "mov" {
   return "mp4";
 }
 
+function msToSeconds(ms: number): number {
+  return ms / 1000;
+}
+
+function getVisibleOverlays(overlays: Overlay[], currentTimeMs: number) {
+  return overlays.filter(
+    (overlay) =>
+      overlay.visible &&
+      currentTimeMs >= overlay.startTime &&
+      currentTimeMs <= overlay.endTime
+  );
+}
+
 export {
   getVideoBoundingBox,
   getOverlayNormalizedCoords,
   getTargetVideoDimensions,
   getExtensionFromMime,
   getFormatFromSrc,
+  getVisibleOverlays,
+  msToSeconds,
 };

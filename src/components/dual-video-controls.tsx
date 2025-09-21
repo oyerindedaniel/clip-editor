@@ -26,6 +26,7 @@ import type {
   DualVideoOrientation,
   S3ClipData,
 } from "@/types/app";
+import { toast } from "sonner";
 
 interface DualVideoControlsProps {
   primaryClip: S3ClipData;
@@ -37,7 +38,7 @@ interface DualVideoControlsProps {
   disabled?: boolean;
 }
 
-export function DualVideoControls({
+export default function DualVideoControls({
   primaryClip,
   secondaryClip,
   settings,
@@ -51,6 +52,10 @@ export function DualVideoControls({
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      console.log(file);
+
+      if (!file) return;
+
       if (file && file.type.startsWith("video/")) {
         onAddSecondaryClip(file);
       }

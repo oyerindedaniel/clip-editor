@@ -17,13 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import type { ExportSettings } from "@/types/app";
+import InfoTooltip from "@/components/info-tooltip";
 import {
-  crfValues,
+  CRF_VALUES,
   EXPORT_BITRATE_MAP,
-  formatOptions,
-  fpsOptions,
-  presets,
-  resolutionOptions,
+  FORMAT_OPTIONS,
+  FPS_OPTIONS,
+  PRESETS,
+  RESOLUTION_OPTIONS,
 } from "@/constants/app";
 
 interface ExportNamingDialogProps {
@@ -43,6 +44,7 @@ interface ExportNamingDialogProps {
       | "customBitrateKbps"
     >
   ) => void;
+  isBufferDownloaded: boolean;
 }
 
 export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
@@ -50,6 +52,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   onOpenChange,
   streamerName,
   onExport,
+  isBufferDownloaded,
 }) => {
   const streamerNameRef = useRef<HTMLInputElement | null>(null);
   const clipTitleRef = useRef<HTMLInputElement | null>(null);
@@ -192,7 +195,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 <SelectValue placeholder="Select resolution" />
               </SelectTrigger>
               <SelectContent>
-                {resolutionOptions.map((res) => (
+                {RESOLUTION_OPTIONS.map((res) => (
                   <SelectItem key={res.value} value={res.value}>
                     <div className="flex items-center justify-between w-full">
                       <span>{res.label}</span>
@@ -227,7 +230,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 <SelectValue placeholder="Select FPS" />
               </SelectTrigger>
               <SelectContent>
-                {fpsOptions.map((f) => (
+                {FPS_OPTIONS.map((f) => (
                   <SelectItem key={f.value} value={String(f.value)}>
                     <div className="flex items-center justify-between w-full">
                       <span>{f.label}</span>
@@ -340,7 +343,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent>
-                {formatOptions.map((f) => (
+                {FORMAT_OPTIONS.map((f) => (
                   <SelectItem key={f.value} value={f.value}>
                     <div className="flex items-center justify-between w-full">
                       <span>{f.label}</span>
@@ -371,7 +374,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 <SelectValue placeholder="Select preset" />
               </SelectTrigger>
               <SelectContent>
-                {presets.map((p) => (
+                {PRESETS.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
                     <div className="flex items-center justify-between w-full">
                       <span>{p.label}</span>
@@ -402,7 +405,7 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 <SelectValue placeholder="Select CRF" />
               </SelectTrigger>
               <SelectContent>
-                {crfValues.map((c) => (
+                {CRF_VALUES.map((c) => (
                   <SelectItem key={c.value} value={String(c.value)}>
                     <div className="flex items-center justify-between w-full">
                       <span>{c.label}</span>
@@ -417,9 +420,24 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" onClick={handleExportClick}>
-            Export Clip
-          </Button>
+          <div className="flex items-center gap-2 w-full">
+            <Button
+              type="button"
+              onClick={handleExportClick}
+              disabled={!isBufferDownloaded}
+              className="flex-1"
+            >
+              Export Clip
+            </Button>
+            <InfoTooltip
+              content={
+                isBufferDownloaded
+                  ? "Export the video clip with your selected settings"
+                  : "Please wait for the video buffer to finish downloading before exporting"
+              }
+              disabled={isBufferDownloaded}
+            />
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

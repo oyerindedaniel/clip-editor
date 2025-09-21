@@ -28,7 +28,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const handleClick = useCallback(() => {
-    inputRef.current?.click();
+    if (inputRef.current) {
+      inputRef.current.value = "";
+      inputRef.current.click();
+    }
   }, []);
 
   const isFile = value && value.length > 0;
@@ -172,10 +175,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         name={name}
         accept={accept}
         disabled={disabled}
-        onChange={(e) => {
-          onChange(e);
-          e.currentTarget.value = "";
-        }}
+        onChange={onChange}
         onBlur={onBlur}
         className="hidden"
       />
