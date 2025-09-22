@@ -52,11 +52,11 @@ async function generateOverlayFrames(
 
   const duration = data.endTime - data.startTime;
 
-  const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
-  const renderDimensions = targetResolution!;
-  const { width: renderWidth, height: renderHeight } = renderDimensions;
-
   const videoDimensions = dimensions;
+
+  const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
+  const renderDimensions = targetResolution || videoDimensions;
+  const { width: renderWidth, height: renderHeight } = renderDimensions;
 
   const canvas = new OffscreenCanvas(renderWidth, renderHeight);
   const ctx = canvas.getContext("2d")!;
@@ -118,7 +118,7 @@ async function generateOverlayFrames(
 
     const currentTimeMs = (frameIndex / exportSettings.fps) * 1000;
 
-    ctx.clearRect(0, 0, videoDimensions.width, videoDimensions.height);
+    ctx.clearRect(0, 0, renderWidth, renderHeight);
 
     const visibleOverlays = [];
 
@@ -130,13 +130,13 @@ async function generateOverlayFrames(
       visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
-    // State key based on visible overlays
+    // State key based on visible overlays - use normX/normY for consistency
     const stateKey = visibleOverlays
       .map((o) => {
         if ("text" in o) {
-          return `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+          return `${o.text}-${o.normX}-${o.normY}-${o.startTime}-${o.endTime}`;
         } else if ("file" in o) {
-          return `${o.file.name}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+          return `${o.file.name}-${o.normX}-${o.normY}-${o.startTime}-${o.endTime}`;
         }
         return "unknown";
       })
@@ -144,8 +144,7 @@ async function generateOverlayFrames(
 
     // Only generate new buffer if state hasn't been seen before
     if (!overlayStates.has(stateKey)) {
-      // Render overlays
-      visibleOverlays.forEach((overlay) => {
+      for (const overlay of visibleOverlays) {
         if ("text" in overlay) {
           renderTextOverlay(
             ctx,
@@ -155,7 +154,7 @@ async function generateOverlayFrames(
             targetResolution
           );
         } else if ("file" in overlay) {
-          renderImageOverlay(
+          await renderImageOverlay(
             ctx,
             overlay,
             videoDimensions,
@@ -163,7 +162,7 @@ async function generateOverlayFrames(
             targetResolution
           );
         }
-      });
+      }
 
       const frameBuffer = await canvas.convertToBlob({ type: "image/png" });
       const arrayBuffer = await frameBuffer.arrayBuffer();
@@ -201,12 +200,13 @@ async function generateOverlayFrames(
       visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
+    // Use consistent normX/normY for state key
     const stateKey = visibleOverlays
       .map((o) => {
         if ("text" in o) {
-          return `${o.text}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+          return `${o.text}-${o.normX}-${o.normY}-${o.startTime}-${o.endTime}`;
         } else if ("file" in o) {
-          return `${o.file.name}-${o.x}-${o.y}-${o.startTime}-${o.endTime}`;
+          return `${o.file.name}-${o.normX}-${o.normY}-${o.startTime}-${o.endTime}`;
         }
         return "unknown";
       })
@@ -332,8 +332,8 @@ function renderTextOverlay(
   const divHeight = totalTextHeight + 2 * scaledPaddingY;
 
   // Position div's border box at normalized coordinates
-  const idealDivX = overlay.x * renderWidth;
-  const idealDivY = overlay.y * renderHeight;
+  const idealDivX = overlay.normX * renderWidth;
+  const idealDivY = overlay.normY * renderHeight;
 
   // Clamp div to prevent clipping
   const clampedDivX = Math.max(0, Math.min(renderWidth - divWidth, idealDivX));
@@ -458,8 +458,8 @@ async function renderImageOverlay(
   const scaledWidth = overlay.width * scaleFactor;
   const scaledHeight = overlay.height * scaleFactor;
 
-  const idealDivX = overlay.x * renderWidth;
-  const idealDivY = overlay.y * renderHeight;
+  const idealDivX = overlay.normX * renderWidth;
+  const idealDivY = overlay.normY * renderHeight;
 
   const clampedDivX = Math.max(
     0,

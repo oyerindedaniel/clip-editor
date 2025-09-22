@@ -279,8 +279,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         buffer,
         metadata,
         offset: 0,
-        volume: 0.6,
-        visible: true,
       };
 
       tempVideo.addEventListener("loadedmetadata", () => {
@@ -540,8 +538,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
             offset: 0,
-            volume: 1,
-            visible: true,
           },
           ...(secondaryClip && {
             secondaryClip: {
@@ -554,7 +550,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         },
       };
 
-      console.log({ exportData });
+      logger.log({ exportData });
 
       const processedBlob = await withProgressToast<Blob>(
         "Exporting clip",
@@ -562,7 +558,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         `export-${clipData.metadata.clipId}`
       );
 
-      console.log("export", processedBlob);
+      logger.log("export", processedBlob);
 
       const downloadUrl = URL.createObjectURL(processedBlob);
       const a = document.createElement("a");

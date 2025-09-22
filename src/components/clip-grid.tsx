@@ -7,6 +7,7 @@ import { Edit } from "lucide-react";
 import type { S3ClipData as ClipData } from "@/types/app";
 import Link from "next/link";
 import { LoaderIcon } from "@/icons/loader";
+import logger from "@/utils/logger";
 
 interface ClipGridProps {
   initialClips: ClipData[];
@@ -68,7 +69,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
         try {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         } catch (error) {
-          console.warn(`Failed to draw thumbnail for ${clipId}:`, error);
+          logger.warn(`Failed to draw thumbnail for ${clipId}:`, error);
         }
 
         setLoadingThumbnails((prev) => {
@@ -80,7 +81,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
       };
 
       const onError = () => {
-        console.warn(`Failed to load video for thumbnail: ${clipId}`);
+        logger.warn(`Failed to load video for thumbnail: ${clipId}`);
         processedThumbnailsRef.current.delete(clipId);
         setLoadingThumbnails((prev) => {
           const newSet = new Set(prev);

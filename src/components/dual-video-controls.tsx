@@ -52,8 +52,6 @@ export default function DualVideoControls({
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      console.log(file);
-
       if (!file) return;
 
       if (file && file.type.startsWith("video/")) {

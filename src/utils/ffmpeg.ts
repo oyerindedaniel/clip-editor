@@ -156,7 +156,7 @@ export async function processClipForExport(
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
 
-  const { dualVideo, exportSettings } = data;
+  const { dualVideo, exportSettings, targetResolution } = data;
   const { primaryClip } = dualVideo ?? {};
 
   if (!primaryClip?.buffer) {
@@ -168,6 +168,10 @@ export async function processClipForExport(
 
   const format = exportSettings.format;
   const outputFileName = `output.${format}`;
+
+  let overlayDir: string | null = null;
+
+  const renderDimensions = targetResolution || primaryClip.dimensions;
 
   try {
     const clonedExportInput = primaryClip.buffer.slice(0);
@@ -197,7 +201,7 @@ export async function processClipForExport(
         data
       );
 
-      const overlayDir = `overlay_frames_${Date.now()}`;
+      overlayDir = `overlay_frames_${Date.now()}`;
       await ffmpeg.createDir(overlayDir);
 
       for (let i = 0; i < overlayFrames.length; i++) {
@@ -209,10 +213,15 @@ export async function processClipForExport(
       }
 
       args.push("-i", `${overlayDir}/overlay_%04d.png`);
+
       args.push(
         "-filter_complex",
-        `[0:v][1:v]overlay=0:0:enable='between(t,0,${duration})'`
+        `[0:v]scale=${renderDimensions.width}:${renderDimensions.height}[scaled];` +
+          `[scaled][1:v]overlay=0:0:enable='between(t,0,${duration})'[v]`
       );
+
+      args.push("-map", "[v]");
+      args.push("-map", "0:a?");
     }
 
     const codecArgs = getCodecArgs(format);
@@ -229,13 +238,6 @@ export async function processClipForExport(
       `${getBitrate(exportSettings)}k`
     );
 
-    if (data.targetResolution) {
-      args.push(
-        "-s",
-        `${data.targetResolution.width}x${data.targetResolution.height}`
-      );
-    }
-
     args.push("-y", outputFileName);
 
     await ffmpeg.exec(args);
@@ -251,7 +253,20 @@ export async function processClipForExport(
     try {
       await ffmpeg.deleteFile(inputFileName);
       await ffmpeg.deleteFile(outputFileName);
-    } catch {}
+
+      if (overlayDir) {
+        try {
+          const files = await ffmpeg.listDir(overlayDir);
+          for (const file of files) {
+            await ffmpeg.deleteFile(`${overlayDir}/${file.name}`);
+          }
+        } catch (cleanupError) {
+          logger.warn("Failed to cleanup overlay directory:", cleanupError);
+        }
+      }
+    } catch (generalCleanupError) {
+      logger.warn("Failed to cleanup files:", generalCleanupError);
+    }
   }
 }
 

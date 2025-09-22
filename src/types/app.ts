@@ -246,8 +246,6 @@ export interface DualVideoClip {
   buffer: ArrayBuffer | null;
   metadata: S3ClipMetadata;
   offset: number; // Time offset in milliseconds
-  volume: number; // Audio volume level (0-1)
-  visible: boolean;
 }
 
 export type DualVideoLayout = "vertical" | "horizontal";
