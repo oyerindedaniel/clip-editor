@@ -194,20 +194,6 @@ export default function DualVideoControls({
                 {secondaryClip.metadata.originalFilename || "Secondary Clip"}
               </span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                updateSecondaryClip({ visible: !secondaryClip.visible })
-              }
-              className="p-1 h-6 w-6"
-            >
-              {secondaryClip.visible ? (
-                <Eye size={14} className="text-accent-primary" />
-              ) : (
-                <EyeOff size={14} className="text-foreground-muted" />
-              )}
-            </Button>
           </div>
         </div>
 
