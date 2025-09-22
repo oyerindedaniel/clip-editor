@@ -10,14 +10,12 @@ import {
 } from "@/components/ui/select";
 import { FONT_OPTIONS } from "@/constants/app";
 import { loadFontVariants, preloadCommonVariants } from "@/utils/font-loader";
-import { cn } from "@/lib/utils";
 import logger from "@/utils/logger";
 import { useStableHandler } from "@/hooks/use-stable-handler";
 
 interface FontSelectorProps {
   value: string;
   onChange: (font: string) => void;
-  className?: string;
   bold?: boolean;
   italic?: boolean;
 }
@@ -25,7 +23,6 @@ interface FontSelectorProps {
 export function FontSelector({
   value,
   onChange,
-  className,
   bold = true,
   italic = true,
 }: FontSelectorProps) {
@@ -76,7 +73,7 @@ export function FontSelector({
 
   return (
     <Select value={value} onValueChange={handleFontChange}>
-      <SelectTrigger className={cn("", className)}>
+      <SelectTrigger>
         <SelectValue placeholder="Select font" />
       </SelectTrigger>
       <SelectContent>

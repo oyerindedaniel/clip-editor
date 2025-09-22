@@ -46,22 +46,21 @@ async function generateOverlayFrames(
     primaryClip: { dimensions },
   } = dualVideo!;
 
-  if (!targetResolution || !clientDisplaySize) {
+  if (!targetResolution || !clientDisplaySize || !dimensions) {
     throw new Error("Missing target resolution or client display size");
   }
 
   const duration = data.endTime - data.startTime;
+  const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
 
   const videoDimensions = dimensions;
-
-  const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
   const renderDimensions = targetResolution || videoDimensions;
   const { width: renderWidth, height: renderHeight } = renderDimensions;
 
   const canvas = new OffscreenCanvas(renderWidth, renderHeight);
   const ctx = canvas.getContext("2d")!;
 
-  const scaleFactor = calculateScaleFactor(videoDimensions, clientDisplaySize);
+  const scaleFactor = calculateScaleFactor(renderDimensions, clientDisplaySize);
 
   logger.log("🧠 Generating overlay frames", {
     totalFrames,
@@ -130,7 +129,7 @@ async function generateOverlayFrames(
       visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
-    // State key based on visible overlays - use normX/normY for consistency
+    // State key based on visible overlays
     const stateKey = visibleOverlays
       .map((o) => {
         if ("text" in o) {
@@ -200,7 +199,6 @@ async function generateOverlayFrames(
       visibleOverlays.push(...getVisibleOverlays(imageOverlays, currentTimeMs));
     }
 
-    // Use consistent normX/normY for state key
     const stateKey = visibleOverlays
       .map((o) => {
         if ("text" in o) {
@@ -237,11 +235,11 @@ async function generateOverlayFrames(
 }
 
 function calculateScaleFactor(
-  videoDimensions: Dimensions,
+  targetDimensions: Dimensions,
   clientDisplaySize: Dimensions
 ): number {
   // Calculate scale factor based on the ratio of video to display size
-  const videoAspectRatio = videoDimensions.width / videoDimensions.height;
+  const videoAspectRatio = targetDimensions.width / targetDimensions.height;
   const displayAspectRatio = clientDisplaySize.width / clientDisplaySize.height;
 
   let scaleFactor: number;
@@ -249,14 +247,14 @@ function calculateScaleFactor(
   if (Math.abs(videoAspectRatio - displayAspectRatio) < 0.1) {
     logger.log("📏 Aspect ratios are similar. Scaling based on total area.");
     // Similar aspect ratios - scale based on area
-    const videoArea = videoDimensions.width * videoDimensions.height;
+    const videoArea = targetDimensions.width * targetDimensions.height;
     const displayArea = clientDisplaySize.width * clientDisplaySize.height;
     scaleFactor = Math.sqrt(videoArea / displayArea);
   } else {
     logger.log("⚠️ Aspect ratios differ. Scaling based on limiting dimension.");
     // Different aspect ratios - scale based on the limiting dimension
-    const widthScale = videoDimensions.width / clientDisplaySize.width;
-    const heightScale = videoDimensions.height / clientDisplaySize.height;
+    const widthScale = targetDimensions.width / clientDisplaySize.width;
+    const heightScale = targetDimensions.height / clientDisplaySize.height;
     scaleFactor = Math.max(widthScale, heightScale);
   }
 

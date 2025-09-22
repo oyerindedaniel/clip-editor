@@ -197,7 +197,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? "rgba(255, 0, 0, 0.15)"
       : "transparent";
     trace.style.pointerEvents = "none";
-    trace.style.zIndex = "99";
+    trace.style.zIndex = "15";
   }, [showTraceRef]);
 
   const loadClipVideo = useCallback(

@@ -1,4 +1,4 @@
-import type { Dimensions, Overlay } from "@/types/app";
+import type { Dimensions, ExportSettings, Overlay } from "@/types/app";
 
 /**
  * Calculate the visible bounding box of a video element inside its container.
@@ -86,7 +86,7 @@ function getOverlayNormalizedCoords(
  * @returns An object containing the calculated width and height.
  */
 function getTargetVideoDimensions(
-  resolution: "720p" | "1080p" | "1440p" | "4k",
+  resolution: ExportSettings["resolution"],
   aspectRatio: number
 ): Dimensions {
   let targetHeight: number;

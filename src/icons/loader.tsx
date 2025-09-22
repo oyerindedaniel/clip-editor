@@ -1,13 +1,14 @@
-import React from "react";
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-interface LoaderIconProps {
-  className?: string;
+interface LoaderIconProps extends React.SVGProps<SVGSVGElement> {
   size?: number;
 }
 
 export const LoaderIcon: React.FC<LoaderIconProps> = ({
   className = "",
   size = 24,
+  ...props
 }) => {
   return (
     <svg
@@ -20,7 +21,8 @@ export const LoaderIcon: React.FC<LoaderIconProps> = ({
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`animate-spin ${className}`}
+      className={cn("animate-spin", className)}
+      {...props}
     >
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M12 6l0 -3" />

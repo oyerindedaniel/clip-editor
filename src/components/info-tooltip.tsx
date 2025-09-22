@@ -9,22 +9,17 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-interface InfoTooltipProps {
+interface InfoTooltipProps extends React.ComponentProps<typeof TooltipContent> {
   content: string;
-  className?: React.HTMLAttributes<HTMLDivElement>["className"];
-  iconClassName?: React.SVGProps<SVGSVGElement>["className"];
-  side?: "top" | "right" | "bottom" | "left";
-  align?: "start" | "center" | "end";
   disabled?: boolean;
 }
 
 export function InfoTooltip({
   content,
-  className,
-  iconClassName,
   side = "top",
   align = "center",
   disabled = false,
+  ...props
 }: InfoTooltipProps) {
   if (disabled) {
     return null;
@@ -39,15 +34,14 @@ export function InfoTooltip({
             "inline-flex items-center justify-center w-4 h-4 rounded-full",
             "text-foreground-subtle hover:text-foreground-default",
             "transition-colors duration-200 ease-in-out",
-            "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1",
-            className
+            "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1"
           )}
           aria-label="More information"
         >
-          <Info size={12} className={iconClassName} />
+          <Info size={12} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side={side} align={align} className="max-w-xs">
+      <TooltipContent side={side} align={align} {...props} className="max-w-xs">
         <p className="text-xs leading-relaxed">{content}</p>
       </TooltipContent>
     </Tooltip>
