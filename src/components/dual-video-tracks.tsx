@@ -180,7 +180,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (!state) return;
 
-    let { visualDuration } = getVisualState(state);
+    const { visualDuration } = getVisualState(state);
     let trimmedFrames = secondaryPreviewFrames;
 
     const trimStart = state.trimStart;
