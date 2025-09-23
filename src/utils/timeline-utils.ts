@@ -112,6 +112,8 @@ export function getScrollState(
   maxContentWidth?: number,
   logicalMaxPx?: number
 ) {
+  const EPSILON = 1;
+
   const scrollLeft = scrollContainer.scrollLeft;
   const containerWidth = scrollContainer.clientWidth;
 
@@ -123,12 +125,12 @@ export function getScrollState(
 
   const maxScrollLeft = Math.max(0, scrollWidth - containerWidth);
 
-  let canScrollRight = scrollLeft < maxScrollLeft;
-  const canScrollLeft = scrollLeft > 0;
+  let canScrollRight = scrollLeft < maxScrollLeft - EPSILON;
+  const canScrollLeft = scrollLeft > EPSILON;
 
   if (logicalMaxPx != null) {
     canScrollRight =
-      canScrollRight && scrollLeft + containerWidth < logicalMaxPx;
+      canScrollRight && scrollLeft + containerWidth < logicalMaxPx - EPSILON;
   }
 
   return {

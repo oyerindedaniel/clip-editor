@@ -152,7 +152,6 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       setActiveHandle(handleType);
 
       startAutoScroll(scrollContainer, (scrollDelta) => {
-        console.log(scrollDelta);
         const { canScrollLeft, canScrollRight } =
           getScrollState(scrollContainer);
 
