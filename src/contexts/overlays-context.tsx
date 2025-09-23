@@ -17,6 +17,7 @@ import type {
   DualVideoClip,
   DualVideoSettings,
   Dimensions,
+  ClipMetadata,
 } from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
@@ -126,14 +127,14 @@ type OverlaysContextValue = {
   setVideoRef: (element: HTMLVideoElement | null) => void;
   dualVideoRef: RefObject<HTMLVideoElement | null>;
   setDualVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
-  secondaryClip: DualVideoClip | null;
+  secondaryClip: (DualVideoClip & ClipMetadata) | null;
   dualVideoSettings: DualVideoSettings;
   dualVideoOffsetMs: number;
-  setSecondaryClip: React.Dispatch<React.SetStateAction<DualVideoClip | null>>;
+  setSecondaryClip: React.Dispatch<
+    React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
+  >;
   setDualVideoSettings: React.Dispatch<React.SetStateAction<DualVideoSettings>>;
   setDualVideoOffsetMs: React.Dispatch<React.SetStateAction<number>>;
-  onOffsetChange: (offsetMs: number) => void;
-  onCutSecondaryAt: (timeMs: number) => void;
   getActiveContainer: () => HTMLDivElement | null;
 };
 
@@ -150,20 +151,23 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const [imageOverlays, setImageOverlays] = useState<ImageOverlay[]>([]);
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null);
 
-  const [secondaryClip, setSecondaryClip] = useState<DualVideoClip | null>(
-    null
-  );
-  const secondaryClipRef = useLatestValue(secondaryClip);
+  const [secondaryClip, setSecondaryClip] = useState<
+    (DualVideoClip & ClipMetadata) | null
+  >(null);
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
     {
-      layout: "vertical",
+      layout: "vertical-letterbox",
       outputOrientation: "vertical",
       primaryAudio: "primary",
       normalizeAudio: true,
       primaryVolume: 0.8,
       secondaryVolume: 0.6,
+      pipPosition: "bottom-right",
+      pipSize: 0.25,
+      secondaryOffset: 0,
     }
   );
+
   const [dualVideoOffsetMs, setDualVideoOffsetMs] = useState<number>(0);
 
   const textOverlaysRef = useLatestValue(textOverlays);
@@ -298,6 +302,27 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     return () => {
       removeGuides();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalMouseDown = (ev: MouseEvent) => {
+      const target = ev.target as Node | null;
+      if (!target) return;
+
+      for (const element of textOverlayRefs.current.values()) {
+        if (element && element.contains(target)) return;
+      }
+      for (const element of imageOverlayRefs.current.values()) {
+        if (element && element.contains(target)) return;
+      }
+
+      setSelectedOverlay(null);
+    };
+
+    document.addEventListener("mousedown", handleGlobalMouseDown, true);
+    return () => {
+      document.removeEventListener("mousedown", handleGlobalMouseDown, true);
     };
   }, []);
 
@@ -1183,14 +1208,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     [updateImageOverlay]
   );
 
-  const onOffsetChange = useCallback((offsetMs: number) => {
-    setDualVideoOffsetMs(offsetMs);
-  }, []);
-
-  const onCutSecondaryAt = useCallback((timeMs: number) => {
-    logger.log("Cut secondary video at:", timeMs);
-  }, []);
-
   const contextValue = {
     videoRef,
     setVideoRef,
@@ -1222,8 +1239,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     setSecondaryClip,
     setDualVideoSettings,
     setDualVideoOffsetMs,
-    onOffsetChange,
-    onCutSecondaryAt,
     getActiveContainer,
   };
 

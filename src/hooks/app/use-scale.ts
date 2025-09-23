@@ -1,8 +1,8 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatestValue } from "../use-latest-value";
 
 /**
- * Fixed scaling configuration - always uses the specified pixels per second
+ * Fixed scaling configuration - always uses the specified pixels per second.
  */
 type FixedScalingConfig = {
   type: "fixed";
@@ -10,15 +10,17 @@ type FixedScalingConfig = {
 };
 
 /**
- * Container-based scaling configuration - scales based on container width
+ * Container-based scaling configuration - scales timeline
+ * proportionally to the container width.
  */
 type ContainerScalingConfig = {
   type: "container";
 };
 
 /**
- * Auto scaling configuration - automatically switches between fixed and container scaling
- * based on container size and minimum usability constraints
+ * Auto scaling configuration - chooses between fixed scaling
+ * and container-based scaling depending on container width and
+ * min/max usability constraints.
  */
 type AutoScalingConfig = {
   type: "auto";
@@ -27,37 +29,45 @@ type AutoScalingConfig = {
   maxPxPerSecond?: number;
 };
 
+/**
+ * Union of supported scaling configurations.
+ */
 type UseScaleConfig =
   | FixedScalingConfig
   | ContainerScalingConfig
   | AutoScalingConfig;
 
+/**
+ * Possible scaling modes currently in effect.
+ */
 type ScalingType = "fixed" | "container" | "auto";
 
-interface UseScaleReturn {
-  pxPerMsRef: React.RefObject<number>;
-  recalc: () => void;
-  currentScalingType: ScalingType;
-}
-
+/**
+ * React hook for calculating timeline scaling (pixels per millisecond).
+ * Supports fixed, container-based, and auto scaling strategies.
+ */
 export function useScale({
   containerRef,
   durationMs,
+  paddingPx = 0,
   ...config
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   durationMs: number;
-} & UseScaleConfig): UseScaleReturn {
-  const pxPerMsRef = useRef(0);
-  const currentScalingTypeRef = useRef<ScalingType>("container");
+  paddingPx?: number;
+} & UseScaleConfig) {
+  const [pxPerMs, setPxPerMs] = useState(0);
+  const [currentScalingType, setCurrentScalingType] =
+    useState<ScalingType>("auto");
   const configRef = useLatestValue(config);
 
   const recalc = useCallback(() => {
     const config = configRef.current;
 
     if (config.type === "fixed") {
-      pxPerMsRef.current = config.fixedPxPerSecond / 1000;
-      currentScalingTypeRef.current = "fixed";
+      const value = config.fixedPxPerSecond / 1000;
+      setPxPerMs(value);
+      setCurrentScalingType("fixed");
       return;
     }
 
@@ -65,12 +75,12 @@ export function useScale({
       const el = containerRef.current;
       if (!el) return;
 
-      const width = el.clientWidth;
+      const usableWidth = Math.max(0, el.clientWidth - paddingPx);
       const containerPxPerMs =
-        durationMs > 0 && width > 0 ? width / durationMs : 0;
+        durationMs > 0 && usableWidth > 0 ? usableWidth / durationMs : 0.05;
 
-      pxPerMsRef.current = containerPxPerMs;
-      currentScalingTypeRef.current = "container";
+      setPxPerMs(containerPxPerMs);
+      setCurrentScalingType("container");
       return;
     }
 
@@ -78,9 +88,9 @@ export function useScale({
       const el = containerRef.current;
       if (!el) return;
 
-      const width = el.clientWidth;
+      const usableWidth = Math.max(0, el.clientWidth - paddingPx);
       const containerPxPerMs =
-        durationMs > 0 && width > 0 ? width / durationMs : 0;
+        durationMs > 0 && usableWidth > 0 ? usableWidth / durationMs : 0;
       const fixedPxPerMs = config.fixedPxPerSecond / 1000;
 
       const containerPxPerSecond = containerPxPerMs * 1000;
@@ -91,12 +101,15 @@ export function useScale({
       const isContainerTooLarge =
         config.maxPxPerSecond && containerPxPerSecond > config.maxPxPerSecond;
 
+      let finalValue: number;
       if (isContainerTooSmall || isContainerTooLarge) {
-        pxPerMsRef.current = fixedPxPerMs;
-        currentScalingTypeRef.current = "auto";
+        finalValue = fixedPxPerMs;
+        setPxPerMs(finalValue);
+        setCurrentScalingType("fixed");
       } else {
-        pxPerMsRef.current = containerPxPerMs;
-        currentScalingTypeRef.current = "auto";
+        finalValue = containerPxPerMs;
+        setPxPerMs(finalValue);
+        setCurrentScalingType("container");
       }
     }
   }, [durationMs]);
@@ -110,9 +123,12 @@ export function useScale({
     }
   }, [recalc, config.type]);
 
+  const rawPxPerMs = pxPerMs + paddingPx / durationMs;
+
   return {
-    pxPerMsRef,
+    pxPerMs,
+    rawPxPerMs,
     recalc,
-    currentScalingType: currentScalingTypeRef.current,
+    currentScalingType,
   };
 }

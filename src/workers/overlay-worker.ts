@@ -43,14 +43,14 @@ async function generateOverlayFrames(
     data;
 
   const {
-    primaryClip: { dimensions },
+    primaryClip: { dimensions, trimStart, trimEnd },
   } = dualVideo!;
 
   if (!targetResolution || !clientDisplaySize || !dimensions) {
     throw new Error("Missing target resolution or client display size");
   }
 
-  const duration = data.endTime - data.startTime;
+  const duration = trimEnd - trimStart;
   const totalFrames = Math.ceil(msToSeconds(duration) * exportSettings.fps);
 
   const videoDimensions = dimensions;

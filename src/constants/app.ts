@@ -196,3 +196,5 @@ export const DEFAULT_CLIP_METADATA = {
   cropMode: DEFAULT_CROP_MODE as CropMode,
   format: "mp4" as VideoFormat,
 } as const;
+
+export const MAX_HISTORY = 30;

@@ -36,6 +36,7 @@ interface AspectRatioSelectorProps {
   settings: Settings;
   onSettingsApplied: (settings: Settings) => void;
   isBufferDownloaded: boolean;
+  isExporting: boolean;
 }
 
 const AspectRatioSelector = ({
@@ -44,6 +45,7 @@ const AspectRatioSelector = ({
   settings,
   onSettingsApplied,
   isBufferDownloaded,
+  isExporting,
 }: AspectRatioSelectorProps) => {
   const [convertAspectRatio, setConvertAspectRatio] = useState(
     settings.aspectRatio
@@ -232,7 +234,7 @@ const AspectRatioSelector = ({
               className="flex-1"
               variant="default"
               size="sm"
-              disabled={!isBufferDownloaded}
+              disabled={!isBufferDownloaded || isExporting}
             >
               Apply Settings
             </Button>

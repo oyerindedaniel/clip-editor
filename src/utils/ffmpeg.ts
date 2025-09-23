@@ -177,16 +177,17 @@ export async function processClipForExport(
     const clonedExportInput = primaryClip.buffer.slice(0);
     await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedExportInput));
 
-    const startSeconds = data.startTime / 1000;
-    const duration = (data.endTime - data.startTime) / 1000;
+    const primaryDuration =
+      (primaryClip.trimEnd - primaryClip.trimStart) / 1000;
+    const primaryStartSeconds = primaryClip.trimStart / 1000;
 
     const args: string[] = [
       "-ss",
-      startSeconds.toString(),
+      primaryStartSeconds.toString(),
       "-i",
       inputFileName,
       "-t",
-      duration.toString(),
+      primaryDuration.toString(),
     ];
 
     const textOverlays = data.textOverlays ?? [];
@@ -217,7 +218,7 @@ export async function processClipForExport(
       args.push(
         "-filter_complex",
         `[0:v]scale=${renderDimensions.width}:${renderDimensions.height}[scaled];` +
-          `[scaled][1:v]overlay=0:0:enable='between(t,0,${duration})'[v]`
+          `[scaled][1:v]overlay=0:0:enable='between(t,0,${primaryDuration})'[v]`
       );
 
       args.push("-map", "[v]");

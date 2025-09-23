@@ -91,8 +91,15 @@ export interface AudioTrack {
   visible: boolean;
 }
 
-export type CropMode = "letterbox" | "crop" | "stretch";
+export interface DualVideoClip {
+  id: string;
+  url: string;
+  buffer: ArrayBuffer | null;
+  metadata: S3ClipMetadata;
+  offset: number; // Time offset in milliseconds
+}
 
+export type CropMode = "letterbox" | "crop" | "stretch" | "none";
 export type VideoFormat = "mp4" | "webm" | "mov";
 
 export type Settings = {
@@ -130,13 +137,46 @@ export interface ClipMetadata extends Omit<Settings, "padColor"> {
   };
 }
 
+export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
+export type DualVideoOrientation = "vertical";
+export type PiPPosition =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+export type AudioMixMode = "primary" | "secondary" | "mixed";
+
+export interface DualVideoSettings {
+  layout: DualVideoLayout;
+  outputOrientation: DualVideoOrientation;
+  primaryAudio: AudioMixMode;
+  normalizeAudio: boolean;
+  primaryVolume: number;
+  secondaryVolume: number;
+  // Picture-in-Picture specific settings
+  pipPosition?: PiPPosition;
+  pipSize?: number; // 0.2 to 0.4 (20% to 40% of container width)
+  // Time synchronization
+  secondaryOffset?: number; // milliseconds, positive = delay secondary, negative = advance secondary
+}
+
+export interface DualVideoClip {
+  id: string;
+  url: string;
+  buffer: ArrayBuffer | null;
+  metadata: S3ClipMetadata;
+  timelineOffset: number; // When this clip starts on the timeline (milliseconds from timeline start)
+  trimStart: number; // Where to start within this clip's source video (milliseconds)
+  trimEnd: number; // Where to end within this clip's source video (milliseconds)
+  volume: number; // clip volume (0-1)
+  visible: boolean; // Whether this clip should be included in export
+}
+
 /**
  * Information required to export a clip.
  */
 export interface ClipExportData {
   id: string;
-  startTime: number;
-  endTime: number;
   outputName: string;
   textOverlays?: TextOverlay[];
   imageOverlays?: ImageOverlay[];
@@ -238,24 +278,4 @@ export interface WorkerMessage {
 export interface WorkerResponse {
   type: WorkerType.FRAMES;
   frames: Uint8Array[];
-}
-
-export interface DualVideoClip {
-  id: string;
-  url: string;
-  buffer: ArrayBuffer | null;
-  metadata: S3ClipMetadata;
-  offset: number; // Time offset in milliseconds
-}
-
-export type DualVideoLayout = "vertical" | "horizontal";
-export type DualVideoOrientation = "vertical" | "horizontal";
-
-export interface DualVideoSettings {
-  layout: DualVideoLayout;
-  outputOrientation: DualVideoOrientation;
-  primaryAudio: "primary" | "secondary" | "mixed";
-  normalizeAudio: boolean;
-  primaryVolume: number;
-  secondaryVolume: number;
 }

@@ -49,6 +49,14 @@ interface ClipEditorProps {
   clipData: ClipData;
 }
 
+type TrimData = Pick<DualVideoClip, "timelineOffset" | "trimStart" | "trimEnd">;
+
+const defaultTrimData: TrimData = {
+  timelineOffset: 0,
+  trimStart: 0,
+  trimEnd: 0,
+};
+
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -73,7 +81,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const padColorRef = useRef<string>(DEFAULT_COLORS[0]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
-  const trimRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const primaryClipMetaDataRef = useRef<ClipMetadata | null>(
     DEFAULT_CLIP_METADATA
   );
@@ -90,7 +97,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     dualVideoOffsetMs,
     dualVideoSettings,
     setDualVideoSettings,
-    setSecondaryClip,
   } = useShallowSelector(OverlaysContext, (state) => ({
     containerRef: state.containerRef,
     secondaryContainerRef: state.secondaryContainerRef,
@@ -100,7 +106,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     dualVideoSettings: state.dualVideoSettings,
     dualVideoOffsetMs: state.dualVideoOffsetMs,
     secondaryClip: state.secondaryClip,
-    setSecondaryClip: state.setSecondaryClip,
     setDualVideoSettings: state.setDualVideoSettings,
   }));
 
@@ -109,6 +114,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const clipBufferRef = useRef<ArrayBuffer | null>(null);
   const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
+
+  const primaryTrimData = useRef<TrimData>(defaultTrimData);
+  const secondaryTrimData = useRef<TrimData>(defaultTrimData);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -255,59 +263,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       }
     },
     [clipData.metadata.clipId]
-  );
-
-  const handleAddSecondaryClip = useCallback(async (file: File) => {
-    try {
-      const buffer = await file.arrayBuffer();
-
-      const tempVideo = document.createElement("video");
-      const tempUrl = URL.createObjectURL(file);
-      tempVideo.src = tempUrl;
-
-      const metadata: DualVideoClip["metadata"] = {
-        clipId: `secondary_${Date.now()}`,
-        clipDurationMs: 0,
-        clipStartTime: 0,
-        clipEndTime: 0,
-        originalFilename: file.name,
-      };
-
-      const newSecondaryClip: DualVideoClip = {
-        id: `secondary_${Date.now()}`,
-        url: tempUrl,
-        buffer,
-        metadata,
-        offset: 0,
-      };
-
-      tempVideo.addEventListener("loadedmetadata", () => {
-        const durationMs = tempVideo.duration * 1000;
-
-        setSecondaryClip({
-          ...newSecondaryClip,
-          metadata: {
-            ...newSecondaryClip.metadata,
-            clipDurationMs: durationMs,
-            clipEndTime: durationMs,
-          },
-        });
-        toast.success("Secondary video clip added");
-      });
-    } catch (error) {
-      logger.error("Error adding secondary clip:", error);
-      toast.error("Failed to add secondary video clip");
-    }
-  }, []);
-
-  const handleSecondaryClipChange = useCallback(
-    (clip: DualVideoClip | null) => {
-      if (secondaryClip?.url && secondaryClip.url !== clip?.url) {
-        URL.revokeObjectURL(secondaryClip.url);
-      }
-      setSecondaryClip(clip);
-    },
-    [secondaryClip?.url]
   );
 
   const handleDualVideoSettingsChange = useCallback(
@@ -507,8 +462,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       const exportData: ClipExportData = {
         id: clipData.metadata.clipId,
-        startTime: trimRef.current.start || 0,
-        endTime: trimRef.current.end || duration,
         outputName,
         textOverlays: textOverlaysRef.current.filter(
           (overlay) => overlay.visible
@@ -537,13 +490,15 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             buffer: clipBufferRef.current,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
+            ...primaryTrimData.current,
             offset: 0,
+            volume: 0.8,
+            visible: true,
           },
           ...(secondaryClip && {
             secondaryClip: {
               ...secondaryClip,
-              ...primaryClipMetaDataRef.current,
-              format: getFormatFromSrc(secondaryClip.url),
+              ...secondaryTrimData.current,
             },
           }),
           settings: dualVideoSettings,
@@ -584,8 +539,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   };
 
   const handleTrim = (startTime: number, endTime: number) => {
-    trimRef.current = { start: startTime, end: endTime };
-    logger.log("Trimmed video from:", startTime, "to:", endTime);
+    primaryTrimData.current = {
+      ...primaryTrimData.current,
+      trimStart: startTime,
+      trimEnd: endTime,
+    };
+    logger.log("Trimmed primary video from:", startTime, "to:", endTime);
   };
 
   const handleTimeUpdate = useCallback(() => {
@@ -685,6 +644,18 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 initialOffsetMs={dualVideoOffsetMs}
                 primaryPreviewFrames={primaryFrames}
                 secondaryPreviewFrames={secondaryFrames}
+                onCommitOffset={(offsetMs) => {
+                  secondaryTrimData.current = {
+                    ...secondaryTrimData.current,
+                    timelineOffset: offsetMs,
+                  };
+                }}
+                onCutSecondaryAt={(trimData) => {
+                  secondaryTrimData.current = {
+                    ...secondaryTrimData.current,
+                    ...trimData,
+                  };
+                }}
               />
             ) : isVideoLoaded ? (
               <Timeline
@@ -705,6 +676,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         settings={settings}
         onSettingsApplied={handleSettingsApplied}
         isBufferDownloaded={isBufferDownloaded}
+        isExporting={isExporting}
       />
 
       <ExportNamingDialog
@@ -738,11 +710,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 onAudioTrackUpdate={updateAudioTrack}
                 onAudioTrackDelete={deleteAudioTrack}
                 onAddAudioTrack={addAudioTrack}
-                secondaryClip={secondaryClip}
-                dualVideoSettings={dualVideoSettings}
-                onSecondaryClipChange={handleSecondaryClipChange}
-                onDualVideoSettingsChange={handleDualVideoSettingsChange}
-                onAddSecondaryClip={handleAddSecondaryClip}
               />
             </EditorPanel.Body>
           </EditorPanel.Content>

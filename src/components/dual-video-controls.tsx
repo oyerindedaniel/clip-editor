@@ -5,10 +5,15 @@ import {
   Video,
   Settings,
   Trash2,
-  Eye,
-  EyeOff,
-  AlignVerticalJustifyCenter,
-  AlignHorizontalJustifyCenter,
+  Maximize2,
+  Crop,
+  PictureInPicture,
+  Volume2,
+  VolumeX,
+  Volume1,
+  Plus,
+  Minus,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,46 +24,161 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import type {
   DualVideoClip,
   DualVideoSettings,
   DualVideoLayout,
   DualVideoOrientation,
+  PiPPosition,
+  AudioMixMode,
   S3ClipData,
+  VideoFormat,
+  CropMode,
 } from "@/types/app";
 import { toast } from "sonner";
+import { useShallowSelector } from "react-shallow-store";
+import { OverlaysContext } from "@/contexts/overlays-context";
+import logger from "@/utils/logger";
 
 interface DualVideoControlsProps {
   primaryClip: S3ClipData;
-  secondaryClip: DualVideoClip | null;
-  settings: DualVideoSettings;
-  onSecondaryClipChange: (clip: DualVideoClip | null) => void;
-  onSettingsChange: (settings: DualVideoSettings) => void;
-  onAddSecondaryClip: (file: File) => void;
   disabled?: boolean;
+  isBufferDownloaded?: boolean;
 }
+
+const layoutOptions = [
+  {
+    value: "vertical-letterbox" as DualVideoLayout,
+    label: "Vertical Letterbox",
+    description: "Stacks videos with black bars",
+    icon: <Maximize2 size={16} />,
+  },
+  {
+    value: "vertical-crop" as DualVideoLayout,
+    label: "Vertical Crop",
+    description: "Stacks videos filling container",
+    icon: <Crop size={16} />,
+  },
+  {
+    value: "pip" as DualVideoLayout,
+    label: "Picture-in-Picture",
+    description: "Secondary overlays primary",
+    icon: <PictureInPicture size={16} />,
+  },
+];
+
+const pipPositionOptions = [
+  { value: "top-left" as PiPPosition, label: "Top Left" },
+  { value: "top-right" as PiPPosition, label: "Top Right" },
+  { value: "bottom-left" as PiPPosition, label: "Bottom Left" },
+  { value: "bottom-right" as PiPPosition, label: "Bottom Right" },
+];
+
+const audioModeOptions = [
+  {
+    value: "primary" as AudioMixMode,
+    label: "Primary Audio Only",
+    icon: <Volume2 size={16} />,
+  },
+  {
+    value: "secondary" as AudioMixMode,
+    label: "Secondary Audio Only",
+    icon: <Volume1 size={16} />,
+  },
+  {
+    value: "mixed" as AudioMixMode,
+    label: "Mixed Audio",
+    icon: <VolumeX size={16} />,
+  },
+];
 
 export default function DualVideoControls({
   primaryClip,
-  secondaryClip,
-  settings,
-  onSecondaryClipChange,
-  onSettingsChange,
-  onAddSecondaryClip,
   disabled = false,
+  isBufferDownloaded = false,
 }: DualVideoControlsProps) {
+  const {
+    secondaryClip,
+    dualVideoSettings: settings,
+    onSecondaryClipChange,
+    onSettingsChange,
+    setSecondaryClip,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    secondaryClip: state.secondaryClip,
+    dualVideoSettings: state.dualVideoSettings,
+    onSecondaryClipChange: state.setSecondaryClip,
+    onSettingsChange: state.setDualVideoSettings,
+    setSecondaryClip: state.setSecondaryClip,
+  }));
+
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
-      if (file && file.type.startsWith("video/")) {
-        onAddSecondaryClip(file);
+      if (!file.type.startsWith("video/")) {
+        toast.error("Please select a video file");
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+
+        const tempVideo = document.createElement("video");
+        const tempUrl = URL.createObjectURL(file);
+        tempVideo.src = tempUrl;
+
+        const metadata: DualVideoClip["metadata"] = {
+          clipId: `secondary_${Date.now()}`,
+          clipDurationMs: 0,
+          clipStartTime: 0,
+          clipEndTime: 0,
+          originalFilename: file.name,
+        };
+
+        const newSecondaryClip: DualVideoClip = {
+          id: `secondary_${Date.now()}`,
+          url: tempUrl,
+          buffer,
+          metadata,
+          offset: 0,
+          volume: 0.6,
+          visible: true,
+          trimStart: 0,
+          trimEnd: 0,
+          timelineOffset: 0,
+        };
+
+        tempVideo.addEventListener("loadedmetadata", () => {
+          const durationMs = tempVideo.duration * 1000;
+          setSecondaryClip({
+            ...newSecondaryClip,
+            metadata: {
+              ...newSecondaryClip.metadata,
+              clipDurationMs: durationMs,
+              clipEndTime: durationMs,
+            },
+            dimensions: {
+              width: tempVideo.videoWidth,
+              height: tempVideo.videoHeight,
+            },
+            aspectRatio: `${tempVideo.videoWidth}:${tempVideo.videoHeight}`,
+            cropMode: "none" as CropMode,
+            format: file.type.split("/")[1] as VideoFormat,
+          });
+
+          toast.success("Secondary video clip added");
+        });
+      } catch (error) {
+        logger.error("Error adding secondary clip:", error);
+        toast.error("Failed to add secondary video clip");
       }
     },
-    [onAddSecondaryClip]
+    []
   );
 
   const updateSetting = useCallback(
@@ -80,9 +200,44 @@ export default function DualVideoControls({
     [secondaryClip, onSecondaryClipChange]
   );
 
+  const handleOffsetChange = useCallback(
+    (value: number) => {
+      updateSetting("secondaryOffset", value);
+    },
+    [updateSetting]
+  );
+
+  const handleOffsetIncrement = useCallback(
+    (increment: number) => {
+      const currentOffset = settings.secondaryOffset || 0;
+      handleOffsetChange(currentOffset + increment);
+    },
+    [settings.secondaryOffset, handleOffsetChange]
+  );
+
+  const handleVolumeChange = useCallback(
+    (type: "primary" | "secondary", value: number) => {
+      const volume = value / 100; // Convert percentage to 0-1 range
+      updateSetting(
+        type === "primary" ? "primaryVolume" : "secondaryVolume",
+        volume
+      );
+    },
+    [updateSetting]
+  );
+
+  const handlePiPSizeChange = useCallback(
+    (value: number) => {
+      const size = value / 100; // Convert percentage to 0.2-0.4 range
+      const clampedSize = Math.max(0.2, Math.min(0.4, size));
+      updateSetting("pipSize", clampedSize);
+    },
+    [updateSetting]
+  );
+
   if (!secondaryClip) {
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground-default">🎥</h3>
           <Button
@@ -94,7 +249,7 @@ export default function DualVideoControls({
           </Button>
         </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <FileUpload
             accept="video/*"
             hint="Add a second video clip"
@@ -104,8 +259,8 @@ export default function DualVideoControls({
           />
 
           {isExpanded && (
-            <div className="space-y-3 pt-2 border-t border-border">
-              <div className="space-y-2">
+            <div className="space-y-4 pt-2 border-t border-border">
+              <div className="flex flex-col gap-2">
                 <label className="text-xs text-foreground-subtle">Layout</label>
                 <Select
                   value={settings.layout}
@@ -115,26 +270,181 @@ export default function DualVideoControls({
                   disabled={disabled}
                 >
                   <SelectTrigger className="h-8">
-                    <SelectValue />
+                    <SelectValue>
+                      {
+                        layoutOptions.find(
+                          (option) => option.value === settings.layout
+                        )?.label
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="vertical">
-                      <div className="flex items-center space-x-2">
-                        <AlignVerticalJustifyCenter size={14} />
-                        <span>Vertical</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="horizontal">
-                      <div className="flex items-center space-x-2">
-                        <AlignHorizontalJustifyCenter size={14} />
-                        <span>Horizontal</span>
-                      </div>
-                    </SelectItem>
+                    {layoutOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex items-center space-x-2">
+                          {option.icon}
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">
+                              {option.label}
+                            </span>
+                            <span className="text-xs text-foreground-muted">
+                              {option.description}
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              {settings.layout === "pip" && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs text-foreground-subtle">
+                      PiP Position
+                    </label>
+                    <Select
+                      value={settings.pipPosition || "bottom-right"}
+                      onValueChange={(value: PiPPosition) =>
+                        updateSetting("pipPosition", value)
+                      }
+                      disabled={disabled}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipPositionOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs text-foreground-subtle">
+                      PiP Size: {Math.round((settings.pipSize || 0.25) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="20"
+                      max="40"
+                      value={Math.round((settings.pipSize || 0.25) * 100)}
+                      onChange={(e) =>
+                        handlePiPSizeChange(parseInt(e.target.value))
+                      }
+                      className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                      disabled={disabled}
+                    />
+                    <div className="flex justify-between text-xs text-foreground-muted">
+                      <span>20%</span>
+                      <span>40%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <label className="text-xs text-foreground-subtle">
+                  Audio Mode
+                </label>
+                <Select
+                  value={settings.primaryAudio}
+                  onValueChange={(value: AudioMixMode) =>
+                    updateSetting("primaryAudio", value)
+                  }
+                  disabled={disabled}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue>
+                      {
+                        audioModeOptions.find(
+                          (option) => option.value === settings.primaryAudio
+                        )?.label
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {audioModeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex items-center space-x-2">
+                          {option.icon}
+                          <span className="text-sm font-medium">
+                            {option.label}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs text-foreground-subtle">
+                      Primary Volume:{" "}
+                      {Math.round((settings.primaryVolume || 0.8) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round((settings.primaryVolume || 0.8) * 100)}
+                      onChange={(e) =>
+                        handleVolumeChange("primary", parseInt(e.target.value))
+                      }
+                      className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                      disabled={disabled}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs text-foreground-subtle">
+                      Secondary Volume:{" "}
+                      {Math.round((settings.secondaryVolume || 0.6) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round(
+                        (settings.secondaryVolume || 0.6) * 100
+                      )}
+                      onChange={(e) =>
+                        handleVolumeChange(
+                          "secondary",
+                          parseInt(e.target.value)
+                        )
+                      }
+                      className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                      disabled={disabled}
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="normalizeAudio"
+                      checked={settings.normalizeAudio}
+                      onChange={(e) =>
+                        updateSetting("normalizeAudio", e.target.checked)
+                      }
+                      className="rounded border-gray-700/50"
+                      disabled={disabled}
+                    />
+                    <label
+                      htmlFor="normalizeAudio"
+                      className="text-xs text-foreground-subtle"
+                    >
+                      Normalize Audio
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
                 <label className="text-xs text-foreground-subtle">
                   Output Orientation
                 </label>
@@ -150,9 +460,6 @@ export default function DualVideoControls({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="vertical">Vertical (9:16)</SelectItem>
-                    <SelectItem value="horizontal">
-                      Horizontal (16:9)
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -164,7 +471,7 @@ export default function DualVideoControls({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-foreground-default">🎥</h3>
         <div className="flex items-center space-x-1">
@@ -185,21 +492,50 @@ export default function DualVideoControls({
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="flex flex-col gap-2">
+        <Badge variant="success" className="text-xs">
+          Primary
+        </Badge>
         <div className="p-3 rounded-lg bg-surface-secondary">
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center space-x-2">
               <Video size={14} className="text-foreground-subtle" />
               <span className="text-xs font-medium text-foreground-default truncate">
-                {secondaryClip.metadata.originalFilename || "Secondary Clip"}
+                {primaryClip.metadata.originalFilename || "Primary Clip"}
               </span>
+            </div>
+            <div className="flex items-center space-x-1">
+              {isBufferDownloaded && (
+                <Check size={12} className="text-green-400" />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          <Badge variant="info" className="text-xs">
+            Secondary
+          </Badge>
+          <div className="p-3 rounded-lg bg-surface-secondary">
+            <div className="flex items-center justify-between">
+              <div className="flex min-w-0 items-center space-x-2">
+                <Video size={14} className="text-foreground-subtle" />
+                <span className="text-xs font-medium text-foreground-default truncate">
+                  {secondaryClip.metadata.originalFilename || "Secondary Clip"}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Check size={12} className="text-green-400" />
+              </div>
             </div>
           </div>
         </div>
 
         {isExpanded && (
-          <div className="space-y-3 pt-2 border-t border-border">
-            <div className="space-y-2">
+          <div className="space-y-4 pt-2 border-t border-surface-tertiary">
+            <div className="flex flex-col gap-2">
               <label className="text-xs text-foreground-subtle">Layout</label>
               <Select
                 value={settings.layout}
@@ -209,26 +545,220 @@ export default function DualVideoControls({
                 disabled={disabled}
               >
                 <SelectTrigger className="h-8">
-                  <SelectValue />
+                  <SelectValue>
+                    {
+                      layoutOptions.find(
+                        (option) => option.value === settings.layout
+                      )?.label
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vertical">
-                    <div className="flex items-center space-x-2">
-                      <AlignVerticalJustifyCenter size={14} />
-                      <span>Vertical</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="horizontal">
-                    <div className="flex items-center space-x-2">
-                      <AlignHorizontalJustifyCenter size={14} />
-                      <span>Horizontal</span>
-                    </div>
-                  </SelectItem>
+                  {layoutOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center space-x-2">
+                        {option.icon}
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {option.label}
+                          </span>
+                          <span className="text-xs text-foreground-muted">
+                            {option.description}
+                          </span>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
+            {settings.layout === "pip" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-foreground-subtle">
+                    PiP Position
+                  </label>
+                  <Select
+                    value={settings.pipPosition || "bottom-right"}
+                    onValueChange={(value: PiPPosition) =>
+                      updateSetting("pipPosition", value)
+                    }
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pipPositionOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-foreground-subtle">
+                    PiP Size: {Math.round((settings.pipSize || 0.25) * 100)}%
+                  </label>
+                  <input
+                    type="range"
+                    min="20"
+                    max="40"
+                    value={Math.round((settings.pipSize || 0.25) * 100)}
+                    onChange={(e) =>
+                      handlePiPSizeChange(parseInt(e.target.value))
+                    }
+                    className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    disabled={disabled}
+                  />
+                  <div className="flex justify-between text-xs text-foreground-muted">
+                    <span>20%</span>
+                    <span>40%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <label className="text-xs text-foreground-subtle">
+                Audio Mode
+              </label>
+              <Select
+                value={settings.primaryAudio}
+                onValueChange={(value: AudioMixMode) =>
+                  updateSetting("primaryAudio", value)
+                }
+                disabled={disabled}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue>
+                    {
+                      audioModeOptions.find(
+                        (option) => option.value === settings.primaryAudio
+                      )?.label
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {audioModeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center space-x-2">
+                        {option.icon}
+                        <span className="text-sm font-medium">
+                          {option.label}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-foreground-subtle">
+                    Primary Volume:{" "}
+                    <span className="font-bold text-foreground-default">
+                      {Math.round((settings.primaryVolume || 0.8) * 100)}%
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((settings.primaryVolume || 0.8) * 100)}
+                    onChange={(e) =>
+                      handleVolumeChange("primary", parseInt(e.target.value))
+                    }
+                    className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    disabled={disabled}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-foreground-subtle">
+                    Secondary Volume:{" "}
+                    <span className="font-bold text-foreground-default">
+                      {Math.round((settings.secondaryVolume || 0.6) * 100)}%
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((settings.secondaryVolume || 0.6) * 100)}
+                    onChange={(e) =>
+                      handleVolumeChange("secondary", parseInt(e.target.value))
+                    }
+                    className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    disabled={disabled}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="normalizeAudio"
+                    checked={settings.normalizeAudio}
+                    onChange={(e) =>
+                      updateSetting("normalizeAudio", e.target.checked)
+                    }
+                    className="rounded border-gray-700/50"
+                    disabled={disabled}
+                  />
+                  <label
+                    htmlFor="normalizeAudio"
+                    className="text-xs text-foreground-subtle"
+                  >
+                    Normalize Audio
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* <div className="flex flex-col gap-2">
+              <label className="text-xs text-foreground-subtle">
+                Time Synchronization
+              </label>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOffsetIncrement(-100)}
+                  disabled={disabled}
+                  className="h-8 w-8 p-0"
+                >
+                  <Minus size={14} />
+                </Button>
+                <Input
+                  type="number"
+                  value={settings.secondaryOffset || 0}
+                  onChange={(e) =>
+                    handleOffsetChange(parseInt(e.target.value) || 0)
+                  }
+                  className="h-8 text-xs"
+                  placeholder="0"
+                  disabled={disabled}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOffsetIncrement(100)}
+                  disabled={disabled}
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus size={14} />
+                </Button>
+                <span className="text-xs text-foreground-muted">ms</span>
+              </div>
+              <p className="text-xs text-foreground-muted">
+                Negative values advance secondary clip, positive values delay it
+              </p>
+            </div> */}
+
+            <div className="flex flex-col gap-2">
               <label className="text-xs text-foreground-subtle">
                 Output Orientation
               </label>
@@ -243,8 +773,7 @@ export default function DualVideoControls({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vertical">Vertical</SelectItem>
-                  <SelectItem value="horizontal">Horizontal</SelectItem>
+                  <SelectItem value="vertical">Vertical (9:16)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

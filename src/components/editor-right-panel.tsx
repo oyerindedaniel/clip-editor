@@ -38,11 +38,6 @@ interface EditorRightPanelProps {
   onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
   onAudioTrackDelete: (id: string) => void;
   onAddAudioTrack: () => void;
-  secondaryClip: DualVideoClip | null;
-  dualVideoSettings: DualVideoSettings;
-  onSecondaryClipChange: (clip: DualVideoClip | null) => void;
-  onDualVideoSettingsChange: (settings: DualVideoSettings) => void;
-  onAddSecondaryClip: (file: File) => void;
 }
 
 const TAB_CONFIG = [
@@ -81,11 +76,6 @@ export function EditorRightPanel({
   onAudioTrackUpdate,
   onAudioTrackDelete,
   onAddAudioTrack,
-  secondaryClip,
-  dualVideoSettings,
-  onSecondaryClipChange,
-  onDualVideoSettingsChange,
-  onAddSecondaryClip,
 }: EditorRightPanelProps) {
   const [activeTab, setActiveTab] = useState<ClipToolType>("clips");
   const { addTextOverlay, addImageOverlay } = useShallowSelector(
@@ -293,15 +283,12 @@ export function EditorRightPanel({
 
       case "dual":
         return (
-          <DualVideoControls
-            primaryClip={clipData}
-            secondaryClip={secondaryClip}
-            settings={dualVideoSettings}
-            onSecondaryClipChange={onSecondaryClipChange}
-            onSettingsChange={onDualVideoSettingsChange}
-            onAddSecondaryClip={onAddSecondaryClip}
-            disabled={!isVideoLoaded}
-          />
+          <div className="pb-[81px]">
+            <DualVideoControls
+              primaryClip={clipData}
+              disabled={!isVideoLoaded}
+            />
+          </div>
         );
 
       default:

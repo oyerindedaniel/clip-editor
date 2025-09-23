@@ -41,12 +41,13 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const HANDLE_WIDTH = 12;
   const EDGE_THRESHOLD = 30;
 
-  const { pxPerMsRef, recalc } = useScale({
-    containerRef: timelineRef,
+  const { pxPerMs, rawPxPerMs, recalc, currentScalingType } = useScale({
+    containerRef: scrollContainerRef,
     durationMs: duration,
     type: "auto",
     fixedPxPerSecond: FIXED_PX_PER_SECOND,
     maxPxPerSecond: 100,
+    paddingPx: HANDLE_WIDTH,
   });
 
   const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll({
@@ -58,11 +59,10 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
 
-  const maxContentWidth = duration * pxPerMsRef.current;
-  const pxPerSecond = pxPerMsRef.current * 1000; // in px
+  const maxContentWidth = duration * pxPerMs;
+  const pxPerSecond = pxPerMs * 1000; // in px
 
   const drawRuler = useCallback(() => {
-    const pxPerMs = pxPerMsRef.current;
     if (pxPerMs <= 0) return;
 
     renderTimelineRuler({
@@ -70,10 +70,9 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       durationMs: duration,
       container: rulerRef.current,
     });
-  }, [duration]);
+  }, [duration, pxPerMs]);
 
   const renderStrip = useCallback(() => {
-    const pxPerMs = pxPerMsRef.current;
     if (pxPerMs <= 0) return;
 
     renderTimelineStrips({
@@ -82,7 +81,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       frames,
       container: stripRef.current,
     });
-  }, [duration, frames]);
+  }, [duration, frames, pxPerMs]);
 
   const renderBlock = useCallback(() => {
     if (blockRef.current) {
@@ -153,6 +152,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       setActiveHandle(handleType);
 
       startAutoScroll(scrollContainer, (scrollDelta) => {
+        console.log(scrollDelta);
         const { canScrollLeft, canScrollRight } =
           getScrollState(scrollContainer);
 
@@ -178,7 +178,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
             );
 
             leftHandle.style.left = `${clampedLeftPos}px`;
-            const newStartTime = pxToMs(clampedLeftPos, pxPerMsRef.current);
+            const newStartTime = pxToMs(clampedLeftPos, pxPerMs);
             trimValuesRef.current.start = newStartTime;
             updateTooltipContent(newStartTime, trimValuesRef.current.end);
           } else if (handleType === "right") {
@@ -190,7 +190,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
             );
 
             rightHandle.style.left = `${clampedRightPos}px`;
-            const newEndTime = pxToMs(clampedRightPos, pxPerMsRef.current);
+            const newEndTime = pxToMs(clampedRightPos, pxPerMs);
             trimValuesRef.current.end = newEndTime;
             updateTooltipContent(trimValuesRef.current.start, newEndTime);
           }
@@ -230,22 +230,21 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
             let newX = mouseX - timelineRect.left;
             newX = Math.max(0, Math.min(newX, timelineRect.width));
 
-            const newTime = pxToMs(newX, pxPerMsRef.current);
+            const newTime = pxToMs(newX, pxPerMs);
 
             if (handleType === "left") {
               const currentRightPos = parseFloat(
                 rightHandle.style.left || `${maxContentWidth}`
               );
               const maxLeftTime =
-                pxToMs(currentRightPos, pxPerMsRef.current) -
-                pxToMs(pxPerSecond, pxPerMsRef.current);
+                pxToMs(currentRightPos, pxPerMs) - pxToMs(pxPerSecond, pxPerMs);
               const newTrimStart = Math.max(
                 0,
                 Math.min(newTime, Math.max(0, maxLeftTime))
               );
 
               trimValuesRef.current.start = newTrimStart;
-              const newLeftPos = newTrimStart * pxPerMsRef.current;
+              const newLeftPos = newTrimStart * pxPerMs;
 
               leftHandle.style.left = `${newLeftPos}px`;
 
@@ -253,15 +252,14 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
             } else if (handleType === "right") {
               const currentLeftPos = parseFloat(leftHandle.style.left || "0");
               const minRightTime =
-                pxToMs(currentLeftPos, pxPerMsRef.current) +
-                pxToMs(pxPerSecond, pxPerMsRef.current);
+                pxToMs(currentLeftPos, pxPerMs) + pxToMs(pxPerSecond, pxPerMs);
               const newTrimEnd = Math.min(
                 duration,
                 Math.max(newTime, minRightTime)
               );
 
               trimValuesRef.current.end = newTrimEnd;
-              const newRightPos = msToPx(newTrimEnd, pxPerMsRef.current);
+              const newRightPos = msToPx(newTrimEnd, pxPerMs);
 
               rightHandle.style.left = `${newRightPos}px`;
 
@@ -300,9 +298,11 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       startAutoScroll,
       stopAutoScroll,
       updateTooltipContent,
-      pxPerMsRef,
+      pxPerMs,
     ]
   );
+
+  const timelineWidth = `${duration * rawPxPerMs}px`;
 
   return (
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
@@ -317,13 +317,18 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
 
       <div
         ref={scrollContainerRef}
-        className="relative w-full rounded-md bg-surface-secondary overflow-x-auto overflow-y-hidden"
+        className="relative w-(--width) rounded-md overflow-x-auto bg-surface-secondary overflow-y-hidden"
+        style={
+          {
+            "--width": currentScalingType !== "auto" ? timelineWidth : "100%",
+          } as React.CSSProperties
+        }
       >
         <div
           ref={timelineRef}
-          className="relative min-w-full"
+          className="relative"
           style={{
-            width: `${(duration / 1000) * pxPerSecond}px`,
+            width: timelineWidth,
           }}
         >
           <div ref={spacerRef} />
