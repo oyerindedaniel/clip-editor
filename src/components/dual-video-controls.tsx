@@ -11,8 +11,6 @@ import {
   Volume2,
   VolumeX,
   Volume1,
-  Plus,
-  Minus,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type {
   DualVideoClip,
@@ -39,8 +36,8 @@ import type {
 } from "@/types/app";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
-import { OverlaysContext } from "@/contexts/overlays-context";
 import logger from "@/utils/logger";
+import { ClipContext } from "@/contexts/clip-context";
 
 interface DualVideoControlsProps {
   primaryClip: S3ClipData;
@@ -105,7 +102,7 @@ export default function DualVideoControls({
     onSecondaryClipChange,
     onSettingsChange,
     setSecondaryClip,
-  } = useShallowSelector(OverlaysContext, (state) => ({
+  } = useShallowSelector(ClipContext, (state) => ({
     secondaryClip: state.secondaryClip,
     dualVideoSettings: state.dualVideoSettings,
     onSecondaryClipChange: state.setSecondaryClip,
@@ -145,7 +142,6 @@ export default function DualVideoControls({
           url: tempUrl,
           buffer,
           metadata,
-          offset: 0,
           volume: 0.6,
           visible: true,
           trimStart: 0,
@@ -166,9 +162,11 @@ export default function DualVideoControls({
               width: tempVideo.videoWidth,
               height: tempVideo.videoHeight,
             },
-            aspectRatio: `${tempVideo.videoWidth}:${tempVideo.videoHeight}`,
+            aspectRatio: "original",
+            // aspectRatio: `${tempVideo.videoWidth}:${tempVideo.videoHeight}`,
             cropMode: "none" as CropMode,
             format: file.type.split("/")[1] as VideoFormat,
+            padColor: "#000000",
           });
 
           toast.success("Secondary video clip added");
@@ -384,14 +382,14 @@ export default function DualVideoControls({
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-2">
                     <label className="text-xs text-foreground-subtle">
-                      Primary Volume:{" "}
-                      {Math.round((settings.primaryVolume || 0.8) * 100)}%
+                      Primary Volume: {Math.round(settings.primaryVolume * 100)}
+                      %
                     </label>
                     <input
                       type="range"
                       min="0"
                       max="100"
-                      value={Math.round((settings.primaryVolume || 0.8) * 100)}
+                      value={Math.round(settings.primaryVolume * 100)}
                       onChange={(e) =>
                         handleVolumeChange("primary", parseInt(e.target.value))
                       }
@@ -661,14 +659,14 @@ export default function DualVideoControls({
                   <label className="text-xs text-foreground-subtle">
                     Primary Volume:{" "}
                     <span className="font-bold text-foreground-default">
-                      {Math.round((settings.primaryVolume || 0.8) * 100)}%
+                      {Math.round(settings.primaryVolume * 100)}%
                     </span>
                   </label>
                   <input
                     type="range"
                     min="0"
                     max="100"
-                    value={Math.round((settings.primaryVolume || 0.8) * 100)}
+                    value={Math.round(settings.primaryVolume * 100)}
                     onChange={(e) =>
                       handleVolumeChange("primary", parseInt(e.target.value))
                     }

@@ -39,6 +39,36 @@ interface AspectRatioSelectorProps {
   isExporting: boolean;
 }
 
+const aspectRatios = [
+  { value: "original", label: "Keep Original", description: "No conversion" },
+  { value: "16:9", label: "16:9", description: "Widescreen (YouTube, TV)" },
+  { value: "9:16", label: "9:16", description: "Portrait (TikTok, Stories)" },
+  { value: "1:1", label: "1:1", description: "Square (Instagram)" },
+  { value: "4:3", label: "4:3", description: "Standard (Old TV)" },
+  { value: "21:9", label: "21:9", description: "Ultra-wide (Cinema)" },
+  { value: "3:4", label: "3:4", description: "Portrait Standard" },
+] as const;
+
+const cropModes = [
+  {
+    value: "letterbox",
+    label: "Letterbox",
+    icon: <Maximize2 size={16} />,
+  },
+  {
+    value: "crop",
+    label: "Crop",
+    icon: <Crop size={16} />,
+  },
+  {
+    value: "stretch",
+    label: "Stretch",
+    icon: <Video size={16} />,
+  },
+];
+
+export type AspectRatioValue = (typeof aspectRatios)[number]["value"];
+
 const AspectRatioSelector = ({
   isOpen,
   onOpenChange,
@@ -47,42 +77,13 @@ const AspectRatioSelector = ({
   isBufferDownloaded,
   isExporting,
 }: AspectRatioSelectorProps) => {
-  const [convertAspectRatio, setConvertAspectRatio] = useState(
-    settings.aspectRatio
-  );
+  const [convertAspectRatio, setConvertAspectRatio] =
+    useState<AspectRatioValue>(settings.aspectRatio);
   const [cropMode, setCropMode] = useState(settings.cropMode);
   const [padColor, setPadColor] = useState<string>(settings.padColor);
   const [format, setFormat] = useState<VideoFormat>(settings.format);
 
   const settingsRef = useLatestValue(settings);
-
-  const aspectRatios = [
-    { value: "original", label: "Keep Original", description: "No conversion" },
-    { value: "16:9", label: "16:9", description: "Widescreen (YouTube, TV)" },
-    { value: "9:16", label: "9:16", description: "Portrait (TikTok, Stories)" },
-    { value: "1:1", label: "1:1", description: "Square (Instagram)" },
-    { value: "4:3", label: "4:3", description: "Standard (Old TV)" },
-    { value: "21:9", label: "21:9", description: "Ultra-wide (Cinema)" },
-    { value: "3:4", label: "3:4", description: "Portrait Standard" },
-  ];
-
-  const cropModes = [
-    {
-      value: "letterbox",
-      label: "Letterbox",
-      icon: <Maximize2 size={16} />,
-    },
-    {
-      value: "crop",
-      label: "Crop",
-      icon: <Crop size={16} />,
-    },
-    {
-      value: "stretch",
-      label: "Stretch",
-      icon: <Video size={16} />,
-    },
-  ];
 
   useEffect(() => {
     return () => {
@@ -113,7 +114,9 @@ const AspectRatioSelector = ({
             </label>
             <Select
               value={convertAspectRatio}
-              onValueChange={setConvertAspectRatio}
+              onValueChange={(val) =>
+                setConvertAspectRatio(val as AspectRatioValue)
+              }
             >
               <SelectTrigger
                 id="aspectRatio"

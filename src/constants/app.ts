@@ -1,4 +1,9 @@
-import type { CropMode, ExportSettings, VideoFormat } from "@/types/app";
+import type {
+  CropMode,
+  ExportSettings,
+  TrimData,
+  VideoFormat,
+} from "@/types/app";
 
 export const DEFAULT_ASPECT_RATIO = "original";
 export const DEFAULT_CROP_MODE = "letterbox";
@@ -195,6 +200,13 @@ export const DEFAULT_CLIP_METADATA = {
   aspectRatio: DEFAULT_ASPECT_RATIO,
   cropMode: DEFAULT_CROP_MODE as CropMode,
   format: "mp4" as VideoFormat,
+  padColor: DEFAULT_COLORS[0],
 } as const;
 
 export const MAX_HISTORY = 30;
+
+export const DEFAULT_TRIM_DATA: TrimData = {
+  timelineOffset: 0,
+  trimStart: 0,
+  trimEnd: 0,
+};

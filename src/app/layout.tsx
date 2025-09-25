@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { OverlaysProvider } from "@/contexts/overlays-context";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { ClipProvider } from "@/contexts/clip-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,7 +52,9 @@ export default function RootLayout({
           "antialiased"
         )}
       >
-        <OverlaysProvider>{children}</OverlaysProvider>
+        <ClipProvider>
+          <OverlaysProvider>{children}</OverlaysProvider>
+        </ClipProvider>
         <Toaster position="bottom-right" richColors closeButton />
       </body>
     </html>

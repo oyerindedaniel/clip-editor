@@ -11,6 +11,7 @@ import type {
   DualVideoClip,
   DualVideoSettings,
   Settings as SettingsType,
+  TrimData,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
@@ -25,10 +26,11 @@ import {
   getVideoBoundingBox,
   getTargetVideoDimensions,
   getFormatFromSrc,
+  getBufferKey,
 } from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_CLIP_METADATA, DEFAULT_COLORS } from "@/constants/app";
+import { DEFAULT_CLIP_METADATA, DEFAULT_TRIM_DATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "./export-naming-dialog";
@@ -44,18 +46,11 @@ import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "./ui/button";
 import { Settings } from "lucide-react";
+import { ClipContext } from "@/contexts/clip-context";
 
 interface ClipEditorProps {
   clipData: ClipData;
 }
-
-type TrimData = Pick<DualVideoClip, "timelineOffset" | "trimStart" | "trimEnd">;
-
-const defaultTrimData: TrimData = {
-  timelineOffset: 0,
-  trimStart: 0,
-  trimEnd: 0,
-};
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
@@ -78,45 +73,54 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     open: openExportNamingModal,
   } = useDisclosure();
 
-  const padColorRef = useRef<string>(DEFAULT_COLORS[0]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
   const primaryClipMetaDataRef = useRef<ClipMetadata | null>(
     DEFAULT_CLIP_METADATA
   );
   const traceRef = useRef<HTMLDivElement>(null);
-  const [isBufferDownloaded, setIsBufferDownloaded] = useState(false);
 
-  const {
-    textOverlaysRef,
-    imageOverlaysRef,
-    containerRef,
-    secondaryContainerRef,
-    setVideoRef,
-    secondaryClip,
-    dualVideoOffsetMs,
-    dualVideoSettings,
-    setDualVideoSettings,
-  } = useShallowSelector(OverlaysContext, (state) => ({
-    containerRef: state.containerRef,
-    secondaryContainerRef: state.secondaryContainerRef,
-    textOverlaysRef: state.textOverlaysRef,
-    imageOverlaysRef: state.imageOverlaysRef,
-    setVideoRef: state.setVideoRef,
-    dualVideoSettings: state.dualVideoSettings,
-    dualVideoOffsetMs: state.dualVideoOffsetMs,
-    secondaryClip: state.secondaryClip,
-    setDualVideoSettings: state.setDualVideoSettings,
-  }));
+  const { textOverlaysRef, imageOverlaysRef, containerRef, setVideoRef } =
+    useShallowSelector(OverlaysContext, (state) => ({
+      containerRef: state.containerRef,
+      textOverlaysRef: state.textOverlaysRef,
+      imageOverlaysRef: state.imageOverlaysRef,
+      setVideoRef: state.setVideoRef,
+    }));
+
+  const { secondaryClip, dualVideoSettings, setDualVideoSettings } =
+    useShallowSelector(ClipContext, (state) => ({
+      dualVideoSettings: state.dualVideoSettings,
+      secondaryClip: state.secondaryClip,
+      setDualVideoSettings: state.setDualVideoSettings,
+    }));
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
 
-  const clipBufferRef = useRef<ArrayBuffer | null>(null);
+  const [processedBuffers, setProcessedBuffers] = useState<
+    Map<string, ArrayBuffer>
+  >(() => new Map());
+
   const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
 
-  const primaryTrimData = useRef<TrimData>(defaultTrimData);
-  const secondaryTrimData = useRef<TrimData>(defaultTrimData);
+  const primaryTrimData = useRef<TrimData>(DEFAULT_TRIM_DATA);
+  const secondaryTrimData = useRef<TrimData>(DEFAULT_TRIM_DATA);
+
+  const hasBuffer = useCallback(
+    (key: string) => processedBuffers.has(key),
+    [processedBuffers]
+  );
+
+  const isValidBufferState = useMemo(() => {
+    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
+    const bufferKey = getBufferKey(settings);
+
+    const originalBufferExists = hasBuffer(bufferKey);
+    const hasAnyProcessedBuffer = processedBuffers.size > 0;
+
+    return originalBufferExists && hasAnyProcessedBuffer;
+  }, [hasBuffer]);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -211,58 +215,65 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const loadClipVideo = useCallback(
     async (settings: SettingsType): Promise<string | null> => {
       const video = videoRef.current;
-      const clipBuffer = clipBufferRef.current;
-      if (!video || !clipBuffer) return null;
+      if (!video) return null;
+
+      const bufferKey = getBufferKey(settings);
+      const originalBuffer = processedBuffers.get("original");
+
+      if (!originalBuffer) {
+        toast.error("Original clip not available");
+        return null;
+      }
+
+      const existingBuffer = processedBuffers.get(bufferKey);
+      if (existingBuffer && bufferKey !== "original") {
+        const blob = new Blob([existingBuffer], { type: "video/mp4" });
+        const objectUrl = URL.createObjectURL(blob);
+        video.src = objectUrl;
+        return objectUrl;
+      }
 
       const { aspectRatio, cropMode, padColor, format } = settings;
-
-      logger.log("Attempting to load clip video:", {
-        clipId: clipData.metadata.clipId,
-      });
 
       try {
         const processedBlob = await withProgressToast<Blob>(
           "Processing clip",
           () =>
             processClip(
-              clipBuffer,
-              {
-                aspectRatio,
-                cropMode,
-                padColor,
-                format,
-              },
+              originalBuffer,
+              { aspectRatio, cropMode, padColor, format },
               primaryClipMetaDataRef.current!.dimensions
             ),
-          `process-${clipData.metadata.clipId}`
+          `process-${clipData.metadata.clipId}-${bufferKey}`
         );
 
         if (!processedBlob || processedBlob.size === 0) {
-          logger.error("Failed to get valid clip blob:", { processedBlob });
           toast.error("No valid clip data found");
           return null;
         }
 
+        const processedBuffer = await processedBlob.arrayBuffer();
+        setProcessedBuffers((prev) => {
+          const updated = new Map(prev);
+          updated.set(bufferKey, processedBuffer);
+          return updated;
+        });
+
         primaryClipMetaDataRef.current = {
           ...primaryClipMetaDataRef.current!,
-          aspectRatio,
-          cropMode,
-          format,
+          ...settings,
         };
-        padColorRef.current = padColor;
 
         const objectUrl = URL.createObjectURL(processedBlob);
         video.src = objectUrl;
-        logger.log("Set video src to blob URL:", objectUrl);
         return objectUrl;
       } catch (err) {
         const errorMsg = normalizeError(err).message;
-        logger.error("Error loading clip blob:", err);
         toast.error(`Failed to load clip: ${errorMsg}`);
         return null;
       }
     },
-    [clipData.metadata.clipId]
+    [processedBuffers, clipData.metadata.clipId, withProgressToast]
   );
 
   const handleDualVideoSettingsChange = useCallback(
@@ -295,16 +306,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     let abortController: AbortController | undefined;
 
     const convertUrlToBuffer = async () => {
-      if (!clipData.url) return;
+      if (!clipData.url || hasBuffer("original")) return;
 
       abortController = new AbortController();
 
       try {
-        logger.log("Converting URL to buffer:", {
-          clipId: clipData.metadata.clipId,
-          url: clipData.url,
-        });
-
         const response = await fetch(clipData.url, {
           signal: abortController.signal,
         });
@@ -314,40 +320,37 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         }
 
         const buffer = await response.arrayBuffer();
-        clipBufferRef.current = buffer;
-        setIsBufferDownloaded(true);
-
-        logger.log("Successfully converted URL to buffer:", {
-          clipId: clipData.metadata.clipId,
-          bufferSize: buffer.byteLength,
+        setProcessedBuffers((prev) => {
+          const updated = new Map(prev);
+          updated.set("original", buffer);
+          return updated;
         });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
-          logger.log("Buffer conversion aborted");
           return;
         }
-
         const errorMsg = normalizeError(err).message;
-        logger.error("Error converting URL to buffer:", err);
         toast.error(`Failed to load clip: ${errorMsg}`);
-      } finally {
       }
     };
 
-    if (!clipBufferRef.current) {
-      convertUrlToBuffer();
-    }
+    convertUrlToBuffer();
 
     return () => {
       if (abortController) {
         abortController.abort();
       }
-
       if (primaryUrl) {
         URL.revokeObjectURL(primaryUrl);
       }
     };
-  }, [clipData.url, clipData.metadata.clipId]);
+  }, [
+    clipData.url,
+    clipData.metadata.clipId,
+    hasBuffer,
+    setProcessedBuffers,
+    primaryUrl,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -442,8 +445,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     const video = videoRef.current;
 
-    if (!video || !primaryClipMetaDataRef.current || !clipBufferRef.current)
-      return;
+    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
+
+    const bufferKey = getBufferKey(settings);
+    const buffer = processedBuffers.get(bufferKey);
+
+    if (!video || !primaryClipMetaDataRef.current || !buffer) return;
 
     setIsExporting(true);
 
@@ -487,11 +494,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           primaryClip: {
             id: clipData.metadata.clipId,
             url: primaryUrl,
-            buffer: clipBufferRef.current,
+            buffer,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
             ...primaryTrimData.current,
-            offset: 0,
             volume: 0.8,
             visible: true,
           },
@@ -556,10 +562,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const settings = useMemo(() => {
     const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
-    return {
-      ...settings,
-      padColor: padColorRef.current,
-    } as SettingsType;
+    return settings as SettingsType;
   }, [isAspectRatioModalOpen]);
 
   return (
@@ -619,21 +622,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               <PersistentOverlays duration={duration} />
             </div>
 
-            {/* 9:16 dual preview */}
-            <div
-              data-container-context="dual"
-              ref={secondaryContainerRef}
-              className="relative flex items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-            >
-              <DualVideoPlayer
-                primaryClip={{ ...clipData, url: primaryUrl! }}
-                secondaryClip={secondaryClip}
-                offsetMs={dualVideoOffsetMs}
-                currentTime={currentTime}
-              />
-
-              <PersistentOverlays duration={duration} isDualVideo />
-            </div>
+            <DualVideoPlayer
+              primaryClip={{ ...clipData, url: primaryUrl! }}
+              secondaryClip={secondaryClip}
+              currentTime={currentTime}
+              duration={duration}
+            />
           </div>
 
           <div className="flex-1 min-h-0">
@@ -641,7 +635,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               <DualVideoTracks
                 primaryDurationMs={duration}
                 secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
-                initialOffsetMs={dualVideoOffsetMs}
+                initialOffsetMs={0}
                 primaryPreviewFrames={primaryFrames}
                 secondaryPreviewFrames={secondaryFrames}
                 onCommitOffset={(offsetMs) => {
@@ -675,7 +669,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenChange={closeAspectRatioModal}
         settings={settings}
         onSettingsApplied={handleSettingsApplied}
-        isBufferDownloaded={isBufferDownloaded}
+        isBufferDownloaded={isValidBufferState}
         isExporting={isExporting}
       />
 
@@ -684,7 +678,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenChange={closeExportNamingModal}
         streamerName={clipData.metadata.streamerName}
         onExport={handleExport}
-        isBufferDownloaded={isBufferDownloaded}
+        isBufferDownloaded={isValidBufferState}
       />
 
       <EditorPanel.Root

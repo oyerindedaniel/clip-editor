@@ -21,7 +21,6 @@ import { FileUpload } from "./ui/file-upload";
 import type {
   ClipToolType,
   DualVideoClip,
-  DualVideoSettings,
   S3ClipData,
   AudioTrack,
 } from "@/types/app";

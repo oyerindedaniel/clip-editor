@@ -38,7 +38,6 @@ const fontSizes = Array.from(
   { length: Math.floor((72 - 8) / 4) + 1 },
   (_, i) => 8 + i * 4
 );
-const opacities = Array.from({ length: 10 }, (_, i) => (i + 1) * 0.1);
 
 const TextOverlayItem = ({
   overlay,
@@ -118,6 +117,24 @@ const TextOverlayItem = ({
               onChange={(font) =>
                 updateTextOverlay(overlay.id, { fontFamily: font })
               }
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs text-foreground-subtle">
+              Opacity: {Math.round(overlay.opacity * 100)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={Math.round(overlay.opacity * 100)}
+              onChange={(e) =>
+                updateTextOverlay(overlay.id, {
+                  opacity: Number(e.target.value) / 100,
+                })
+              }
+              className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
             />
           </div>
 

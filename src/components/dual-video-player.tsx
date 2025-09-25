@@ -1,79 +1,119 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
+import { Expand, SquareStack } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { S3ClipData, DualVideoClip } from "@/types/app";
-import * as MediaPlayer from "@/components/ui/media-player";
 import { Badge } from "@/components/ui/badge";
 import logger from "@/utils/logger";
-import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { Button } from "./ui/button";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
+import { ClipContext } from "@/contexts/clip-context";
+import { PersistentOverlays } from "./persistent-overlays";
 
 interface DualVideoPlayerProps {
   primaryClip: S3ClipData;
+  duration: number;
   secondaryClip: DualVideoClip | null;
-  offsetMs: number;
-  primaryVideoRef?: React.RefObject<HTMLVideoElement> | null;
   currentTime?: number;
 }
 
 export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   primaryClip,
   secondaryClip,
-  offsetMs,
-  primaryVideoRef,
+  duration,
   currentTime = 0,
 }) => {
-  const internalPrimaryRef = useRef<HTMLVideoElement>(null);
-  const secondaryVideoRef = useRef<HTMLVideoElement>(null);
-  const primaryRef = useComposedRefs(internalPrimaryRef, primaryVideoRef);
+  const [displayMode, setDisplayMode] = useState<"split" | "stretch">("split");
 
-  const { setDualVideoRef, getTimeBasedOverlays } = useShallowSelector(
+  const [isSeekingPrimary, setIsSeekingPrimary] = useState(false);
+  const lastSyncTimeRef = useRef<number>(0);
+
+  const primaryVideoRef = useRef<HTMLVideoElement>(null);
+  const secondaryVideoRef = useRef<HTMLVideoElement>(null);
+
+  const { setDualVideoRef, secondaryContainerRef } = useShallowSelector(
     OverlaysContext,
     (state) => ({
       setDualVideoRef: state.setDualVideoRef,
-      getTimeBasedOverlays: state.getTimeBasedOverlays,
+      secondaryContainerRef: state.secondaryContainerRef,
     })
   );
 
+  const { videoOffsetMs } = useShallowSelector(ClipContext, (state) => ({
+    videoOffsetMs: state.videoOffsetMs,
+  }));
+
   useEffect(() => {
-    setDualVideoRef(internalPrimaryRef);
-  }, [setDualVideoRef, primaryRef]);
+    setDualVideoRef(primaryVideoRef);
+  }, []);
 
-  // const { textOverlays, imageOverlays } = getTimeBasedOverlays(currentTime);
+  const toggleDisplayMode = () => {
+    setDisplayMode((prev) => (prev === "split" ? "stretch" : "split"));
+  };
 
-  // Sync secondary video with primary video based on offset
   const syncVideos = useCallback(() => {
-    const primaryVideo = internalPrimaryRef.current;
+    const primaryVideo = primaryVideoRef.current;
+    const secondaryVideo = secondaryVideoRef.current;
+
+    if (!primaryVideo || !secondaryVideo || isSeekingPrimary) return;
+
+    const primaryTime = primaryVideo.currentTime;
+    const secondaryTargetTime = Math.max(0, primaryTime - videoOffsetMs / 1000);
+    const currentSecondaryTime = secondaryVideo.currentTime;
+    const timeDiff = Math.abs(currentSecondaryTime - secondaryTargetTime);
+
+    const now = Date.now();
+    const timeSinceLastSync = now - lastSyncTimeRef.current;
+
+    if (timeDiff > 0.2 && timeSinceLastSync > 100) {
+      logger.log("Syncing secondary video:", {
+        primaryTime,
+        secondaryTargetTime,
+        currentSecondaryTime,
+        timeDiff,
+        videoOffsetMs,
+      });
+
+      secondaryVideo.currentTime = secondaryTargetTime;
+      lastSyncTimeRef.current = now;
+    }
+  }, [videoOffsetMs, isSeekingPrimary]);
+
+  const handlePrimaryTimeUpdate = useCallback(() => {
+    if (!isSeekingPrimary) {
+      syncVideos();
+    }
+  }, [syncVideos, isSeekingPrimary]);
+
+  const handlePrimarySeeking = useCallback(() => {
+    setIsSeekingPrimary(true);
+  }, []);
+
+  const handlePrimarySeeked = useCallback(() => {
+    setIsSeekingPrimary(false);
+    setTimeout(() => {
+      syncVideos();
+    }, 50);
+  }, [syncVideos]);
+
+  const handlePrimaryPlay = useCallback(() => {
+    const primaryVideo = primaryVideoRef.current;
     const secondaryVideo = secondaryVideoRef.current;
 
     if (!primaryVideo || !secondaryVideo) return;
 
     const primaryTime = primaryVideo.currentTime;
-    const secondaryTime = primaryTime - offsetMs / 1000;
+    const secondaryTargetTime = Math.max(0, primaryTime - videoOffsetMs / 1000);
 
-    // Only update secondary if the time difference is significant (> 0.1s)
-    if (Math.abs(secondaryVideo.currentTime - secondaryTime) > 0.1) {
-      secondaryVideo.currentTime = Math.max(0, secondaryTime);
+    if (secondaryTargetTime >= 0) {
+      secondaryVideo.currentTime = secondaryTargetTime;
+      secondaryVideo.play().catch((error) => {
+        logger.warn("Failed to play secondary video:", error);
+      });
     }
-  }, [offsetMs]);
-
-  const handlePrimaryTimeUpdate = useCallback(() => {
-    syncVideos();
-  }, [syncVideos]);
-
-  // Handle primary video seeking
-  const handlePrimarySeeked = useCallback(() => {
-    syncVideos();
-  }, [syncVideos]);
-
-  const handlePrimaryPlay = useCallback(() => {
-    const secondaryVideo = secondaryVideoRef.current;
-    if (secondaryVideo) {
-      secondaryVideo.play().catch(logger.warn);
-    }
-  }, []);
+  }, [videoOffsetMs]);
 
   const handlePrimaryPause = useCallback(() => {
     const secondaryVideo = secondaryVideoRef.current;
@@ -83,82 +123,130 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   }, []);
 
   useEffect(() => {
-    const primaryVideo = internalPrimaryRef.current;
+    const primaryVideo = primaryVideoRef.current;
     if (!primaryVideo) return;
 
     primaryVideo.addEventListener("play", handlePrimaryPlay);
     primaryVideo.addEventListener("pause", handlePrimaryPause);
     primaryVideo.addEventListener("timeupdate", handlePrimaryTimeUpdate);
+    primaryVideo.addEventListener("seeking", handlePrimarySeeking);
     primaryVideo.addEventListener("seeked", handlePrimarySeeked);
 
     return () => {
       primaryVideo.removeEventListener("play", handlePrimaryPlay);
       primaryVideo.removeEventListener("pause", handlePrimaryPause);
       primaryVideo.removeEventListener("timeupdate", handlePrimaryTimeUpdate);
+      primaryVideo.removeEventListener("seeking", handlePrimarySeeking);
       primaryVideo.removeEventListener("seeked", handlePrimarySeeked);
     };
   }, [
     handlePrimaryPlay,
     handlePrimaryPause,
     handlePrimaryTimeUpdate,
+    handlePrimarySeeking,
     handlePrimarySeeked,
   ]);
 
+  useEffect(() => {
+    if (primaryVideoRef.current && secondaryVideoRef.current) {
+      syncVideos();
+    }
+  }, [videoOffsetMs, syncVideos]);
+
+  console.log("--offset--", videoOffsetMs);
+
   return (
-    <div
-      className={cn(
-        "relative bg-black rounded-lg overflow-hidden aspect-[9/16] flex flex-col justify-center w-full"
-      )}
-    >
-      <div className="relative">
-        <MediaPlayer.Root className="rounded-none">
-          <MediaPlayer.Video
-            ref={primaryRef}
+    <div className="flex flex-col gap-4 items-center">
+      {/* 9:16 dual preview */}
+      <div
+        data-container-context="dual"
+        ref={secondaryContainerRef}
+        className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surhface-secondary shadow-md"
+      >
+        {/* Primary */}
+        <div
+          className={cn(
+            "relative overflow-hidden h-1/2 w-full flex",
+            displayMode === "split" && !secondaryClip && "items-center",
+            displayMode === "split" && secondaryClip && "items-end"
+            // displayMode === "stretch" && "scale-150"
+          )}
+        >
+          <video
+            ref={primaryVideoRef}
             src={primaryClip.url}
-            className="w-full h-full object-cover"
+            poster={"/thumbnails/video-thumb-2.webp"}
             muted={false}
             playsInline
             preload="metadata"
+            className={cn(
+              "rounded-none",
+              displayMode === "split" &&
+                !secondaryClip &&
+                "object-contain w-full h-full",
+              displayMode === "split" && secondaryClip && "object-contain",
+              displayMode === "stretch" && "object-cover w-full h-full"
+            )}
           />
-          <MediaPlayer.Loading />
-          <MediaPlayer.Error />
-          <MediaPlayer.VolumeIndicator />
-        </MediaPlayer.Root>
-        <Badge
-          variant="secondary"
-          className="absolute top-2 left-2 text-[10px] uppercase font-mono"
-        >
-          Primary
-        </Badge>
-      </div>
-
-      {secondaryClip && (
-        <div className="relative">
-          <MediaPlayer.Root className="rounded-none">
-            <MediaPlayer.Video
-              ref={secondaryVideoRef}
-              src={secondaryClip.url}
-              className="w-full h-full object-cover rounded-none"
-              muted={true}
-              playsInline
-              preload="metadata"
-            />
-            <MediaPlayer.Loading />
-            <MediaPlayer.Error />
-            <MediaPlayer.VolumeIndicator />
-          </MediaPlayer.Root>
-          <Badge
+          {/* <Badge
             variant="secondary"
             className="absolute top-2 left-2 text-[10px] uppercase font-mono"
           >
-            Secondary
-          </Badge>
+            Primary
+          </Badge> */}
         </div>
-      )}
 
-      {secondaryClip && (
-        <div className="absolute top-1/2 left-0 right-0 h-px bg-red-600" />
-      )}
+        {/* Secondary */}
+        {secondaryClip && (
+          <div
+            className={cn(
+              "relative overflow-hidden h-1/2 w-full flex",
+              displayMode === "split" && "items-start"
+              // displayMode === "stretch" && "scale-150"
+            )}
+          >
+            <video
+              ref={secondaryVideoRef}
+              src={secondaryClip.url}
+              poster={"/thumbnails/video-thumb-2.webp"}
+              muted
+              playsInline
+              preload="metadata"
+              className={cn(
+                "rounded-none",
+                displayMode === "split" && "object-contain",
+                displayMode === "stretch" && "object-cover w-full h-full"
+              )}
+            />
+            <Badge
+              variant="secondary"
+              className="absolute top-2 left-2 text-[10px] uppercase font-mono"
+            >
+              Secondary
+            </Badge>
+          </div>
+        )}
+
+        {secondaryClip && (
+          <div className="absolute top-1/2 left-0 right-0 h-px bg-red-600 transform -translate-y-px" />
+        )}
+      </div>
+
+      <Button size="sm" variant="outline" onClick={toggleDisplayMode}>
+        {displayMode === "split" ? (
+          <span className="flex items-center gap-1">
+            <Expand className="w-4 h-4" />
+            Stretch
+          </span>
+        ) : (
+          <span className="flex items-center gap-1">
+            <SquareStack className="w-4 h-4" />
+            Stack
+          </span>
+        )}
+      </Button>
+
+      <PersistentOverlays duration={duration} isDualVideo />
     </div>
   );
 };
