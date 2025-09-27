@@ -39,7 +39,6 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   const animationRef = useRef<number>(0);
   const visualUpdateRef = useRef<number>(0);
   const progressRef = useRef(0);
-  const pendingVisualUpdate = useRef(false);
   const currentTimeDisplayRef = useRef<HTMLSpanElement | null>(null);
   const lockedHoverTimeRef = useRef<number | null>(null);
 
@@ -148,7 +147,6 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     return () => {
       cancelAnimationFrame(animationRef.current);
       cancelAnimationFrame(visualUpdateRef.current);
-      pendingVisualUpdate.current = false;
     };
   }, [isPlaying, isDragging, updateProgress]);
 
@@ -267,14 +265,14 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   return (
     <div className={cn("w-full space-y-2", className)}>
       <div className="flex justify-between text-xs text-foreground-muted">
-        <span ref={currentTimeDisplayRef}>0:00</span>
+        <span ref={currentTimeDisplayRef} />
         <span>{formatTime(timelineDurationMs)}</span>
       </div>
 
       <div className="relative">
         <div
           ref={seekBarRef}
-          className="relative h-[4.5px] bg-primary/30 rounded-full cursor-pointer group"
+          className="relative h-[4.5px] hover:h-[5px] transition-[height] duration-300 bg-primary/30 rounded-full cursor-pointer group"
           onMouseDown={handleMouseDown}
           onMouseMove={handleHover}
           onMouseLeave={handleHoverLeave}

@@ -98,7 +98,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const showTraceRef = useLatestValue(showTrace);
 
   const [processedBuffers, setProcessedBuffers] = useState<
-    Map<string, ArrayBuffer>
+    Map<string, { buffer: ArrayBuffer; url: string }>
   >(() => new Map());
 
   const processedBuffersRef = useLatestValue(processedBuffers);
@@ -189,6 +189,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     []
   );
 
+  const originalPrimaryUrl = useMemo(() => {
+    const originalBufferData = processedBuffers.get(getOriginalBufferKey());
+    return originalBufferData?.url ?? clipData.url;
+  }, [processedBuffers, clipData.url]);
+
   const adjustOverlayBounds = useCallback(() => {
     const video = videoRef.current;
     const container = containerRef.current;
@@ -218,21 +223,23 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       if (!video) return null;
 
       const bufferKey = getBufferKey(settings);
-      const originalBuffer = processedBuffers.get(getOriginalBufferKey());
+      const originalBufferData = processedBuffers.get(getOriginalBufferKey());
 
-      if (!originalBuffer) {
+      if (!originalBufferData) {
         toast.error("Original clip not available");
         return null;
       }
 
-      const existingBuffer = processedBuffers.get(bufferKey);
-      if (existingBuffer && originalBuffer) {
+      const existingBufferData = processedBuffers.get(bufferKey);
+      if (existingBufferData) {
         primaryClipMetaDataRef.current = {
           ...primaryClipMetaDataRef.current,
           ...settings,
         };
 
-        const blob = new Blob([existingBuffer], { type: "video/mp4" });
+        const blob = new Blob([existingBufferData.buffer], {
+          type: "video/mp4",
+        });
         const objectUrl = URL.createObjectURL(blob);
         video.src = objectUrl;
         return objectUrl;
@@ -245,7 +252,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           "Processing clip",
           () =>
             processClip(
-              originalBuffer,
+              originalBufferData.buffer,
               { aspectRatio, cropMode, padColor, format },
               primaryClipMetaDataRef.current.dimensions
             ),
@@ -261,7 +268,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
         setProcessedBuffers((prev) => {
           const updated = new Map(prev);
-          updated.set(bufferKey, processedBuffer);
+          updated.set(bufferKey, { buffer: processedBuffer, url: objectUrl });
           return updated;
         });
 
@@ -280,13 +287,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       }
     },
     [processedBuffers, clipData.metadata.clipId, withProgressToast]
-  );
-
-  const handleDualVideoSettingsChange = useCallback(
-    (settings: DualVideoSettings) => {
-      setDualVideoSettings(settings);
-    },
-    []
   );
 
   const primaryFrames = useVideoThumbnails(primaryUrl, 24, isVideoLoaded);
@@ -330,7 +330,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
         setProcessedBuffers((prev) => {
           const updated = new Map(prev);
-          updated.set(bufferKey, buffer);
+          updated.set(bufferKey, { buffer, url: clipData.url });
           return updated;
         });
       } catch (err) {
@@ -348,11 +348,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       if (abortController) {
         abortController.abort();
       }
-      if (primaryUrl) {
-        URL.revokeObjectURL(primaryUrl);
-      }
     };
-  }, [clipData.url, clipData.metadata.clipId, setProcessedBuffers, primaryUrl]);
+  }, [clipData.url, clipData.metadata.clipId]);
 
   useEffect(() => {
     return () => {
@@ -361,6 +358,16 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       }
     };
   }, [secondaryClip?.url]);
+
+  useEffect(() => {
+    return () => {
+      processedBuffersRef.current.forEach(({ url }) => {
+        if (typeof url === "string" && url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -448,9 +455,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     const video = videoRef.current;
 
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
-    const buffer = processedBuffers.get(bufferKey);
+    const bufferData = processedBuffers.get(bufferKey);
 
-    if (!video || !primaryClipMetaDataRef.current || !buffer) return;
+    if (!video || !primaryClipMetaDataRef.current || !bufferData) return;
 
     setIsExporting(true);
 
@@ -493,8 +500,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         dualVideo: {
           primaryClip: {
             id: clipData.metadata.clipId,
-            url: primaryUrl,
-            buffer,
+            url: secondaryClip ? originalPrimaryUrl : primaryUrl,
+            buffer: bufferData.buffer,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
             ...primaryTrimRef.current,
@@ -622,7 +629,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             </div>
 
             <DualVideoPlayer
-              primaryClip={{ ...clipData, url: primaryUrl! }}
+              primaryClip={{ ...clipData, url: originalPrimaryUrl }}
               secondaryClip={secondaryClip}
               duration={duration}
             />
