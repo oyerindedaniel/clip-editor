@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { throttle } from "@/utils/app";
 import type { TrimData } from "@/types/app";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 interface VideoSeekBarProps {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -41,6 +42,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   const progressRef = useRef(0);
   const currentTimeDisplayRef = useRef<HTMLSpanElement | null>(null);
   const lockedHoverTimeRef = useRef<number | null>(null);
+
+  const stableOnSeek = useStableHandler(onSeek);
 
   const calculateTimelineDuration = useCallback(() => {
     const primaryDuration = primaryTrim.trimEnd - primaryTrim.trimStart;
@@ -166,8 +169,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   );
 
   const throttledSeek = useMemo(
-    () => throttle((timeMs: number) => onSeek(timeMs), 100),
-    [onSeek]
+    () => throttle((timeMs: number) => stableOnSeek(timeMs), 100),
+    []
   );
 
   const handleMouseDown = useCallback(
@@ -176,12 +179,12 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       setIsDragging(true);
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
-      onSeek(normalizedTimeMs);
+      stableOnSeek(normalizedTimeMs);
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
     },
-    [getTimeFromPosition, onSeek, timelineDurationMs, scheduleVisualUpdate]
+    [getTimeFromPosition, timelineDurationMs, scheduleVisualUpdate]
   );
 
   const handleMouseMove = useCallback(
