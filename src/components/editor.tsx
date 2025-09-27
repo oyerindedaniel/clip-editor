@@ -192,7 +192,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const originalPrimaryUrl = useMemo(() => {
     const originalBufferData = processedBuffers.get(getOriginalBufferKey());
     return originalBufferData?.url ?? clipData.url;
-  }, [processedBuffers]);
+  }, [processedBuffers, clipData.url]);
 
   const adjustOverlayBounds = useCallback(() => {
     const video = videoRef.current;
