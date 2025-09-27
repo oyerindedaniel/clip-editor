@@ -1,3 +1,4 @@
+import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import type {
   Dimensions,
   ExportSettings,
@@ -156,6 +157,10 @@ const getBufferKey = (settings: Settings) => {
   }-${settings.padColor || "white"}-${settings.format || "mp4"}`;
 };
 
+const getOriginalBufferKey = () => {
+  return getBufferKey(DEFAULT_CLIP_METADATA);
+};
+
 export {
   getVideoBoundingBox,
   getOverlayNormalizedCoords,
@@ -165,4 +170,5 @@ export {
   getVisibleOverlays,
   msToSeconds,
   getBufferKey,
+  getOriginalBufferKey,
 };

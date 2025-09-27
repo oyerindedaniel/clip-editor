@@ -27,10 +27,11 @@ import {
   getTargetVideoDimensions,
   getFormatFromSrc,
   getBufferKey,
+  getOriginalBufferKey,
 } from "@/utils/video";
 import AspectRatioSelector from "./aspect-ratio-selector";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_CLIP_METADATA, DEFAULT_TRIM_DATA } from "@/constants/app";
+import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import { TimelineSkeleton } from "@/components/timeline-skeleton";
 import { ExportNamingDialog } from "./export-naming-dialog";
@@ -75,9 +76,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
-  const primaryClipMetaDataRef = useRef<ClipMetadata | null>(
-    DEFAULT_CLIP_METADATA
-  );
+  const primaryClipMetaDataRef = useRef<ClipMetadata>(DEFAULT_CLIP_METADATA);
   const traceRef = useRef<HTMLDivElement>(null);
 
   const { textOverlaysRef, imageOverlaysRef, containerRef, setVideoRef } =
@@ -102,25 +101,26 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     Map<string, ArrayBuffer>
   >(() => new Map());
 
+  const processedBuffersRef = useLatestValue(processedBuffers);
+
   const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
 
-  const primaryTrimData = useRef<TrimData>(DEFAULT_TRIM_DATA);
-  const secondaryTrimData = useRef<TrimData>(DEFAULT_TRIM_DATA);
-
-  const hasBuffer = useCallback(
-    (key: string) => processedBuffers.has(key),
-    [processedBuffers]
-  );
+  const { primaryTrimRef, secondaryTrimRef, setPrimaryTrim, setSecondaryTrim } =
+    useShallowSelector(ClipContext, (state) => ({
+      primaryTrimRef: state.primaryTrimRef,
+      secondaryTrimRef: state.secondaryTrimRef,
+      setPrimaryTrim: state.setPrimaryTrim,
+      setSecondaryTrim: state.setSecondaryTrim,
+    }));
 
   const isValidBufferState = useMemo(() => {
-    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
-    const bufferKey = getBufferKey(settings);
+    const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
 
-    const originalBufferExists = hasBuffer(bufferKey);
+    const originalBufferExists = processedBuffers.has(bufferKey);
     const hasAnyProcessedBuffer = processedBuffers.size > 0;
 
     return originalBufferExists && hasAnyProcessedBuffer;
-  }, [hasBuffer]);
+  }, [processedBuffers]);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -218,7 +218,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       if (!video) return null;
 
       const bufferKey = getBufferKey(settings);
-      const originalBuffer = processedBuffers.get("original");
+      const originalBuffer = processedBuffers.get(getOriginalBufferKey());
 
       if (!originalBuffer) {
         toast.error("Original clip not available");
@@ -226,7 +226,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       }
 
       const existingBuffer = processedBuffers.get(bufferKey);
-      if (existingBuffer && bufferKey !== "original") {
+      if (existingBuffer && originalBuffer) {
+        primaryClipMetaDataRef.current = {
+          ...primaryClipMetaDataRef.current,
+          ...settings,
+        };
+
         const blob = new Blob([existingBuffer], { type: "video/mp4" });
         const objectUrl = URL.createObjectURL(blob);
         video.src = objectUrl;
@@ -242,7 +247,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             processClip(
               originalBuffer,
               { aspectRatio, cropMode, padColor, format },
-              primaryClipMetaDataRef.current!.dimensions
+              primaryClipMetaDataRef.current.dimensions
             ),
           `process-${clipData.metadata.clipId}-${bufferKey}`
         );
@@ -253,6 +258,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         }
 
         const processedBuffer = await processedBlob.arrayBuffer();
+
         setProcessedBuffers((prev) => {
           const updated = new Map(prev);
           updated.set(bufferKey, processedBuffer);
@@ -260,7 +266,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         });
 
         primaryClipMetaDataRef.current = {
-          ...primaryClipMetaDataRef.current!,
+          ...primaryClipMetaDataRef.current,
           ...settings,
         };
 
@@ -306,7 +312,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     let abortController: AbortController | undefined;
 
     const convertUrlToBuffer = async () => {
-      if (!clipData.url || hasBuffer("original")) return;
+      const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
+      if (!clipData.url || processedBuffersRef.current.has(bufferKey)) return;
 
       abortController = new AbortController();
 
@@ -320,9 +327,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         }
 
         const buffer = await response.arrayBuffer();
+
         setProcessedBuffers((prev) => {
           const updated = new Map(prev);
-          updated.set("original", buffer);
+          updated.set(bufferKey, buffer);
           return updated;
         });
       } catch (err) {
@@ -344,13 +352,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         URL.revokeObjectURL(primaryUrl);
       }
     };
-  }, [
-    clipData.url,
-    clipData.metadata.clipId,
-    hasBuffer,
-    setProcessedBuffers,
-    primaryUrl,
-  ]);
+  }, [clipData.url, clipData.metadata.clipId, setProcessedBuffers, primaryUrl]);
 
   useEffect(() => {
     return () => {
@@ -370,7 +372,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       adjustOverlayBounds();
 
       primaryClipMetaDataRef.current = {
-        ...primaryClipMetaDataRef.current!,
+        ...primaryClipMetaDataRef.current,
         format: getFormatFromSrc(video.currentSrc),
         dimensions: {
           width: video.videoWidth,
@@ -445,9 +447,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     const video = videoRef.current;
 
-    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
-
-    const bufferKey = getBufferKey(settings);
+    const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
     const buffer = processedBuffers.get(bufferKey);
 
     if (!video || !primaryClipMetaDataRef.current || !buffer) return;
@@ -460,8 +460,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       const clientDisplaySize = { width: clientWidth, height: clientHeight };
 
       const videoAspectRatio =
-        primaryClipMetaDataRef.current!.dimensions.width /
-        primaryClipMetaDataRef.current!.dimensions.height;
+        primaryClipMetaDataRef.current.dimensions.width /
+        primaryClipMetaDataRef.current.dimensions.height;
       const targetResolutionDimensions = getTargetVideoDimensions(
         resolution!,
         videoAspectRatio
@@ -497,14 +497,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             buffer,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
-            ...primaryTrimData.current,
+            ...primaryTrimRef.current,
             volume: 0.8,
             visible: true,
           },
           ...(secondaryClip && {
             secondaryClip: {
               ...secondaryClip,
-              ...secondaryTrimData.current,
+              ...secondaryTrimRef.current,
             },
           }),
           settings: dualVideoSettings,
@@ -529,8 +529,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
-
-      closeAspectRatioModal();
     } catch (error) {
       logger.error("Export error:", error);
     } finally {
@@ -545,11 +543,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   };
 
   const handleTrim = (startTime: number, endTime: number) => {
-    primaryTrimData.current = {
-      ...primaryTrimData.current,
+    setPrimaryTrim((prev) => ({
+      ...prev,
       trimStart: startTime,
       trimEnd: endTime,
-    };
+    }));
+
     logger.log("Trimmed primary video from:", startTime, "to:", endTime);
   };
 
@@ -561,7 +560,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, []);
 
   const settings = useMemo(() => {
-    const { dimensions, ...settings } = primaryClipMetaDataRef.current!;
+    const { dimensions, ...settings } = primaryClipMetaDataRef.current;
     return settings as SettingsType;
   }, [isAspectRatioModalOpen]);
 
@@ -625,7 +624,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             <DualVideoPlayer
               primaryClip={{ ...clipData, url: primaryUrl! }}
               secondaryClip={secondaryClip}
-              currentTime={currentTime}
               duration={duration}
             />
           </div>
@@ -638,17 +636,23 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 initialOffsetMs={0}
                 primaryPreviewFrames={primaryFrames}
                 secondaryPreviewFrames={secondaryFrames}
+                // onOffsetChange={(liveOffsetMs) => {
+                //   setSecondaryTrim((prev) => ({
+                //     ...prev,
+                //     timelineOffset: liveOffsetMs,
+                //   }));
+                // }}
                 onCommitOffset={(offsetMs) => {
-                  secondaryTrimData.current = {
-                    ...secondaryTrimData.current,
+                  setSecondaryTrim((prev) => ({
+                    ...prev,
                     timelineOffset: offsetMs,
-                  };
+                  }));
                 }}
                 onCutSecondaryAt={(trimData) => {
-                  secondaryTrimData.current = {
-                    ...secondaryTrimData.current,
+                  setSecondaryTrim((prev) => ({
+                    ...prev,
                     ...trimData,
-                  };
+                  }));
                 }}
               />
             ) : isVideoLoaded ? (

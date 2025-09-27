@@ -8,6 +8,7 @@ import {
   RefObject,
   useEffect,
   createContext,
+  useMemo,
 } from "react";
 
 import type {
@@ -277,6 +278,22 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const target = ev.target as Node | null;
       if (!target) return;
 
+      if (
+        target instanceof HTMLElement &&
+        target.closest("[data-overlay-inspector]")
+      ) {
+        return;
+      }
+
+      if (
+        target instanceof HTMLElement &&
+        (target.closest("[data-radix-select-content]") ||
+          target.closest("[data-radix-select-item]") ||
+          target.closest("[data-radix-select-trigger]"))
+      ) {
+        return;
+      }
+
       for (const element of textOverlayRefs.current.values()) {
         if (element && element.contains(target)) return;
       }
@@ -499,8 +516,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
-  const debouncedUpdateNormalizedCoords = useCallback(
-    debounce(() => {
+  const debouncedUpdateNormalizedCoords = useMemo(() => {
+    const fn = () => {
       const video = videoRef.current;
       if (!video) return;
 
@@ -534,9 +551,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           updateImageOverlay(id, { x, y, normX, normY, width, height });
         }
       });
-    }, 300),
-    [updateTextOverlay, updateImageOverlay]
-  );
+    };
+
+    return debounce(fn, 300);
+  }, []);
 
   const rafIdRef = useRef<number | null>(null);
 

@@ -98,6 +98,13 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   }, [duration, maxContentWidth]);
 
   useEffect(() => {
+    setPrimaryTrim((prev) => ({
+      ...prev,
+      trimEnd: duration,
+    }));
+  }, []);
+
+  useEffect(() => {
     rafIdRef.current = requestAnimationFrame(() => {
       drawRuler();
       renderBlock();

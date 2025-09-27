@@ -55,15 +55,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryDurationMs,
   secondaryDurationMs,
   initialOffsetMs,
+  onOffsetChange,
   onCutSecondaryAt,
   onCommitOffset,
   primaryPreviewFrames,
   secondaryPreviewFrames,
 }) => {
-  const { setVideoOffsetMs } = useShallowSelector(ClipContext, (state) => ({
-    setVideoOffsetMs: state.setVideoOffsetMs,
-  }));
-
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const playheadRef = useRef<HTMLDivElement | null>(null);
@@ -212,7 +209,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
 
     // Secondary strips
-
     renderTimelineStrips({
       pxPerMs,
       durationMs: visualDuration,
@@ -521,7 +517,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           );
 
           currentOffsetRef.current = newOffset;
-          setVideoOffsetMs(newOffset);
+          onOffsetChange?.(newOffset);
           renderBlocks();
 
           if (tooltipContentRef.current) {
@@ -584,7 +580,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             );
 
             currentOffsetRef.current = newOffset;
-            setVideoOffsetMs(newOffset);
+            onOffsetChange?.(newOffset);
             renderBlocks();
 
             if (tooltipContentRef.current) {
@@ -753,25 +749,33 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           >
             <Scissors className="mr-1" size={14} /> Cut Secondary
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Undo (Ctrl+Z)</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleRedo}
-            disabled={historyIndex >= editHistory.length - 1}
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRedo}
+                disabled={historyIndex >= editHistory.length - 1}
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Redo (Ctrl+Shift+Z)</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -790,21 +794,26 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           <div className="absolute inset-x-0 top-0 h-5" ref={rulerRef} />
           <div className="absolute inset-0 bg-gradient-to-b from-surface-primary/40 to-transparent pointer-events-none" />
 
-          <HitArea
-            buffer={20}
-            className="absolute top-0 bottom-0 left-0 z-20 cursor-ew-resize"
-            onMouseDown={onPlayheadMouseDown}
+          <div
+            ref={playheadRef}
+            className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
-            <div ref={playheadRef} className="relative h-full">
-              <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
-              <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
-            </div>
-          </HitArea>
+            <HitArea
+              buffer={20}
+              className="relative h-full cursor-ew-resize"
+              onMouseDown={onPlayheadMouseDown}
+            >
+              <div className="relative h-full">
+                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
+              </div>
+            </HitArea>
+          </div>
 
           {markers.map((markerTime, index) => (
             <div
               key={`marker-${index}-${markerTime}`}
-              className="absolute top-0 bottom-0 z-10"
+              className="absolute top-0 bottom-0 z-5"
               style={{ left: `${msToPx(markerTime, pxPerMs)}px` }}
             >
               <Tooltip>

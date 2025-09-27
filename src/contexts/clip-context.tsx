@@ -1,12 +1,5 @@
 "use client";
-import {
-  createContext,
-  useState,
-  useRef,
-  useCallback,
-  ReactNode,
-  RefObject,
-} from "react";
+import { createContext, useState, ReactNode } from "react";
 import type {
   DualVideoClip,
   DualVideoSettings,
@@ -15,6 +8,7 @@ import type {
 } from "@/types/app";
 import { type StoreApi, useContextStore } from "react-shallow-store";
 import { DEFAULT_TRIM_DATA } from "@/constants/app";
+import { useLatestValue } from "@/hooks/use-latest-value";
 
 type DualVideoContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
@@ -23,12 +17,13 @@ type DualVideoContextValue = {
   >;
   dualVideoSettings: DualVideoSettings;
   setDualVideoSettings: React.Dispatch<React.SetStateAction<DualVideoSettings>>;
-  videoOffsetMs: number;
-  setVideoOffsetMs: React.Dispatch<React.SetStateAction<number>>;
   primaryTrim: TrimData;
   setPrimaryTrim: React.Dispatch<React.SetStateAction<TrimData>>;
+  primaryTrimRef: React.RefObject<TrimData>;
+
   secondaryTrim: TrimData;
   setSecondaryTrim: React.Dispatch<React.SetStateAction<TrimData>>;
+  secondaryTrimRef: React.RefObject<TrimData>;
 };
 
 export const ClipContext =
@@ -57,19 +52,20 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
   const [secondaryTrim, setSecondaryTrim] =
     useState<TrimData>(DEFAULT_TRIM_DATA);
 
-  const [videoOffsetMs, setVideoOffsetMs] = useState<number>(0);
+  const primaryTrimRef = useLatestValue(primaryTrim);
+  const secondaryTrimRef = useLatestValue(secondaryTrim);
 
   const contextValue = {
     secondaryClip,
     setSecondaryClip,
     dualVideoSettings,
     setDualVideoSettings,
-    videoOffsetMs,
-    setVideoOffsetMs,
     primaryTrim,
     setPrimaryTrim,
     secondaryTrim,
     setSecondaryTrim,
+    primaryTrimRef,
+    secondaryTrimRef,
   };
 
   const dualVideoStore = useContextStore(contextValue);

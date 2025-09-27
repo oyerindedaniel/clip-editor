@@ -48,6 +48,7 @@ const TextOverlayItem = ({
 }: TextOverlayItemProps) => {
   return (
     <div
+      data-overlay-inspector
       className={cn(
         "rounded-lg border text-sm overflow-hidden",
         selectedOverlay === overlay.id
@@ -122,7 +123,10 @@ const TextOverlayItem = ({
 
           <div className="space-y-1.5">
             <label className="text-xs text-foreground-subtle">
-              Opacity: {Math.round(overlay.opacity * 100)}%
+              Opacity:{" "}
+              <span className="font-bold text-foreground-default">
+                {Math.round(overlay.opacity * 100)}%
+              </span>
             </label>
             <input
               type="range"

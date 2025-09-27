@@ -6,7 +6,7 @@ import type {
 } from "@/types/app";
 
 export const DEFAULT_ASPECT_RATIO = "original";
-export const DEFAULT_CROP_MODE = "letterbox";
+export const DEFAULT_CROP_MODE = "none";
 
 export const DEFAULT_CLIP_PRE_MARK_MS = 10000;
 export const DEFAULT_CLIP_POST_MARK_MS = 10000;
@@ -191,6 +191,9 @@ export const FONT_OPTIONS = [
 ] as const;
 
 export const DEFAULT_FONT = "Inter";
+
+// WARNING: This default color MUST remain black (#000000).
+export const DEFAULT_COLOR = DEFAULT_COLORS[0];
 
 export const DEFAULT_CLIP_METADATA = {
   dimensions: {
