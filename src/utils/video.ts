@@ -1,4 +1,10 @@
-import type { Dimensions, ExportSettings, Overlay } from "@/types/app";
+import { DEFAULT_CLIP_METADATA } from "@/constants/app";
+import type {
+  Dimensions,
+  ExportSettings,
+  Overlay,
+  Settings,
+} from "@/types/app";
 
 /**
  * Calculate the visible bounding box of a video element inside its container.
@@ -145,6 +151,16 @@ function getVisibleOverlays(overlays: Overlay[], currentTimeMs: number) {
   );
 }
 
+const getBufferKey = (settings: Settings) => {
+  return `${settings.aspectRatio || "original"}-${
+    settings.cropMode || "none"
+  }-${settings.padColor || "white"}-${settings.format || "mp4"}`;
+};
+
+const getOriginalBufferKey = () => {
+  return getBufferKey(DEFAULT_CLIP_METADATA);
+};
+
 export {
   getVideoBoundingBox,
   getOverlayNormalizedCoords,
@@ -153,4 +169,6 @@ export {
   getFormatFromSrc,
   getVisibleOverlays,
   msToSeconds,
+  getBufferKey,
+  getOriginalBufferKey,
 };

@@ -8,16 +8,14 @@ import {
   RefObject,
   useEffect,
   createContext,
+  useMemo,
 } from "react";
 
 import type {
   TextOverlay,
   ImageOverlay,
   Overlay,
-  DualVideoClip,
-  DualVideoSettings,
   Dimensions,
-  ClipMetadata,
 } from "@/types/app";
 import { getOverlayNormalizedCoords, getVideoBoundingBox } from "@/utils/video";
 import logger from "@/utils/logger";
@@ -119,22 +117,11 @@ type OverlaysContextValue = {
     e: React.MouseEvent,
     containerContext?: ContainerContext
   ) => void;
-
+  setDualVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
   textOverlaysRef: RefObject<TextOverlay[]>;
   imageOverlaysRef: RefObject<ImageOverlay[]>;
-
   videoRef: RefObject<HTMLVideoElement | null>;
   setVideoRef: (element: HTMLVideoElement | null) => void;
-  dualVideoRef: RefObject<HTMLVideoElement | null>;
-  setDualVideoRef: (ref: RefObject<HTMLVideoElement | null>) => void;
-  secondaryClip: (DualVideoClip & ClipMetadata) | null;
-  dualVideoSettings: DualVideoSettings;
-  dualVideoOffsetMs: number;
-  setSecondaryClip: React.Dispatch<
-    React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
-  >;
-  setDualVideoSettings: React.Dispatch<React.SetStateAction<DualVideoSettings>>;
-  setDualVideoOffsetMs: React.Dispatch<React.SetStateAction<number>>;
   getActiveContainer: () => HTMLDivElement | null;
 };
 
@@ -150,25 +137,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [imageOverlays, setImageOverlays] = useState<ImageOverlay[]>([]);
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null);
-
-  const [secondaryClip, setSecondaryClip] = useState<
-    (DualVideoClip & ClipMetadata) | null
-  >(null);
-  const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
-    {
-      layout: "vertical-letterbox",
-      outputOrientation: "vertical",
-      primaryAudio: "primary",
-      normalizeAudio: true,
-      primaryVolume: 0.8,
-      secondaryVolume: 0.6,
-      pipPosition: "bottom-right",
-      pipSize: 0.25,
-      secondaryOffset: 0,
-    }
-  );
-
-  const [dualVideoOffsetMs, setDualVideoOffsetMs] = useState<number>(0);
 
   const textOverlaysRef = useLatestValue(textOverlays);
   const imageOverlaysRef = useLatestValue(imageOverlays);
@@ -309,6 +277,22 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     const handleGlobalMouseDown = (ev: MouseEvent) => {
       const target = ev.target as Node | null;
       if (!target) return;
+
+      if (
+        target instanceof HTMLElement &&
+        target.closest("[data-overlay-inspector]")
+      ) {
+        return;
+      }
+
+      if (
+        target instanceof HTMLElement &&
+        (target.closest("[data-radix-select-content]") ||
+          target.closest("[data-radix-select-item]") ||
+          target.closest("[data-radix-select-trigger]"))
+      ) {
+        return;
+      }
 
       for (const element of textOverlayRefs.current.values()) {
         if (element && element.contains(target)) return;
@@ -532,8 +516,8 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
-  const debouncedUpdateNormalizedCoords = useCallback(
-    debounce(() => {
+  const debouncedUpdateNormalizedCoords = useMemo(() => {
+    const fn = () => {
       const video = videoRef.current;
       if (!video) return;
 
@@ -567,9 +551,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           updateImageOverlay(id, { x, y, normX, normY, width, height });
         }
       });
-    }, 300),
-    [updateTextOverlay, updateImageOverlay]
-  );
+    };
+
+    return debounce(fn, 300);
+  }, []);
 
   const rafIdRef = useRef<number | null>(null);
 
@@ -1233,12 +1218,6 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     startRotation,
     textOverlaysRef,
     imageOverlaysRef,
-    secondaryClip,
-    dualVideoSettings,
-    dualVideoOffsetMs,
-    setSecondaryClip,
-    setDualVideoSettings,
-    setDualVideoOffsetMs,
     getActiveContainer,
   };
 

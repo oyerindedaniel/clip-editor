@@ -1,7 +1,12 @@
-import type { CropMode, ExportSettings, VideoFormat } from "@/types/app";
+import type {
+  CropMode,
+  ExportSettings,
+  TrimData,
+  VideoFormat,
+} from "@/types/app";
 
 export const DEFAULT_ASPECT_RATIO = "original";
-export const DEFAULT_CROP_MODE = "letterbox";
+export const DEFAULT_CROP_MODE = "none";
 
 export const DEFAULT_CLIP_PRE_MARK_MS = 10000;
 export const DEFAULT_CLIP_POST_MARK_MS = 10000;
@@ -187,6 +192,9 @@ export const FONT_OPTIONS = [
 
 export const DEFAULT_FONT = "Inter";
 
+// WARNING: This default color MUST remain black (#000000).
+export const DEFAULT_COLOR = DEFAULT_COLORS[0];
+
 export const DEFAULT_CLIP_METADATA = {
   dimensions: {
     width: 1920,
@@ -195,6 +203,13 @@ export const DEFAULT_CLIP_METADATA = {
   aspectRatio: DEFAULT_ASPECT_RATIO,
   cropMode: DEFAULT_CROP_MODE as CropMode,
   format: "mp4" as VideoFormat,
+  padColor: DEFAULT_COLORS[0],
 } as const;
 
 export const MAX_HISTORY = 30;
+
+export const DEFAULT_TRIM_DATA: TrimData = {
+  timelineOffset: 0,
+  trimStart: 0,
+  trimEnd: 0,
+};

@@ -1,3 +1,5 @@
+import { AspectRatioValue } from "@/components/aspect-ratio-selector";
+
 /**
  * Represents a marked clip segment in the recording.
  */
@@ -91,19 +93,11 @@ export interface AudioTrack {
   visible: boolean;
 }
 
-export interface DualVideoClip {
-  id: string;
-  url: string;
-  buffer: ArrayBuffer | null;
-  metadata: S3ClipMetadata;
-  offset: number; // Time offset in milliseconds
-}
-
 export type CropMode = "letterbox" | "crop" | "stretch" | "none";
 export type VideoFormat = "mp4" | "webm" | "mov";
 
 export type Settings = {
-  aspectRatio: string;
+  aspectRatio: AspectRatioValue;
   cropMode: CropMode;
   padColor: string;
   format: VideoFormat;
@@ -130,7 +124,7 @@ export interface ExportSettings {
   cropMode?: CropMode;
 }
 
-export interface ClipMetadata extends Omit<Settings, "padColor"> {
+export interface ClipMetadata extends Settings {
   dimensions: {
     width: number;
     height: number;
@@ -171,6 +165,11 @@ export interface DualVideoClip {
   volume: number; // clip volume (0-1)
   visible: boolean; // Whether this clip should be included in export
 }
+
+export type TrimData = Pick<
+  DualVideoClip,
+  "timelineOffset" | "trimStart" | "trimEnd"
+>;
 
 /**
  * Information required to export a clip.

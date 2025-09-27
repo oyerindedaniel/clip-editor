@@ -26,6 +26,9 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MAX_HISTORY } from "@/constants/app";
+import { useShallowSelector } from "react-shallow-store";
+import { ClipContext } from "@/contexts/clip-context";
+import { HitArea } from "./hit-area";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -45,12 +48,14 @@ interface HistoryState {
   trimEnd: number | null;
   secondaryDurationMs: number;
   action: HistoryAction;
+  prevSecondaryDurationMs?: number;
 }
 
 export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryDurationMs,
   secondaryDurationMs,
   initialOffsetMs,
+  onOffsetChange,
   onCutSecondaryAt,
   onCommitOffset,
   primaryPreviewFrames,
@@ -68,9 +73,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const [trimStart, setTrimStart] = useState<number | null>(null);
   const [trimEnd, setTrimEnd] = useState<number | null>(null);
-
-  const trimStartRef = useLatestValue(trimStart);
-  const trimEndRef = useLatestValue(trimEnd);
 
   const hasBothMarkers = trimStart !== null && trimEnd !== null;
 
@@ -207,14 +209,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
 
     // Secondary strips
-    if (secondaryPreviewFrames && secondaryPreviewFrames.length > 0) {
-      renderTimelineStrips({
-        pxPerMs,
-        durationMs: visualDuration,
-        frames: trimmedFrames,
-        container: secondaryStripRef.current,
-      });
-    }
+    renderTimelineStrips({
+      pxPerMs,
+      durationMs: visualDuration,
+      frames: trimmedFrames,
+      container: secondaryStripRef.current,
+    });
   }, [
     primaryDurationMs,
     pxPerMs,
@@ -342,16 +342,25 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (newIndex !== null) {
       const stateToApply = editHistory[newIndex];
+      const prevState = editHistory[newIndex + 1];
+
       if (stateToApply) {
-        const prevState = editHistory[newIndex + 1];
+        if (prevState?.action === "cut" && prevState.prevSecondaryDurationMs) {
+          onCutSecondaryAt?.({
+            trimStart: 0,
+            trimEnd: Math.round(prevState.prevSecondaryDurationMs),
+          });
+        }
+
         const needsRender =
           !prevState ||
           stateToApply.secondaryDurationMs !== prevState.secondaryDurationMs ||
           stateToApply.action === "cut";
+
         applyHistoryState(stateToApply, needsRender);
       }
     }
-  }, [editHistory, applyHistoryState]);
+  }, [editHistory, applyHistoryState, onCutSecondaryAt]);
 
   const handleRedo = useCallback(() => {
     let newIndex: number | null = null;
@@ -368,16 +377,29 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (newIndex !== null) {
       const stateToApply = editHistory[newIndex];
+
       if (stateToApply) {
+        if (
+          stateToApply.action === "cut" &&
+          stateToApply.trimStart !== null &&
+          stateToApply.trimEnd !== null
+        ) {
+          onCutSecondaryAt?.({
+            trimStart: Math.round(stateToApply.trimStart),
+            trimEnd: Math.round(stateToApply.trimEnd),
+          });
+        }
+
         const prevState = editHistory[newIndex - 1];
         const needsRender =
           !prevState ||
           stateToApply.secondaryDurationMs !== prevState.secondaryDurationMs ||
           stateToApply.action === "cut";
+
         applyHistoryState(stateToApply, needsRender);
       }
     }
-  }, [editHistory, applyHistoryState]);
+  }, [editHistory, applyHistoryState, onCutSecondaryAt]);
 
   const handleAddMarker = useCallback(() => {
     if (!containerRef.current || !playheadRef.current) return;
@@ -431,6 +453,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       trimEnd: null,
       secondaryDurationMs: newDuration,
       action: "cut",
+      prevSecondaryDurationMs: currentSecondaryDurationMs,
     } satisfies HistoryState;
 
     addToHistory(state);
@@ -494,6 +517,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           );
 
           currentOffsetRef.current = newOffset;
+          onOffsetChange?.(newOffset);
           renderBlocks();
 
           if (tooltipContentRef.current) {
@@ -556,6 +580,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             );
 
             currentOffsetRef.current = newOffset;
+            onOffsetChange?.(newOffset);
             renderBlocks();
 
             if (tooltipContentRef.current) {
@@ -724,25 +749,33 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           >
             <Scissors className="mr-1" size={14} /> Cut Secondary
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Undo (Ctrl+Z)</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleRedo}
-            disabled={historyIndex >= editHistory.length - 1}
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRedo}
+                disabled={historyIndex >= editHistory.length - 1}
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Redo (Ctrl+Shift+Z)</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -763,23 +796,32 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
           <div
             ref={playheadRef}
-            onMouseDown={onPlayheadMouseDown}
-            className="absolute top-0 left-0 bottom-0 w-px bg-primary z-20 cursor-ew-resize"
+            className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
-            <div className="absolute -top-2 -left-2 h-4 w-4 bg-primary rotate-45" />
+            <HitArea
+              buffer={20}
+              className="relative h-full cursor-ew-resize"
+              onMouseDown={onPlayheadMouseDown}
+            >
+              <div className="relative h-full">
+                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
+              </div>
+            </HitArea>
           </div>
 
           {markers.map((markerTime, index) => (
             <div
               key={`marker-${index}-${markerTime}`}
-              className="absolute top-0 bottom-0 w-px bg-yellow-500 z-10"
-              style={{
-                left: `${msToPx(markerTime, pxPerMs)}px`,
-              }}
+              className="absolute top-0 bottom-0 z-5"
+              style={{ left: `${msToPx(markerTime, pxPerMs)}px` }}
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="absolute -top-1 -left-1 h-2 w-2 bg-yellow-500 rounded-full cursor-pointer" />
+                  <HitArea className="relative h-full">
+                    <div className="absolute top-0 bottom-0 w-px bg-yellow-500 left-1/2 -translate-x-1/2" />
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
+                  </HitArea>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="flex items-center gap-2">
                   <span className="text-xs">Marker at {markerTime}ms</span>
@@ -800,7 +842,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           ))}
 
           <div className="absolute left-0 right-0 top-6 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 mx-2 rounded bg-surface-tertiary/60" />
+            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
             <div
               ref={primaryBlockRef}
               className={cn(

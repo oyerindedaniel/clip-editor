@@ -54,6 +54,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
 
   return (
     <div
+      data-overlay-inspector
       className={cn(
         "group rounded-lg border text-sm overflow-hidden",
         selectedOverlay === overlay.id

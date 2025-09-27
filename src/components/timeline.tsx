@@ -11,6 +11,8 @@ import {
   getScrollState,
 } from "@/utils/timeline-utils";
 import { cn } from "@/lib/utils";
+import { ClipContext } from "@/contexts/clip-context";
+import { useShallowSelector } from "react-shallow-store";
 
 interface TimelineProps {
   duration: number;
@@ -21,6 +23,10 @@ interface TimelineProps {
 type Dir = "left" | "right";
 
 const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
+  const { setPrimaryTrim } = useShallowSelector(ClipContext, (state) => ({
+    setPrimaryTrim: state.setPrimaryTrim,
+  }));
+
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const leftHandleRef = useRef<HTMLDivElement>(null);
@@ -41,7 +47,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const HANDLE_WIDTH = 12;
   const EDGE_THRESHOLD = 30;
 
-  const { pxPerMs, rawPxPerMs, recalc, currentScalingType } = useScale({
+  const { pxPerMs, rawPxPerMs, currentScalingType } = useScale({
     containerRef: scrollContainerRef,
     durationMs: duration,
     type: "auto",
@@ -92,7 +98,13 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   }, [duration, maxContentWidth]);
 
   useEffect(() => {
-    recalc();
+    setPrimaryTrim((prev) => ({
+      ...prev,
+      trimEnd: duration,
+    }));
+  }, []);
+
+  useEffect(() => {
     rafIdRef.current = requestAnimationFrame(() => {
       drawRuler();
       renderBlock();
@@ -113,7 +125,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [duration, maxContentWidth, recalc, drawRuler, pxPerSecond, renderBlock]);
+  }, [duration, maxContentWidth, drawRuler, pxPerSecond, renderBlock]);
 
   useEffect(() => {
     renderStrip();
@@ -282,7 +294,15 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
 
-        onTrim(trimValuesRef.current.start, trimValuesRef.current.end);
+        const { start, end } = trimValuesRef.current;
+
+        onTrim(start, end);
+
+        setPrimaryTrim({
+          timelineOffset: 0,
+          trimStart: start,
+          trimEnd: end,
+        });
       };
 
       document.addEventListener("mousemove", onMouseMove);

@@ -18,6 +18,60 @@ function debounce<F extends (...args: any[]) => void>(func: F, delay: number) {
   return debounced as F & { cancel: () => void };
 }
 
+export type ThrottleOptions = {
+  leading?: boolean;
+  trailing?: boolean;
+};
+
+export function throttle<T extends (...args: any[]) => void>(
+  func: T,
+  wait: number,
+  options: ThrottleOptions = {}
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let lastCallTime = 0;
+
+  const { leading = true, trailing = true } = options;
+
+  function invoke(now: number, args: Parameters<T>) {
+    lastCallTime = now;
+    func(...args);
+  }
+
+  function trailingInvoke() {
+    if (lastArgs) {
+      invoke(Date.now(), lastArgs);
+      lastArgs = null;
+    }
+    timeout = null;
+  }
+
+  return function throttled(this: unknown, ...args: Parameters<T>) {
+    const now = Date.now();
+    const remaining = wait - (now - lastCallTime);
+
+    if (remaining <= 0) {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+      invoke(now, args);
+    } else {
+      if (trailing) {
+        lastArgs = args;
+        if (!timeout) {
+          timeout = setTimeout(trailingInvoke, remaining);
+        }
+      }
+    }
+
+    if (!lastCallTime && !leading) {
+      lastCallTime = now;
+    }
+  };
+}
+
 function formatDurationDisplay(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
