@@ -12,6 +12,7 @@ import { throttle } from "@/utils/app";
 import type { TrimData } from "@/types/app";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useStableHandler } from "@/hooks/use-stable-handler";
+import { HitArea } from "./hit-area";
 
 interface VideoSeekBarProps {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -33,6 +34,7 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const seekBarRef = useRef<HTMLDivElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
@@ -41,7 +43,6 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   const visualUpdateRef = useRef<number>(0);
   const progressRef = useRef(0);
   const currentTimeDisplayRef = useRef<HTMLSpanElement | null>(null);
-  const lockedHoverTimeRef = useRef<number | null>(null);
 
   const stableOnSeek = useStableHandler(onSeek);
 
@@ -183,6 +184,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
+
+      setHoverTime(normalizedTimeMs);
     },
     [getTimeFromPosition, timelineDurationMs, scheduleVisualUpdate]
   );
@@ -227,27 +230,16 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       const seekBar = seekBarRef.current;
       if (!seekBar) return;
 
-      const timeMs = getTimeFromPosition(e.clientX);
-
       const normalizedProgressMs = progressRef.current * timelineDurationMs;
-      if (Math.abs(timeMs - normalizedProgressMs) < 50) {
-        lockedHoverTimeRef.current = timeMs;
-        setHoverTime(timeMs);
-        return;
-      }
 
-      if (lockedHoverTimeRef.current !== null) {
-        return;
-      }
-
-      setHoverTime(timeMs);
+      setIsHovered(true);
+      setHoverTime(normalizedProgressMs);
     },
     [getTimeFromPosition, timelineDurationMs]
   );
 
   const handleHoverLeave = useCallback(() => {
-    setHoverTime(null);
-    lockedHoverTimeRef.current = null;
+    setIsHovered(false);
   }, []);
 
   const formatTime = useCallback((timeMs: number): string => {
@@ -275,21 +267,30 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       <div className="relative">
         <div
           ref={seekBarRef}
-          className="relative h-[4.5px] hover:h-[5px] transition-[height] duration-300 bg-primary/30 rounded-full cursor-pointer group"
+          className="
+          relative cursor-pointer rounded-full bg-primary/30
+          h-[4.5px] hover:h-[5px] transition-[height] duration-300
+          before:content-[''] before:absolute before:inset-x-0 before:top-[-8px] before:bottom-[-8px]
+        "
           onMouseDown={handleMouseDown}
           onMouseMove={handleHover}
           onMouseLeave={handleHoverLeave}
         >
           <div
             ref={progressFillRef}
-            className="absolute top-0 left-0 h-full bg-primary rounded-full origin-left will-change-transform"
+            className="absolute inset-0 bg-primary rounded-full origin-left will-change-transform"
           />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <Tooltip open={isHovered}>
+            <TooltipTrigger asChild className="relative z-10">
               <div
                 ref={thumbRef}
-                className="absolute top-1/2 left-0 w-2.5 h-2.5 bg-primary rounded-full shadow-lg will-change-transform"
+                className={`
+                  absolute top-1/2 left-0 
+                  w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform
+                  before:content-[''] before:absolute before:inset-0 
+                  before:-m-2
+                `}
               />
             </TooltipTrigger>
             <TooltipContent side="top">

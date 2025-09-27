@@ -3112,7 +3112,7 @@ function MediaPlayerTooltip(props: MediaPlayerTooltipProps) {
             {shortcut.map((shortcutKey) => (
               <kbd
                 key={shortcutKey}
-                className="select-none rounded border bg-surface-tertiary px-1.5 py-0.5 font-mono text-[11.2px] text-foreground shadow-xs"
+                className="select-none rounded border bg-surface-tertiary px-1.5 py-0.5 text-[11.2px] text-foreground shadow-xs"
               >
                 <abbr title={shortcutKey} className="no-underline">
                   {shortcutKey}
@@ -3124,7 +3124,7 @@ function MediaPlayerTooltip(props: MediaPlayerTooltipProps) {
           shortcut && (
             <kbd
               key={shortcut}
-              className="select-none rounded border bg-surface-tertiary px-1.5 py-px font-mono text-[11.2px] text-foreground shadow-xs"
+              className="select-none rounded border bg-surface-tertiary px-1.5 py-px text-[11.2px] text-foreground shadow-xs"
             >
               <abbr title={shortcut} className="no-underline">
                 {shortcut}
