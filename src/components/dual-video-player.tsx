@@ -388,6 +388,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
         )}
 
         <div
+          data-hovered={isHovered}
           className={cn(
             "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out",
             isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
