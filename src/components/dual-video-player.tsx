@@ -39,6 +39,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSeekingPrimary, setIsSeekingPrimary] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const primaryVideoRef = useRef<HTMLVideoElement>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement>(null);
@@ -192,7 +193,10 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     const trimEnd = primaryTrim.trimEnd / 1000;
 
     // Handle live trimming - stop if current position is outside trim bounds
-    if (currentTime < trimStart || currentTime >= trimEnd) {
+    if (
+      (currentTime < trimStart || currentTime >= trimEnd) &&
+      !isRepeatRef.current
+    ) {
       primary.pause();
       primary.currentTime = trimStart;
       setIsPlaying(false);
@@ -205,8 +209,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     // Handle end of video
     if (currentTime >= trimEnd) {
       primary.pause();
-
-      console.log("in here butch");
 
       if (isRepeatRef.current) {
         // Repeat: reset to start and continue playing
@@ -228,12 +230,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
               setIsPlaying(false);
             });
         }, 25);
-      } else {
-        // No repeat: just stop playing
-        setIsPlaying(false);
-        if (secondaryTrim) {
-          alignSecondary(currentTime, false);
-        }
       }
     }
   }, [alignSecondary]);
@@ -327,7 +323,9 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       <div
         data-container-context="dual"
         ref={secondaryContainerRef}
-        className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md group"
+        className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <div
           className={cn(
@@ -389,14 +387,18 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
           <div className="absolute top-1/2 left-0 right-0 h-px bg-red-600 transform -translate-y-px" />
         )}
 
-        {/* Combined controls container - bottom */}
-        <div className="absolute bottom-0 left-0 right-0 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out group-hover:translate-y-0 translate-y-4">
+        <div
+          className={cn(
+            "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out",
+            isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          )}
+        >
           <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
             <div className="px-4 py-3 space-y-3">
-              {/* Seek bar */}
               <VideoSeekBar
                 primaryVideoRef={primaryVideoRef}
                 primaryTrim={primaryTrim}
+                secondaryTrim={secondaryClip ? secondaryTrim : null}
                 isPlaying={isPlaying}
                 onSeek={(timeMs) => {
                   if (primaryVideoRef.current) {
@@ -406,7 +408,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
                 className="w-full"
               />
 
-              {/* Control buttons */}
               <div className="flex items-center justify-center gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -459,7 +460,12 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
           </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-out" />
+        <div
+          className={cn(
+            "absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent transition-opacity duration-200 ease-out",
+            isHovered ? "opacity-100" : "opacity-0"
+          )}
+        />
       </div>
 
       <div className="flex gap-2 items-center">
