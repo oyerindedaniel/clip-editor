@@ -190,11 +190,20 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
 
     const currentTime = primary.currentTime;
     const trimStart = primaryTrim.trimStart / 1000;
-    const trimEnd = primaryTrim.trimEnd / 1000;
+    const primaryEnd = primaryTrim.trimEnd / 1000;
+
+    let actualTimelineEnd = primaryEnd;
+    if (secondaryTrim) {
+      const secondaryDuration =
+        (secondaryTrim.trimEnd - secondaryTrim.trimStart) / 1000;
+      const secondaryOffset = (secondaryTrim.timelineOffset || 0) / 1000;
+      const secondaryEnd = secondaryOffset + secondaryDuration;
+      actualTimelineEnd = Math.max(primaryEnd, trimStart + secondaryEnd);
+    }
 
     // Handle live trimming - stop if current position is outside trim bounds
     if (
-      (currentTime < trimStart || currentTime >= trimEnd) &&
+      (currentTime < trimStart || currentTime >= actualTimelineEnd) &&
       !isRepeatRef.current
     ) {
       primary.pause();
@@ -207,11 +216,10 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     }
 
     // Handle end of video
-    if (currentTime >= trimEnd) {
+    if (currentTime >= actualTimelineEnd) {
       primary.pause();
-
+      // Repeat: reset to start and continue playing
       if (isRepeatRef.current) {
-        // Repeat: reset to start and continue playing
         primary.currentTime = trimStart;
         if (secondaryTrim) {
           alignSecondary(trimStart, false);
@@ -233,6 +241,24 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       }
     }
   }, [alignSecondary]);
+
+  const handleSeek = useCallback(
+    (normalizedTimeMs: number) => {
+      const primary = primaryVideoRef.current;
+      if (!primary) return;
+
+      // Convert normalized timeline position back to primary video time
+      const primaryTimeMs = primaryTrim.trimStart + normalizedTimeMs;
+      const primaryTimeSec = primaryTimeMs / 1000;
+
+      primary.currentTime = primaryTimeSec;
+
+      if (secondaryTrim) {
+        alignSecondary(primaryTimeSec, isPlaying);
+      }
+    },
+    [primaryTrim, secondaryTrim, alignSecondary, isPlaying]
+  );
 
   useEffect(() => {
     const primary = primaryVideoRef.current;
@@ -401,11 +427,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
                 primaryTrim={primaryTrim}
                 secondaryTrim={secondaryClip ? secondaryTrim : null}
                 isPlaying={isPlaying}
-                onSeek={(timeMs) => {
-                  if (primaryVideoRef.current) {
-                    primaryVideoRef.current.currentTime = timeMs / 1000;
-                  }
-                }}
+                onSeek={handleSeek}
                 className="w-full"
               />
 

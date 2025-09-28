@@ -1,33 +1,49 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-interface HitAreaProps extends React.HTMLAttributes<HTMLDivElement> {
+type HitAreaVariant = "x" | "y" | "all";
+
+interface HitAreaProps extends React.HTMLAttributes<HTMLElement> {
+  children: React.ReactElement<
+    React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement> }
+  >;
   buffer?: number;
+  variant?: HitAreaVariant;
 }
 
-export const HitArea: React.FC<HitAreaProps> = ({
-  children,
-  buffer = 16,
-  className,
-  style,
-  ...rest
-}) => {
-  const half = buffer / 2;
+export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
+  (
+    { children, buffer = 8, variant = "all", className, style, ...rest },
+    ref
+  ) => {
+    const variantClass =
+      variant === "x"
+        ? "before:-mx-(--hit-buffer)"
+        : variant === "y"
+        ? "before:-my-(--hit-buffer)"
+        : "before:-m-(--hit-buffer)";
 
-  return (
-    <div
-      className={cn(
-        "absolute top-0 bottom-0 flex items-center justify-center cursor-pointer",
+    if (!React.isValidElement(children)) {
+      return null;
+    }
+
+    return React.cloneElement(children, {
+      ...rest,
+      ref,
+      className: cn(
+        children.props.className,
+        "relative",
+        "before:content-[''] before:absolute before:inset-0 before:pointer-events-auto",
+        variantClass,
         className
-      )}
-      style={{
-        left: `-${half}px`,
-        width: `${buffer}px`,
+      ),
+      style: {
+        ...children.props.style,
         ...style,
-      }}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-};
+        ["--hit-buffer" as any]: `${buffer}px`,
+      } as React.CSSProperties,
+    });
+  }
+);
+
+HitArea.displayName = "HitArea";

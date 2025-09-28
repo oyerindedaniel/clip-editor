@@ -89,37 +89,43 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [primaryTrim, secondaryTrim]
   );
 
-  const scheduleVisualUpdate = useCallback(
+  const updateVisualElements = useCallback(
     (progress: number) => {
       const barEl = seekBarRef.current;
       if (!barEl) return;
 
+      const clamped = Math.max(0, Math.min(1, progress));
+      progressRef.current = clamped;
+
+      if (progressFillRef.current) {
+        progressFillRef.current.style.transform = `scaleX(${clamped})`;
+      }
+
+      if (thumbRef.current) {
+        const barWidth = barEl.offsetWidth;
+        const x = clamped * barWidth;
+        thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
+      }
+
+      if (currentTimeDisplayRef.current) {
+        const currentTimeMs = clamped * timelineDurationMs;
+        currentTimeDisplayRef.current.textContent = formatTime(currentTimeMs);
+      }
+    },
+    [timelineDurationMs]
+  );
+
+  const scheduleVisualUpdate = useCallback(
+    (progress: number) => {
       if (visualUpdateRef.current) {
         cancelAnimationFrame(visualUpdateRef.current);
       }
 
       visualUpdateRef.current = requestAnimationFrame(() => {
-        const clamped = Math.max(0, Math.min(1, progress));
-        progressRef.current = clamped;
-
-        if (progressFillRef.current) {
-          progressFillRef.current.style.transform = `scaleX(${clamped})`;
-        }
-
-        if (thumbRef.current) {
-          const barWidth = barEl.offsetWidth;
-          const x = clamped * barWidth;
-          thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
-        }
-
-        if (currentTimeDisplayRef.current) {
-          const currentTimeMs = clamped * timelineDurationMs;
-
-          currentTimeDisplayRef.current.textContent = formatTime(currentTimeMs);
-        }
+        updateVisualElements(progress);
       });
     },
-    [timelineDurationMs, primaryTrim.trimStart]
+    [updateVisualElements]
   );
 
   const updateProgress = useCallback(() => {
@@ -129,8 +135,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       newProgress = Math.min(1, normalizedTimeMs / timelineDurationMs);
     }
 
-    scheduleVisualUpdate(newProgress);
-  }, [getCurrentNormalizedTime, timelineDurationMs, scheduleVisualUpdate]);
+    updateVisualElements(newProgress);
+  }, [getCurrentNormalizedTime, timelineDurationMs, updateVisualElements]);
 
   useEffect(() => {
     const animate = () => {
@@ -265,39 +271,36 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       </div>
 
       <div className="relative">
-        <div
+        <HitArea
+          buffer={10}
+          variant="y"
+          className="relative cursor-pointer rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-300"
           ref={seekBarRef}
-          className="
-          relative cursor-pointer rounded-full bg-primary/30
-          h-[4.5px] hover:h-[5px] transition-[height] duration-300
-          before:content-[''] before:absolute before:inset-x-0 before:top-[-8px] before:bottom-[-8px]
-        "
           onMouseDown={handleMouseDown}
           onMouseMove={handleHover}
           onMouseLeave={handleHoverLeave}
         >
-          <div
-            ref={progressFillRef}
-            className="absolute inset-0 bg-primary rounded-full origin-left will-change-transform"
-          />
+          <div className="relative h-full w-full">
+            <div
+              ref={progressFillRef}
+              className="absolute inset-0 bg-primary rounded-full origin-left will-change-transform"
+            />
 
-          <Tooltip open={isHovered}>
-            <TooltipTrigger asChild className="relative z-10">
-              <div
-                ref={thumbRef}
-                className={`
-                  absolute top-1/2 left-0 
-                  w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform
-                  before:content-[''] before:absolute before:inset-0 
-                  before:-m-2
-                `}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {formatTime(hoverTime || 0)}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+            <Tooltip open={isHovered}>
+              <TooltipTrigger asChild className="relative z-10">
+                <HitArea buffer={8} variant="all">
+                  <div
+                    ref={thumbRef}
+                    className="absolute top-1/2 left-0 w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform -translate-y-1/2"
+                  />
+                </HitArea>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {formatTime(hoverTime || 0)}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </HitArea>
       </div>
     </div>
   );
