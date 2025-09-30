@@ -87,12 +87,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setVideoRef: state.setVideoRef,
     }));
 
-  const { secondaryClip, dualVideoSettings, setDualVideoSettings } =
-    useShallowSelector(ClipContext, (state) => ({
-      dualVideoSettings: state.dualVideoSettings,
+  const { secondaryClip, dualVideoSettingsRef } = useShallowSelector(
+    ClipContext,
+    (state) => ({
       secondaryClip: state.secondaryClip,
-      setDualVideoSettings: state.setDualVideoSettings,
-    }));
+      dualVideoSettingsRef: state.dualVideoSettingsRef,
+    })
+  );
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -441,6 +442,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       resolution,
       bitrate,
       customBitrateKbps,
+      audioBitrateKbps,
+      audioCompressed,
     }: Pick<
       ExportSettings,
       | "preset"
@@ -450,6 +453,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       | "resolution"
       | "bitrate"
       | "customBitrateKbps"
+      | "audioBitrateKbps"
+      | "audioCompressed"
     >
   ) => {
     const video = videoRef.current;
@@ -492,6 +497,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           resolution,
           bitrate,
           customBitrateKbps,
+          audioBitrateKbps,
+          audioCompressed,
           convertAspectRatio: primaryClipMetaDataRef.current.aspectRatio,
           cropMode: primaryClipMetaDataRef.current.cropMode,
         },
@@ -514,7 +521,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               ...secondaryTrimRef.current,
             },
           }),
-          settings: dualVideoSettings,
+          settings: dualVideoSettingsRef.current,
         },
       };
 

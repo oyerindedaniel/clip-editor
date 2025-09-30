@@ -339,7 +339,8 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
         className="relative w-(--width) rounded-md overflow-x-auto bg-surface-secondary overflow-y-hidden"
         style={
           {
-            "--width": currentScalingType !== "auto" ? timelineWidth : "100%",
+            "--width":
+              currentScalingType === "container" ? timelineWidth : "100%",
           } as React.CSSProperties
         }
       >

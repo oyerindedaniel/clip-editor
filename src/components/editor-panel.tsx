@@ -5,7 +5,6 @@ import React, {
   useRef,
   useEffect,
   forwardRef,
-  useImperativeHandle,
   useCallback,
   useId,
 } from "react";
@@ -33,6 +32,7 @@ interface EditorPanelContextType {
   titleId: string;
   descriptionId: string;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
   animationState: AnimationState;
   shouldRender: boolean;
 }
@@ -78,98 +78,6 @@ const useEditorPanel = () => {
   return context;
 };
 
-const createPanelStyles = () => {
-  if (typeof document === "undefined") return;
-
-  const styleId = "editor-panel-animations";
-  if (document.getElementById(styleId)) return;
-
-  const style = document.createElement("style");
-  style.id = styleId;
-  style.textContent = `
-      @keyframes slide-in-right {
-        0% { 
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        100% { 
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-      
-      @keyframes slide-in-left {
-        0% { 
-          transform: translateX(-100%);
-          opacity: 0;
-        }
-        100% { 
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-      
-      @keyframes slide-out-right {
-        0% { 
-          transform: translateX(0);
-          opacity: 1;
-        }
-        100% { 
-          transform: translateX(100%);
-          opacity: 0;
-        }
-      }
-      
-      @keyframes slide-out-left {
-        0% { 
-          transform: translateX(0);
-          opacity: 1;
-        }
-        100% { 
-          transform: translateX(-100%);
-          opacity: 0;
-        }
-      }
-
-      @keyframes slide-in-right-bounce {
-        0% {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        60% {
-          transform: translateX(0);
-          opacity: 1;
-        }
-        75% {
-          transform: translateX(30px);
-        }
-        90% {
-          transform: translateX(-15px);
-        }
-        100% {
-          transform: translateX(0);
-        }
-      }
-      
-      .panel-enter-right {
-        animation: slide-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      
-      .panel-enter-left {
-        animation: slide-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      
-      .panel-exit-right {
-        animation: slide-out-right 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
-      }
-      
-      .panel-exit-left {
-        animation: slide-out-left 0.3s cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
-      }
-    `;
-  document.head.appendChild(style);
-};
-
 const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
   (
     {
@@ -190,6 +98,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     });
 
     const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const contentRef = useRef<HTMLDivElement | null>(null);
 
     const triggerId = useId();
     const contentId = useId();
@@ -199,30 +108,38 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     const [animationState, setAnimationState] =
       useState<AnimationState>("idle");
 
-    // TODO: toogle "idle" out based on actual animation end
-    const handleAnimation = async (presence: boolean) => {
+    const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
         if (presence) {
           setAnimationState("entering");
           resolve();
-        } else {
-          setAnimationState("exiting");
-          setTimeout(() => {
-            setAnimationState("idle");
-            resolve();
-          }, 350);
+          return;
         }
+
+        setAnimationState("exiting");
+
+        const node = contentRef.current;
+        if (!node) {
+          setAnimationState("idle");
+          resolve();
+          return;
+        }
+
+        const onAnimationEnd = () => {
+          setAnimationState("idle");
+          node.removeEventListener("animationend", onAnimationEnd);
+          node.removeEventListener("transitionend", onAnimationEnd);
+          resolve();
+        };
+
+        node.addEventListener("animationend", onAnimationEnd);
+        node.addEventListener("transitionend", onAnimationEnd);
       });
     };
 
     const shouldRender = useAnimatePresence(open, handleAnimation, {
-      timeout: 400,
-      animateOnInitialLoad: false,
+      initial: false,
     });
-
-    useEffect(() => {
-      createPanelStyles();
-    }, []);
 
     const contextValue: EditorPanelContextType = {
       open,
@@ -234,6 +151,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       titleId,
       descriptionId,
       triggerRef,
+      contentRef,
       animationState,
       shouldRender,
     };
@@ -322,7 +240,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       style,
       ...props
     },
-    ref
+    forwardedRef
   ) => {
     const {
       open,
@@ -330,15 +248,16 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       side,
       contentId,
       triggerRef,
+      contentRef,
       titleId,
       descriptionId,
       shouldRender,
       animationState,
     } = useEditorPanel();
 
-    const contentRef = useRef<HTMLDivElement | null>(null);
+    const ref = useRef<HTMLDivElement | null>(null);
 
-    useImperativeHandle(ref, () => contentRef.current!);
+    const composedRefs = useComposedRefs(ref, forwardedRef, contentRef);
 
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -361,7 +280,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     useEffect(() => {
       const handlePointerDown = (event: PointerEvent) => {
         const target = event.target as Node;
-        const content = contentRef.current;
+        const content = ref.current;
         const trigger = triggerRef.current;
 
         if (
@@ -387,7 +306,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     }, [open, onPointerDownOutside, triggerRef]);
 
     useEffect(() => {
-      const content = contentRef.current;
+      const content = ref.current;
       if (!content) return;
 
       if (open) {
@@ -424,41 +343,40 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
     if (!shouldRender && !forceMount) return null;
 
-    const sideClasses = {
-      right: "right-0",
-      left: "left-0",
-    };
-
-    const getAnimationClass = () => {
-      if (animationState === "entering") return `panel-enter-${side}`;
-      if (animationState === "exiting") return `panel-exit-${side}`;
-      return "";
-    };
-
-    const combinedStyle = {
-      [side === "right" ? "marginRight" : "marginLeft"]: `${sideOffset}px`,
-      ...style,
-    };
+    const dataState =
+      animationState === "entering"
+        ? "open"
+        : animationState === "exiting"
+        ? "closed"
+        : undefined;
 
     return (
       <div
-        ref={contentRef}
+        ref={composedRefs}
         id={contentId}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
+        data-state={dataState}
         className={cn(
           "fixed top-0 bottom-0 z-50",
           "bg-surface-secondary/95 backdrop-blur-sm",
           "border-l border-default",
           "shadow-2xl shadow-black/20",
-          sideClasses[side],
-          getAnimationClass(),
+          side === "right" ? "right-0" : "left-0",
+          side === "right"
+            ? "data-[state=open]:animate-panel-enter-right data-[state=closed]:animate-panel-exit-right"
+            : "data-[state=open]:animate-panel-enter-left data-[state=closed]:animate-panel-exit-left",
           className
         )}
-        style={combinedStyle}
+        style={{
+          ...(side === "right"
+            ? { marginRight: `${sideOffset}px` }
+            : { marginLeft: `${sideOffset}px` }),
+          ...style,
+        }}
         {...props}
       >
         {children}

@@ -26,8 +26,6 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MAX_HISTORY } from "@/constants/app";
-import { useShallowSelector } from "react-shallow-store";
-import { ClipContext } from "@/contexts/clip-context";
 import { HitArea } from "./hit-area";
 
 interface DualVideoTracksProps {
@@ -798,12 +796,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             ref={playheadRef}
             className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
-            <HitArea
-              buffer={20}
-              className="relative h-full cursor-ew-resize"
-              onMouseDown={onPlayheadMouseDown}
-            >
-              <div className="relative h-full">
+            <HitArea variant="x" onMouseDown={onPlayheadMouseDown}>
+              <div className="relative h-full cursor-ew-resize">
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
               </div>
@@ -818,11 +812,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <HitArea className="relative h-full">
-                    <div className="absolute top-0 bottom-0 w-px bg-yellow-500 left-1/2 -translate-x-1/2" />
-                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
+                  <HitArea variant="x" className="relative h-full">
+                    <div className="relative h-full">
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-yellow-500" />
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
+                    </div>
                   </HitArea>
                 </TooltipTrigger>
+
                 <TooltipContent side="top" className="flex items-center gap-2">
                   <span className="text-xs">Marker at {markerTime}ms</span>
                   <Button

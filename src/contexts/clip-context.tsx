@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useState, ReactNode } from "react";
+import { createContext, useState, ReactNode, useMemo } from "react";
 import type {
   DualVideoClip,
   DualVideoSettings,
@@ -15,8 +15,11 @@ type DualVideoContextValue = {
   setSecondaryClip: React.Dispatch<
     React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
   >;
+
   dualVideoSettings: DualVideoSettings;
   setDualVideoSettings: React.Dispatch<React.SetStateAction<DualVideoSettings>>;
+  dualVideoSettingsRef: React.RefObject<DualVideoSettings>;
+
   primaryTrim: TrimData;
   setPrimaryTrim: React.Dispatch<React.SetStateAction<TrimData>>;
   primaryTrimRef: React.RefObject<TrimData>;
@@ -48,6 +51,8 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
     }
   );
 
+  const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
+
   const [primaryTrim, setPrimaryTrim] = useState<TrimData>(DEFAULT_TRIM_DATA);
   const [secondaryTrim, setSecondaryTrim] =
     useState<TrimData>(DEFAULT_TRIM_DATA);
@@ -55,18 +60,34 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
 
-  const contextValue = {
-    secondaryClip,
-    setSecondaryClip,
-    dualVideoSettings,
-    setDualVideoSettings,
-    primaryTrim,
-    setPrimaryTrim,
-    secondaryTrim,
-    setSecondaryTrim,
-    primaryTrimRef,
-    secondaryTrimRef,
-  };
+  const contextValue = useMemo(
+    () => ({
+      secondaryClip,
+      setSecondaryClip,
+      dualVideoSettings,
+      setDualVideoSettings,
+      dualVideoSettingsRef,
+      primaryTrim,
+      setPrimaryTrim,
+      secondaryTrim,
+      setSecondaryTrim,
+      primaryTrimRef,
+      secondaryTrimRef,
+    }),
+    [
+      secondaryClip,
+      setSecondaryClip,
+      dualVideoSettings,
+      setDualVideoSettings,
+      dualVideoSettingsRef,
+      primaryTrim,
+      setPrimaryTrim,
+      secondaryTrim,
+      setSecondaryTrim,
+      primaryTrimRef,
+      secondaryTrimRef,
+    ]
+  );
 
   const dualVideoStore = useContextStore(contextValue);
 

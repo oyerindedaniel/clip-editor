@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Badge } from "@/components/ui/badge";
+import { Volume } from "./volume";
+import { Switch } from "@/components/ui/switch";
 import type {
   DualVideoClip,
   DualVideoSettings,
@@ -216,17 +218,6 @@ export default function DualVideoControls({
       handleOffsetChange(currentOffset + increment);
     },
     [settings.secondaryOffset, handleOffsetChange]
-  );
-
-  const handleVolumeChange = useCallback(
-    (type: "primary" | "secondary", value: number) => {
-      const volume = value / 100; // Convert percentage to 0-1 range
-      updateSetting(
-        type === "primary" ? "primaryVolume" : "secondaryVolume",
-        volume
-      );
-    },
-    [updateSetting]
   );
 
   const handlePiPSizeChange = useCallback(
@@ -445,55 +436,55 @@ export default function DualVideoControls({
               </Select>
 
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-foreground-subtle">
+                <Volume.Root
+                  value={settings.primaryVolume}
+                  onValueChange={(v) => updateSetting("primaryVolume", v)}
+                >
+                  <Volume.Label className="text-xs">
                     Primary Volume:{" "}
                     <span className="font-bold text-foreground-default">
                       {Math.round(settings.primaryVolume * 100)}%
                     </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={Math.round(settings.primaryVolume * 100)}
-                    onChange={(e) =>
-                      handleVolumeChange("primary", parseInt(e.target.value))
-                    }
-                    className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
-                    disabled={disabled}
-                  />
-                </div>
+                  </Volume.Label>
+                  <Volume.Controls variant="pill">
+                    <Volume.Button aria-label="Primary volume" />
+                    <Volume.Slider>
+                      <Volume.Slider.Track>
+                        <Volume.Slider.Range />
+                        <Volume.Slider.Thumb />
+                      </Volume.Slider.Track>
+                    </Volume.Slider>
+                  </Volume.Controls>
+                </Volume.Root>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-foreground-subtle">
+                <Volume.Root
+                  value={settings.secondaryVolume}
+                  onValueChange={(v) => updateSetting("secondaryVolume", v)}
+                >
+                  <Volume.Label className="text-xs">
                     Secondary Volume:{" "}
                     <span className="font-bold text-foreground-default">
                       {Math.round((settings.secondaryVolume || 0.6) * 100)}%
                     </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={Math.round((settings.secondaryVolume || 0.6) * 100)}
-                    onChange={(e) =>
-                      handleVolumeChange("secondary", parseInt(e.target.value))
-                    }
-                    className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
-                    disabled={disabled}
-                  />
-                </div>
+                  </Volume.Label>
+                  <Volume.Controls variant="pill">
+                    <Volume.Button aria-label="Secondary volume" />
+                    <Volume.Slider>
+                      <Volume.Slider.Track>
+                        <Volume.Slider.Range />
+                        <Volume.Slider.Thumb />
+                      </Volume.Slider.Track>
+                    </Volume.Slider>
+                  </Volume.Controls>
+                </Volume.Root>
 
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+                  <Switch
                     id="normalizeAudio"
                     checked={settings.normalizeAudio}
-                    onChange={(e) =>
-                      updateSetting("normalizeAudio", e.target.checked)
+                    onCheckedChange={(v: boolean) =>
+                      updateSetting("normalizeAudio", v)
                     }
-                    className="rounded border-gray-700/50"
                     disabled={disabled}
                   />
                   <label

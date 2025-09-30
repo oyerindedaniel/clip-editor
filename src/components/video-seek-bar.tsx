@@ -22,11 +22,16 @@ interface VideoSeekBarProps {
   isPlaying: boolean;
   onSeek: (normalizedTimeMs: number) => void;
   className?: React.HTMLAttributes<HTMLDivElement>["className"];
+  primaryBuffered?: TimeRanges | null;
+  secondaryBuffered?: TimeRanges | null;
 }
 
 export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   primaryVideoRef,
+  secondaryVideoRef,
   primaryTrim,
+  primaryBuffered,
+  secondaryBuffered,
   secondaryTrim,
   isPlaying,
   onSeek,
@@ -37,6 +42,7 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   const seekBarRef = useRef<HTMLDivElement | null>(null);
+  const bufferFillRef = useRef<HTMLDivElement | null>(null);
   const progressFillRef = useRef<HTMLDivElement | null>(null);
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const animationRef = useRef<number>(0);
@@ -60,66 +66,127 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
   const timelineDurationMs = calculateTimelineDuration();
 
-  const getCurrentNormalizedTime = useCallback(
-    (secondaryVideoRef?: React.RefObject<HTMLVideoElement | null>) => {
-      const primaryVideo = primaryVideoRef.current;
-      const secondaryVideo = secondaryVideoRef?.current;
-      if (!primaryVideo) return 0;
+  const getCurrentNormalizedTime = useCallback(() => {
+    const primaryVideo = primaryVideoRef.current;
+    const secondaryVideo = secondaryVideoRef?.current;
+    if (!primaryVideo) return 0;
 
-      const primaryCurrentMs = primaryVideo.currentTime * 1000;
-      const primaryRelativeMs = Math.max(
-        0,
-        primaryCurrentMs - primaryTrim.trimStart
-      );
+    const primaryCurrentMs = primaryVideo.currentTime * 1000;
+    const primaryRelativeMs = Math.max(
+      0,
+      primaryCurrentMs - primaryTrim.trimStart
+    );
 
-      if (!secondaryTrim || !secondaryVideo) return primaryRelativeMs;
+    if (!secondaryTrim || !secondaryVideo) return primaryRelativeMs;
 
-      const secondaryCurrentMs = secondaryVideo.currentTime * 1000;
-      const secondaryRelativeMs = Math.max(
-        0,
-        secondaryCurrentMs - secondaryTrim.trimStart
-      );
+    const secondaryCurrentMs = secondaryVideo.currentTime * 1000;
+    const secondaryRelativeMs = Math.max(
+      0,
+      secondaryCurrentMs - secondaryTrim.trimStart
+    );
+    const secondaryOffset = secondaryTrim.timelineOffset || 0;
+
+    const primaryTimelinePos = primaryRelativeMs;
+    const secondaryTimelinePos = secondaryOffset + secondaryRelativeMs;
+
+    return Math.max(primaryTimelinePos, secondaryTimelinePos);
+  }, [primaryTrim, secondaryTrim]);
+
+  const updateBufferDisplay = useCallback(() => {
+    if (!bufferFillRef.current) return;
+
+    const primary = primaryVideoRef.current;
+    if (!primary) return;
+
+    let primaryBufferedMs = 0;
+    if (primaryBuffered) {
+      const primaryCurrentSec = primary.currentTime;
+      for (let i = 0; i < primaryBuffered.length; i++) {
+        const start = primaryBuffered.start(i);
+        const end = primaryBuffered.end(i);
+        if (primaryCurrentSec >= start && primaryCurrentSec <= end) {
+          const bufferedEndMs = end * 1000 - primaryTrim.trimStart;
+          primaryBufferedMs = Math.max(0, bufferedEndMs);
+          break;
+        }
+      }
+    }
+
+    let totalBufferedMs = primaryBufferedMs;
+
+    if (secondaryTrim && secondaryBuffered) {
       const secondaryOffset = secondaryTrim.timelineOffset || 0;
+      const secondaryDuration = secondaryTrim.trimEnd - secondaryTrim.trimStart;
+      const secondaryEnd = secondaryOffset + secondaryDuration;
 
-      const primaryTimelinePos = primaryRelativeMs;
-      const secondaryTimelinePos = secondaryOffset + secondaryRelativeMs;
+      if (secondaryEnd > primaryTrim.trimEnd - primaryTrim.trimStart) {
+        const secondary = secondaryVideoRef?.current;
+        if (secondary) {
+          for (let i = 0; i < secondaryBuffered.length; i++) {
+            const start = secondaryBuffered.start(i);
+            const end = secondaryBuffered.end(i);
+            const secondaryCurrentSec = secondary.currentTime;
 
-      return Math.max(primaryTimelinePos, secondaryTimelinePos);
-    },
-    [primaryTrim, secondaryTrim]
-  );
+            if (secondaryCurrentSec >= start && secondaryCurrentSec <= end) {
+              const bufferedEndMs =
+                end * 1000 - secondaryTrim.trimStart + secondaryOffset;
+              totalBufferedMs = Math.max(totalBufferedMs, bufferedEndMs);
+              break;
+            }
+          }
+        }
+      }
+    }
 
-  const scheduleVisualUpdate = useCallback(
+    const bufferProgress = Math.min(1, totalBufferedMs / timelineDurationMs);
+    bufferFillRef.current.style.transform = `scaleX(${bufferProgress})`;
+  }, [
+    primaryBuffered,
+    secondaryBuffered,
+    primaryTrim,
+    secondaryTrim,
+    timelineDurationMs,
+  ]);
+
+  const updateVisualElements = useCallback(
     (progress: number) => {
       const barEl = seekBarRef.current;
       if (!barEl) return;
 
+      const clamped = Math.max(0, Math.min(1, progress));
+      progressRef.current = clamped;
+
+      if (progressFillRef.current) {
+        progressFillRef.current.style.transform = `scaleX(${clamped})`;
+      }
+
+      if (thumbRef.current) {
+        const barWidth = barEl.offsetWidth;
+        const x = clamped * barWidth;
+        thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
+      }
+
+      if (currentTimeDisplayRef.current) {
+        const currentTimeMs = clamped * timelineDurationMs;
+        currentTimeDisplayRef.current.textContent = formatTime(currentTimeMs);
+      }
+
+      updateBufferDisplay();
+    },
+    [timelineDurationMs, updateBufferDisplay]
+  );
+
+  const scheduleVisualUpdate = useCallback(
+    (progress: number) => {
       if (visualUpdateRef.current) {
         cancelAnimationFrame(visualUpdateRef.current);
       }
 
       visualUpdateRef.current = requestAnimationFrame(() => {
-        const clamped = Math.max(0, Math.min(1, progress));
-        progressRef.current = clamped;
-
-        if (progressFillRef.current) {
-          progressFillRef.current.style.transform = `scaleX(${clamped})`;
-        }
-
-        if (thumbRef.current) {
-          const barWidth = barEl.offsetWidth;
-          const x = clamped * barWidth;
-          thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
-        }
-
-        if (currentTimeDisplayRef.current) {
-          const currentTimeMs = clamped * timelineDurationMs;
-
-          currentTimeDisplayRef.current.textContent = formatTime(currentTimeMs);
-        }
+        updateVisualElements(progress);
       });
     },
-    [timelineDurationMs, primaryTrim.trimStart]
+    [updateVisualElements]
   );
 
   const updateProgress = useCallback(() => {
@@ -129,13 +196,15 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       newProgress = Math.min(1, normalizedTimeMs / timelineDurationMs);
     }
 
-    scheduleVisualUpdate(newProgress);
-  }, [getCurrentNormalizedTime, timelineDurationMs, scheduleVisualUpdate]);
+    updateVisualElements(newProgress);
+  }, [getCurrentNormalizedTime, timelineDurationMs, updateVisualElements]);
+
+  const stableUpdateProgress = useStableHandler(updateProgress);
 
   useEffect(() => {
     const animate = () => {
       if (!isDragging) {
-        updateProgress();
+        stableUpdateProgress();
       }
       if (isPlaying) {
         animationRef.current = requestAnimationFrame(animate);
@@ -145,14 +214,14 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     if (isPlaying) {
       animationRef.current = requestAnimationFrame(animate);
     } else {
-      updateProgress();
+      stableUpdateProgress();
     }
 
     return () => {
       cancelAnimationFrame(animationRef.current);
       cancelAnimationFrame(visualUpdateRef.current);
     };
-  }, [isPlaying, isDragging, updateProgress]);
+  }, [isPlaying, isDragging, stableUpdateProgress]);
 
   const getTimeFromPosition = useCallback(
     (clientX: number): number => {
@@ -259,46 +328,46 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
   return (
     <div className={cn("w-full space-y-2", className)}>
-      <div className="flex justify-between text-xs text-foreground-muted">
+      <div className="flex justify-between text-xs text-white">
         <span ref={currentTimeDisplayRef} />
         <span>{formatTime(timelineDurationMs)}</span>
       </div>
 
-      <div className="relative">
-        <div
-          ref={seekBarRef}
-          className="
-          relative cursor-pointer rounded-full bg-primary/30
-          h-[4.5px] hover:h-[5px] transition-[height] duration-300
-          before:content-[''] before:absolute before:inset-x-0 before:top-[-8px] before:bottom-[-8px]
-        "
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleHover}
-          onMouseLeave={handleHoverLeave}
-        >
+      <HitArea
+        buffer={10}
+        variant="y"
+        className="relative cursor-pointer rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-300"
+        ref={seekBarRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleHover}
+        onMouseLeave={handleHoverLeave}
+      >
+        <div>
+          <div
+            ref={bufferFillRef}
+            className="absolute inset-0 bg-primary/30 rounded-full origin-left will-change-transform"
+          />
+
           <div
             ref={progressFillRef}
             className="absolute inset-0 bg-primary rounded-full origin-left will-change-transform"
           />
 
           <Tooltip open={isHovered}>
-            <TooltipTrigger asChild className="relative z-10">
-              <div
-                ref={thumbRef}
-                className={`
-                  absolute top-1/2 left-0 
-                  w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform
-                  before:content-[''] before:absolute before:inset-0 
-                  before:-m-2
-                `}
-              />
+            <TooltipTrigger asChild className="z-10">
+              <HitArea buffer={8} variant="all">
+                <div
+                  ref={thumbRef}
+                  className="absolute top-1/2 left-0 w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform"
+                />
+              </HitArea>
             </TooltipTrigger>
             <TooltipContent side="top">
               {formatTime(hoverTime || 0)}
             </TooltipContent>
           </Tooltip>
         </div>
-      </div>
+      </HitArea>
     </div>
   );
 };

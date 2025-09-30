@@ -101,8 +101,14 @@ export function useScale({
       const isContainerTooLarge =
         config.maxPxPerSecond && containerPxPerSecond > config.maxPxPerSecond;
 
+      const isContainerWiderThanWindow = el.clientWidth > window.innerWidth;
+
       let finalValue: number;
-      if (isContainerTooSmall || isContainerTooLarge) {
+      if (
+        isContainerTooSmall ||
+        isContainerTooLarge ||
+        isContainerWiderThanWindow
+      ) {
         finalValue = fixedPxPerMs;
         setPxPerMs(finalValue);
         setCurrentScalingType("fixed");

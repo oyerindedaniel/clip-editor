@@ -1,33 +1,53 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { getElementRef } from "@/lib/get-element-ref";
 
-interface HitAreaProps extends React.HTMLAttributes<HTMLDivElement> {
-  buffer?: number;
+type HitAreaVariant = "x" | "y" | "all";
+
+interface HitAreaProps extends React.HTMLAttributes<HTMLElement> {
+  children: React.ReactElement<
+    React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement> }
+  >;
+  buffer?: number; // in px
+  variant?: HitAreaVariant;
 }
 
-export const HitArea: React.FC<HitAreaProps> = ({
-  children,
-  buffer = 16,
-  className,
-  style,
-  ...rest
-}) => {
-  const half = buffer / 2;
+export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
+  (
+    { children, buffer = 8, variant = "all", className, style, ...rest },
+    ref
+  ) => {
+    const composedRef = useComposedRefs(ref, getElementRef(children));
 
-  return (
-    <div
-      className={cn(
-        "absolute top-0 bottom-0 flex items-center justify-center cursor-pointer",
+    const variantClass =
+      variant === "x"
+        ? "before:-mx-(--hit-buffer)"
+        : variant === "y"
+        ? "before:-my-(--hit-buffer)"
+        : "before:-m-(--hit-buffer)";
+
+    if (!React.isValidElement(children)) {
+      return null;
+    }
+
+    return React.cloneElement(children, {
+      ...rest,
+      ref: composedRef,
+      className: cn(
+        children.props.className,
+        "relative",
+        "before:content-[''] before:absolute before:inset-0 before:pointer-events-auto",
+        variantClass,
         className
-      )}
-      style={{
-        left: `-${half}px`,
-        width: `${buffer}px`,
+      ),
+      style: {
+        ...children.props.style,
         ...style,
-      }}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-};
+        "--hit-buffer": `${buffer}px`,
+      } as React.CSSProperties,
+    });
+  }
+);
+
+HitArea.displayName = "HitArea";
