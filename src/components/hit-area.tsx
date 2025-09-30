@@ -9,7 +9,7 @@ interface HitAreaProps extends React.HTMLAttributes<HTMLElement> {
   children: React.ReactElement<
     React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement> }
   >;
-  buffer?: number;
+  buffer?: number; // in px
   variant?: HitAreaVariant;
 }
 
@@ -18,6 +18,8 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
     { children, buffer = 8, variant = "all", className, style, ...rest },
     ref
   ) => {
+    const composedRef = useComposedRefs(ref, getElementRef(children));
+
     const variantClass =
       variant === "x"
         ? "before:-mx-(--hit-buffer)"
@@ -28,8 +30,6 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
     if (!React.isValidElement(children)) {
       return null;
     }
-
-    const composedRef = useComposedRefs(ref, getElementRef(children));
 
     return React.cloneElement(children, {
       ...rest,

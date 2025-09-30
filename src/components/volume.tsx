@@ -328,7 +328,7 @@ const VolumeSliderTrack = React.forwardRef<
       if (event.defaultPrevented) return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    let ratio =
+    const ratio =
       orientation === "horizontal"
         ? (event.clientX - rect.left) / rect.width
         : 1 - (event.clientY - rect.top) / rect.height;
