@@ -281,7 +281,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       const primary = primaryVideoRef.current;
       if (!primary) return;
 
-      // Convert normalized timeline position back to primary video time
       const primaryTimeMs = primaryTrim.trimStart + normalizedTimeMs;
       const primaryTimeSec = primaryTimeMs / 1000;
 
