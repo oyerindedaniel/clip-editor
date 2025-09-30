@@ -1,5 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { getElementRef } from "@/lib/get-element-ref";
 
 type HitAreaVariant = "x" | "y" | "all";
 
@@ -27,9 +29,11 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
       return null;
     }
 
+    const composedRef = useComposedRefs(ref, getElementRef(children));
+
     return React.cloneElement(children, {
       ...rest,
-      ref,
+      ref: composedRef,
       className: cn(
         children.props.className,
         "relative",
@@ -40,7 +44,7 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
       style: {
         ...children.props.style,
         ...style,
-        ["--hit-buffer" as any]: `${buffer}px`,
+        "--hit-buffer": `${buffer}px`,
       } as React.CSSProperties,
     });
   }

@@ -8,6 +8,7 @@ import type {
   WorkerResponse,
   VideoFormat,
   Dimensions,
+  ExportSettings,
 } from "@/types/app";
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 import { WorkerType } from "@/types/app";
@@ -117,7 +118,7 @@ export async function processClip(
       "-i",
       inputFileName,
       ...filterArgs,
-      ...getCodecArgs(outputExt),
+      ...getPreviewCodecArgs(outputExt),
       "-preset",
       "ultrafast",
       "-crf",
@@ -225,7 +226,7 @@ export async function processClipForExport(
       args.push("-map", "0:a?");
     }
 
-    const codecArgs = getCodecArgs(format);
+    const codecArgs = getExportCodecArgs(exportSettings);
 
     args.push(...codecArgs);
     args.push(
@@ -318,7 +319,7 @@ function getBitrate(settings: ClipExportData["exportSettings"]): number {
   }
 }
 
-function getCodecArgs(format: VideoFormat): string[] {
+function getPreviewCodecArgs(format: VideoFormat): string[] {
   switch (format) {
     case "mp4":
       return ["-c:v", "libx264", "-c:a", "aac"];
@@ -327,7 +328,45 @@ function getCodecArgs(format: VideoFormat): string[] {
     case "webm":
       return ["-c:v", "libvpx-vp9", "-c:a", "libopus"];
     default:
-      throw new Error(`Unsupported export format: ${format}`);
+      throw new Error(`Unsupported preview format: ${format}`);
+  }
+}
+
+function getExportCodecArgs(settings: ExportSettings): string[] {
+  switch (settings.format) {
+    case "mp4":
+      return [
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        "-b:a",
+        `${settings.audioBitrateKbps || 128}k`,
+      ];
+    case "mov":
+      if (settings.audioCompressed) {
+        return [
+          "-c:v",
+          "prores_ks",
+          "-c:a",
+          "aac",
+          "-b:a",
+          `${settings.audioBitrateKbps || 192}k`,
+        ];
+      } else {
+        return ["-c:v", "prores_ks", "-c:a", "pcm_s16le"];
+      }
+    case "webm":
+      return [
+        "-c:v",
+        "libvpx-vp9",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        `${settings.audioBitrateKbps || 96}k`,
+      ];
+    default:
+      throw new Error(`Unsupported export format: ${settings.format}`);
   }
 }
 

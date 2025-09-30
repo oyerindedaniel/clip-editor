@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { ExportSettings } from "@/types/app";
 import InfoTooltip from "@/components/info-tooltip";
+import { Switch } from "@/components/ui/switch";
 import {
   CRF_VALUES,
   EXPORT_BITRATE_MAP,
@@ -42,6 +43,8 @@ interface ExportNamingDialogProps {
       | "resolution"
       | "bitrate"
       | "customBitrateKbps"
+      | "audioBitrateKbps"
+      | "audioCompressed"
     >
   ) => void;
   isBufferDownloaded: boolean;
@@ -68,6 +71,33 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   const [bitrate, setBitrate] =
     useState<ExportSettings["bitrate"]>("recommended");
   const [customBitrateKbps, setCustomBitrateKbps] = useState<number>(8000);
+  const [audioQuality, setAudioQuality] = useState<
+    "medium" | "high" | "very-high" | "default"
+  >("medium");
+  const [movCompressed, setMovCompressed] = useState<boolean>(false);
+
+  const audioBitrateForSelection = useCallback(() => {
+    if (format === "mp4") {
+      // AAC mappings
+      if (audioQuality === "medium") return 128;
+      if (audioQuality === "high") return 192;
+      return 256; // very-high
+    }
+    if (format === "webm") {
+      // Opus mappings
+      if (audioQuality === "default") return 96;
+      if (audioQuality === "high") return 160;
+      return 256; // very-high
+    }
+    // mov: if not compressed, undefined (PCM). If compressed, reuse AAC options
+    if (format === "mov") {
+      if (!movCompressed) return undefined;
+      if (audioQuality === "medium") return 128;
+      if (audioQuality === "high") return 192;
+      return 256; // very-high
+    }
+    return undefined;
+  }, [format, audioQuality, movCompressed]);
 
   const getRecommendedBitrate = useCallback(() => {
     const selectedResolution = resolution;
@@ -112,6 +142,8 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
       resolution,
       bitrate,
       customBitrateKbps,
+      audioBitrateKbps: audioBitrateForSelection(),
+      audioCompressed: format === "mov" ? movCompressed : true,
     });
     onOpenChange(false);
   };
@@ -356,6 +388,150 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
               </SelectContent>
             </Select>
           </div>
+
+          {format === "mov" && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label className="text-right text-xs" htmlFor="movCompressed">
+                Use compressed audio
+              </label>
+              <div className="col-span-3 flex items-center gap-2">
+                <Switch
+                  id="movCompressed"
+                  checked={movCompressed}
+                  onCheckedChange={(v: boolean) => setMovCompressed(v)}
+                />
+                <span className="text-[11px] text-foreground/70">
+                  {movCompressed
+                    ? "AAC (select quality)"
+                    : "PCM (uncompressed)"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Audio quality selector inside main grid */}
+          {(format === "mp4" ||
+            format === "webm" ||
+            (format === "mov" && movCompressed)) && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label className="text-right text-xs" htmlFor="audioQuality">
+                Audio Quality
+              </label>
+              <Select
+                value={
+                  format === "webm" && audioQuality === "medium"
+                    ? "default"
+                    : audioQuality
+                }
+                onValueChange={(value) => {
+                  if (format === "webm" && value === "default") {
+                    setAudioQuality("default");
+                  } else if (
+                    value === "medium" ||
+                    value === "high" ||
+                    value === "very-high"
+                  ) {
+                    setAudioQuality(value);
+                  } else if (value === "default") {
+                    setAudioQuality("default");
+                  }
+                }}
+              >
+                <SelectTrigger
+                  id="audioQuality"
+                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                >
+                  <SelectValue placeholder="Select audio quality" />
+                </SelectTrigger>
+                <SelectContent>
+                  {format === "mp4" && (
+                    <>
+                      <SelectItem value="medium">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Medium</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 128k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 192k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="very-high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Very High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 256k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    </>
+                  )}
+                  {format === "webm" && (
+                    <>
+                      <SelectItem value="default">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Default</span>
+                          <Badge variant="secondary" className="ml-2">
+                            Opus 96k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            Opus 160k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="very-high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Very High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            Opus 256k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    </>
+                  )}
+                  {format === "mov" && movCompressed && (
+                    <>
+                      <SelectItem value="medium">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Medium</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 128k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 192k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="very-high">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Very High</span>
+                          <Badge variant="secondary" className="ml-2">
+                            AAC 256k
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-4 items-center gap-4">
             <label htmlFor="preset" className="text-right text-xs">

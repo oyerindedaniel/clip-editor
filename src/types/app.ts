@@ -122,6 +122,8 @@ export interface ExportSettings {
   crf: number;
   convertAspectRatio?: string;
   cropMode?: CropMode;
+  audioBitrateKbps?: number; // when applicable (e.g., AAC/Opus)
+  audioCompressed?: boolean; // for MOV: false = PCM (default), true = AAC
 }
 
 export interface ClipMetadata extends Settings {

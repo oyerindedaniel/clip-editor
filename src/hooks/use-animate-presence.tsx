@@ -5,7 +5,7 @@ import { useStableHandler } from "./use-stable-handler";
 import logger from "@/utils/logger";
 
 interface AnimatePresenceOptions {
-  animateOnInitialLoad?: boolean;
+  initial?: boolean;
   timeout?: number; // Timeout for animation in ms
 }
 
@@ -14,7 +14,7 @@ export function useAnimatePresence(
   onAnimate: (presence: boolean) => Promise<void>,
   options: AnimatePresenceOptions = {}
 ): boolean {
-  const { animateOnInitialLoad = true, timeout = 400 } = options;
+  const { initial = true, timeout = 10000 } = options;
 
   const [internalPresence, setInternalPresence] =
     useState<boolean>(externalPresence);
@@ -62,13 +62,13 @@ export function useAnimatePresence(
         clearAnimationTimeout();
       }
     },
-    [onAnimateRef, timeout, clearAnimationTimeout]
+    [timeout, clearAnimationTimeout]
   );
 
   useEffect(() => {
     if (isInitialRender.current) {
       isInitialRender.current = false;
-      if (!animateOnInitialLoad) {
+      if (!initial) {
         return;
       }
     }
@@ -80,12 +80,7 @@ export function useAnimatePresence(
       clearAnimationTimeout();
       currentAnimationIdRef.current++;
     };
-  }, [
-    externalPresence,
-    animateOnInitialLoad,
-    handleAnimation,
-    clearAnimationTimeout,
-  ]);
+  }, [externalPresence, initial, handleAnimation, clearAnimationTimeout]);
 
   return useMemo(() => {
     return externalPresence
