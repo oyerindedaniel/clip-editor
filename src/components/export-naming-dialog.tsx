@@ -409,7 +409,6 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             </div>
           )}
 
-          {/* Audio quality selector inside main grid */}
           {(format === "mp4" ||
             format === "webm" ||
             (format === "mov" && movCompressed)) && (
