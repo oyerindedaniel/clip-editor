@@ -255,8 +255,6 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
         orientation === "horizontal"
           ? controls.offsetWidth
           : controls.offsetHeight;
-
-      console.log({ startRef: startRef.current, endRef: endRef.current });
     }, [orientation, isMeasured]);
 
     React.useLayoutEffect(() => {
