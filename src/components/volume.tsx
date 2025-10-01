@@ -191,13 +191,16 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
       return <Volume2 className="size-5" />;
     };
 
+    const label = muted || volume === 0 ? "Unmute" : "Mute";
+
     return (
       <Comp
         ref={ref}
         variant={variant}
         size={size}
-        data-role="volume-button"
-        className={cn(className)}
+        data-slot="volume-button"
+        className={cn("", className)}
+        aria-label={label}
         onClick={handleClick}
         {...props}
       >
@@ -214,6 +217,7 @@ interface ControlsContextValue {
   forceOpenRef: React.RefObject<boolean>;
   trackRef: React.RefObject<HTMLDivElement | null>;
   sliderRef: React.RefObject<HTMLDivElement | null>;
+  thumbRef: React.RefObject<HTMLDivElement | null>;
 }
 const ControlsContext = React.createContext<ControlsContextValue | null>(null);
 function useControlsContext() {
@@ -235,6 +239,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
 
     const sliderRef = React.useRef<HTMLDivElement>(null);
     const trackRef = React.useRef<HTMLDivElement>(null);
+    const thumbRef = React.useRef<HTMLDivElement>(null);
     const controlsRef = React.useRef<HTMLDivElement>(null);
     const composedRefs = useComposedRefs(ref, controlsRef);
 
@@ -250,6 +255,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
         orientation === "horizontal"
           ? controls.offsetWidth
           : controls.offsetHeight;
+
+      console.log({ startRef: startRef.current, endRef: endRef.current });
     }, [orientation, isMeasured]);
 
     React.useLayoutEffect(() => {
@@ -275,7 +282,9 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
     }, [orientation]);
 
     return (
-      <ControlsContext.Provider value={{ forceOpenRef, trackRef, sliderRef }}>
+      <ControlsContext.Provider
+        value={{ forceOpenRef, trackRef, sliderRef, thumbRef }}
+      >
         <HitArea buffer={30} variant={orientation === "horizontal" ? "x" : "y"}>
           <div
             ref={composedRefs}
@@ -283,14 +292,14 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
               "relative flex gap-2",
               orientation === "horizontal"
                 ? "flex-row items-center justify-center"
-                : "flex-col items-center justify-center [&>[data-role=volume-button]]:order-2",
+                : "flex-col items-center justify-center [&>[data-slot=volume-button]]:order-2",
               variant === "pill" &&
                 "bg-surface-secondary/70 backdrop-blur-sm rounded-full p-1",
               variant === "soft" &&
                 "bg-surface-secondary/50 backdrop-blur-sm rounded-md p-1",
               orientation === "horizontal"
-                ? "has-[[data-state=open]]:animate-[expand-width_200ms_linear_both] has-[[data-state=closed]]:animate-[collapse-width_200ms_linear_both]"
-                : "has-[[data-state=open]]:animate-[expand-height_200ms_linear] has-[[data-state=closed]]:animate-[collapse-height_200ms_linear_both]",
+                ? "has-[[data-state=open]]:animate-[expand-width_250ms_linear_both] has-[[data-state=closed]]:animate-[collapse-width_250ms_linear_both]"
+                : "has-[[data-state=open]]:animate-[expand-height_250ms_linear_both] has-[[data-state=closed]]:animate-[collapse-height_250ms_linear_both]",
               className
             )}
             style={{
@@ -318,11 +327,10 @@ VolumeControls.displayName = "VolumeControls";
 
 interface VolumeSliderProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  size?: number;
 }
 
 const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
-  ({ children, size = 96, ...props }, forwardedRef) => {
+  ({ children, ...props }, forwardedRef) => {
     const { hovering, orientation } = useVolumeContext();
     const { forceOpenRef, sliderRef } = useControlsContext();
 
@@ -444,7 +452,7 @@ VolumeSliderTrack.displayName = "VolumeSliderTrack";
 const VolumeSliderRange = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
+>(({ className, style, ...props }, ref) => {
   const { volume, min, max, orientation } = useVolumeContext();
   const percent = (volume - min) / (max - min);
 
@@ -457,6 +465,7 @@ const VolumeSliderRange = React.forwardRef<
         className
       )}
       style={{
+        ...style,
         transform:
           orientation === "horizontal"
             ? `scaleX(${percent})`
@@ -471,13 +480,13 @@ VolumeSliderRange.displayName = "VolumeSliderRange";
 const VolumeSliderThumb = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ onKeyDown, onMouseDown, className, ...props }, ref) => {
+>(({ onKeyDown, onMouseDown, className, style, ...props }, forwardedRef) => {
   const { volume, setVolume, min, max, orientation, step, setThumbId } =
     useVolumeContext();
-  const { trackRef } = useControlsContext();
+  const { trackRef, thumbRef } = useControlsContext();
 
-  const thumbRef = React.useRef<HTMLDivElement>(null);
-  const composedRefs = useComposedRefs(ref, thumbRef);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const composedRefs = useComposedRefs(forwardedRef, ref, thumbRef);
 
   const thumbId = React.useId();
   const percent = (volume - min) / (max - min);
@@ -558,9 +567,12 @@ const VolumeSliderThumb = React.forwardRef<
             : "left-1/2 -translate-x-1/2 -translate-y-1/2",
           className
         )}
-        style={
-          orientation === "horizontal" ? { left: offset } : { top: offset }
-        }
+        style={{
+          ...style,
+          ...(orientation === "horizontal"
+            ? { left: offset }
+            : { top: offset }),
+        }}
         {...props}
       />
     </HitArea>

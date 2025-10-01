@@ -45,7 +45,7 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
       className: cn(
         children.props.className,
         "relative",
-        "before:content-[''] before:absolute before:inset-0 before:pointer-events-auto",
+        "before:content-[''] before:absolute before:inset-0 before:pointer-events-auto before:-z-1",
         variantClass,
         className
       ),
