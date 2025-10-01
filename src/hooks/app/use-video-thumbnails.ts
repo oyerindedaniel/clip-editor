@@ -38,7 +38,7 @@ export function useVideoThumbnails(
           const timeout = setTimeout(() => {
             logger.warn("Video load timeout in useVideoThumbnails");
             resolve([]);
-          }, 10000);
+          }, 30000);
 
           await new Promise<void>((res) => {
             if (video.readyState >= 1) {

@@ -23,7 +23,6 @@ import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { VideoSeekBar } from "./video-seek-bar";
 import { Volume } from "./volume";
-import { normalizeError } from "@/utils/error-utils";
 
 interface DualVideoPlayerProps {
   primaryClip: S3ClipData;
@@ -32,6 +31,8 @@ interface DualVideoPlayerProps {
 }
 
 type DisplayMode = "split" | "stretch" | "stretch-full";
+
+const BUFFER_EDGE_TOLERANCE = 0.1;
 
 export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   primaryClip,
@@ -53,7 +54,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const [displayMode, setDisplayMode] = useState<DisplayMode>("split");
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useLatestValue(isPlaying);
-  const [isSeekingPrimary, setIsSeekingPrimary] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -83,7 +83,24 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const secondaryTrimRef = useLatestValue(secondaryTrim);
   const primaryTrimRef = useLatestValue(primaryTrim);
   const isRepeatRef = useLatestValue(isRepeat);
-  const isSeekingPrimaryRef = useLatestValue(isSeekingPrimary);
+  const isSeekingRef = useRef(false);
+  const bufferingTimeoutRef = useRef<number>(0);
+  const isPrimaryBuffering = useRef(false);
+  const isSecondaryBuffering = useRef(false);
+
+  const setBufferingState = useCallback((shouldBuffer: boolean) => {
+    if (bufferingTimeoutRef.current) {
+      clearTimeout(bufferingTimeoutRef.current);
+    }
+
+    if (shouldBuffer) {
+      setIsBuffering(true);
+    } else {
+      bufferingTimeoutRef.current = window.setTimeout(() => {
+        setIsBuffering(false);
+      }, 200);
+    }
+  }, []);
 
   const calculateSecondaryTime = useCallback(
     (primaryCurrentTime: number): number | null => {
@@ -148,10 +165,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       // Handle play/pause state
       if (shouldPlay && secondary.paused) {
         secondary.play().catch((err) => {
-          if (normalizeError(err).name === "AbortError") {
-            logger.warn("Failed to play secondary:", err);
-            return;
-          }
+          logger.warn("Failed to play secondary:", err);
         });
       } else if (!shouldPlay && !secondary.paused) {
         secondary.pause();
@@ -186,10 +200,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
           setIsPlaying(true);
           setIsBuffering(false);
         } catch (err) {
-          if (normalizeError(err).name === "AbortError") {
-            logger.warn("Failed to play primary:", err);
-            return;
-          }
+          logger.warn("Failed to play primary:", err);
 
           setIsPlaying(false);
           setIsBuffering(false);
@@ -209,7 +220,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   );
 
   const handleSync = useCallback(() => {
-    if (isSeekingPrimaryRef.current || !isPlayingRef.current) return;
+    if (isSeekingRef.current || !isPlayingRef.current) return;
 
     const primary = primaryVideoRef.current;
     const primaryTrim = primaryTrimRef.current;
@@ -265,10 +276,8 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
               }
             })
             .catch((err) => {
-              if (normalizeError(err).name === "AbortError") {
-                logger.warn("Failed to restart:", err);
-                return;
-              }
+              logger.warn("Failed to restart:", err);
+
               setIsPlaying(false);
             });
         }, 25);
@@ -305,18 +314,75 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     }
   }, []);
 
-  const isTimeBuffered = useCallback(
-    (video: HTMLVideoElement, time: number): boolean => {
-      const buffered = video.buffered;
-      for (let i = 0; i < buffered.length; i++) {
-        if (time >= buffered.start(i) && time <= buffered.end(i)) {
+  const isTimeInBufferedRange = useCallback(
+    (video: HTMLVideoElement, timeSec: number): boolean => {
+      if (!video?.buffered || video.buffered.length === 0) {
+        return false;
+      }
+
+      for (let i = 0; i < video.buffered.length; i++) {
+        const start = video.buffered.start(i);
+        const end = video.buffered.end(i);
+
+        if (timeSec >= start && timeSec <= end - BUFFER_EDGE_TOLERANCE) {
           return true;
         }
       }
+
       return false;
     },
     []
   );
+
+  const canBothVideosPlay = useCallback((): boolean => {
+    const primary = primaryVideoRef.current;
+    if (!primary) return false;
+
+    const isPrimaryBuffered = isTimeInBufferedRange(
+      primary,
+      primary.currentTime
+    );
+
+    // During seeking: only check if content is buffered (ignore readyState)
+    if (isSeekingRef.current) {
+      if (!isPrimaryBuffered) return false;
+
+      const secondary = secondaryVideoRef.current;
+      if (secondary && secondaryTrimRef.current) {
+        const expectedSecondaryTime = calculateSecondaryTime(
+          primary.currentTime
+        );
+
+        if (expectedSecondaryTime !== null) {
+          const isSecondaryBuffered = isTimeInBufferedRange(
+            secondary,
+            expectedSecondaryTime
+          );
+          if (!isSecondaryBuffered) return false;
+        }
+      }
+
+      return true;
+    }
+
+    // Normal playback: check both buffered AND readyState
+    if (!isPrimaryBuffered || primary.readyState < 3) return false;
+
+    const secondary = secondaryVideoRef.current;
+    if (secondary && secondaryTrimRef.current) {
+      const expectedSecondaryTime = calculateSecondaryTime(primary.currentTime);
+
+      if (expectedSecondaryTime !== null) {
+        const isSecondaryBuffered = isTimeInBufferedRange(
+          secondary,
+          expectedSecondaryTime
+        );
+        if (!isSecondaryBuffered || secondary.readyState < 3) return false;
+      }
+    }
+
+    return true;
+  }, [calculateSecondaryTime, isTimeInBufferedRange]);
 
   useEffect(() => {
     setDualVideoRef(primaryVideoRef);
@@ -342,57 +408,45 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     if (!primary) return;
 
     const onPrimaryWaiting = () => {
-      if (isTimeBuffered(primary, primary.currentTime)) return;
+      if (isSeekingRef.current && canBothVideosPlay()) return;
+      if (!hasPlayIntentRef.current) return;
 
-      if (hasPlayIntentRef.current) {
-        setIsBuffering(true);
-
-        const secondary = secondaryVideoRef.current;
-        if (!primary.paused) {
-          primary.pause();
-          setIsPlaying(false);
-        }
-        if (secondary && !secondary.paused) {
-          secondary.pause();
-          setIsPlaying(false);
-        }
-      }
+      isPrimaryBuffering.current = true;
+      setBufferingState(true);
     };
 
     const onPrimaryCanPlay = () => {
-      setIsBuffering(false);
+      isPrimaryBuffering.current = false;
 
-      if (hasPlayIntentRef.current && primary.paused) {
-        togglePlay(true);
+      const secondary = secondaryVideoRef.current;
+      if (!secondary || !isSecondaryBuffering.current) {
+        setBufferingState(false);
       }
+    };
+
+    const onPrimaryCanPlayThrough = () => {
+      isPrimaryBuffering.current = false;
+      setBufferingState(false);
     };
 
     const onPrimaryStalled = () => {
-      if (isTimeBuffered(primary, primary.currentTime)) return;
+      if (isSeekingRef.current && canBothVideosPlay()) return;
+      if (!hasPlayIntentRef.current && !isPlayingRef.current) return;
 
-      if (hasPlayIntentRef.current || isPlayingRef.current) {
-        setIsBuffering(true);
-
-        const secondary = secondaryVideoRef.current;
-        if (!primary.paused) {
-          primary.pause();
-          setIsPlaying(false);
-        }
-        if (secondary && !secondary.paused) {
-          secondary.pause();
-          setIsPlaying(false);
-        }
-      }
+      isPrimaryBuffering.current = true;
+      setBufferingState(true);
     };
-
     const onPrimaryError = () => {
       setPrimaryError("Failed to load primary video");
+      setBufferingState(false);
     };
     const onPrimaryProgress = () => updateBufferedRanges();
 
-    const onSeeking = () => setIsSeekingPrimary(true);
+    const onSeeking = () => {
+      isSeekingRef.current = true;
+    };
     const onSeeked = () => {
-      setIsSeekingPrimary(false);
+      isSeekingRef.current = false;
       if (secondaryTrim) {
         alignSecondary(primary.currentTime, isPlaying);
       }
@@ -405,6 +459,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
 
     primary.addEventListener("waiting", onPrimaryWaiting);
     primary.addEventListener("canplay", onPrimaryCanPlay);
+    primary.addEventListener("canplaythrough", onPrimaryCanPlayThrough);
     primary.addEventListener("stalled", onPrimaryStalled);
     primary.addEventListener("error", onPrimaryError);
     primary.addEventListener("progress", onPrimaryProgress);
@@ -415,84 +470,92 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     return () => {
       primary.removeEventListener("waiting", onPrimaryWaiting);
       primary.removeEventListener("canplay", onPrimaryCanPlay);
+      primary.removeEventListener("canplaythrough", onPrimaryCanPlayThrough);
       primary.removeEventListener("stalled", onPrimaryStalled);
       primary.removeEventListener("error", onPrimaryError);
       primary.removeEventListener("progress", onPrimaryProgress);
       primary.removeEventListener("seeking", onSeeking);
       primary.removeEventListener("seeked", onSeeked);
       primary.removeEventListener("timeupdate", onTimeUpdate);
+
+      if (bufferingTimeoutRef.current) {
+        clearTimeout(bufferingTimeoutRef.current);
+      }
     };
-  }, [primaryClip.url, alignSecondary, handleSync, updateBufferedRanges]);
+  }, [
+    primaryClip.url,
+    alignSecondary,
+    handleSync,
+    updateBufferedRanges,
+    canBothVideosPlay,
+  ]);
 
   useEffect(() => {
     const secondary = secondaryVideoRef.current;
     if (!secondary) return;
 
+    const onSeekingSecondary = () => {
+      logger.log("Secondary seeking (ignored, primary drives state)");
+    };
+
+    const onSeekedSecondary = () => {
+      logger.log("Secondary seeked (ignored, primary drives state)");
+    };
+
     const onSecondaryWaiting = () => {
-      if (!secondary || isTimeBuffered(secondary, secondary.currentTime))
-        return;
-
-      if (hasPlayIntentRef.current) {
-        setIsBuffering(true);
-
-        const primary = primaryVideoRef.current;
-        if (primary && !primary.paused) {
-          primary.pause();
-          setIsPlaying(false);
-        }
-        if (!secondary.paused) {
-          secondary.pause();
-          setIsPlaying(false);
-        }
-      }
+      if (isSeekingRef.current && canBothVideosPlay()) return;
+      if (!hasPlayIntentRef.current) return;
+      isSecondaryBuffering.current = true;
+      setBufferingState(true);
     };
 
     const onSecondaryCanPlay = () => {
-      setIsBuffering(false);
-
-      if (hasPlayIntentRef.current && secondary.paused) {
-        togglePlay(true);
+      isSecondaryBuffering.current = false;
+      if (!isPrimaryBuffering.current) {
+        setBufferingState(false);
       }
     };
 
+    const onSecondaryCanPlayThrough = () => {
+      isSecondaryBuffering.current = false;
+      setBufferingState(false);
+    };
+
     const onSecondaryStalled = () => {
-      if (!secondary || isTimeBuffered(secondary, secondary.currentTime))
-        return;
-
-      if (hasPlayIntentRef.current || isPlayingRef.current) {
-        setIsBuffering(true);
-
-        const primary = primaryVideoRef.current;
-        if (primary && !primary.paused) {
-          primary.pause();
-          setIsPlaying(false);
-        }
-        if (!secondary.paused) {
-          secondary.pause();
-          setIsPlaying(false);
-        }
-      }
+      if (isSeekingRef.current && canBothVideosPlay()) return;
+      if (!hasPlayIntentRef.current && !isPlayingRef.current) return;
+      isSecondaryBuffering.current = true;
+      setBufferingState(true);
     };
 
     const onSecondaryError = () => {
       setSecondaryError("Failed to load secondary video");
+      setBufferingState(false);
     };
     const onSecondaryProgress = () => updateBufferedRanges();
 
+    secondary.addEventListener("seeking", onSeekingSecondary);
+    secondary.addEventListener("seeked", onSeekedSecondary);
     secondary.addEventListener("waiting", onSecondaryWaiting);
     secondary.addEventListener("canplay", onSecondaryCanPlay);
+    secondary.addEventListener("canplaythrough", onSecondaryCanPlayThrough);
     secondary.addEventListener("stalled", onSecondaryStalled);
     secondary.addEventListener("error", onSecondaryError);
     secondary.addEventListener("progress", onSecondaryProgress);
-
     return () => {
+      secondary.removeEventListener("seeking", onSeekingSecondary);
+      secondary.removeEventListener("seeked", onSeekedSecondary);
       secondary.removeEventListener("waiting", onSecondaryWaiting);
       secondary.removeEventListener("canplay", onSecondaryCanPlay);
+      secondary.removeEventListener(
+        "canplaythrough",
+        onSecondaryCanPlayThrough
+      );
       secondary.removeEventListener("stalled", onSecondaryStalled);
       secondary.removeEventListener("error", onSecondaryError);
       secondary.removeEventListener("progress", onSecondaryProgress);
     };
-  }, [secondaryClip?.url, updateBufferedRanges]);
+  }, [secondaryClip?.url, updateBufferedRanges, canBothVideosPlay]);
 
   useEffect(() => {
     if (secondaryClip && displayMode === "stretch-full") {
@@ -664,8 +727,8 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
         )}
 
         {isBuffering && (
-          <div className="absolute inset-0 bg-surface-primary/70 flex items-center justify-center z-10">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="absolute top-1/2 -translate-y-1/2 z-10">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
           </div>
         )}
 

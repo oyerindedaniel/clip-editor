@@ -497,46 +497,6 @@ export default function DualVideoControls({
               </div>
             </div>
 
-            {/* <div className="flex flex-col gap-2">
-              <label className="text-xs text-foreground-subtle">
-                Time Synchronization
-              </label>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOffsetIncrement(-100)}
-                  disabled={disabled}
-                  className="h-8 w-8 p-0"
-                >
-                  <Minus size={14} />
-                </Button>
-                <Input
-                  type="number"
-                  value={settings.secondaryOffset || 0}
-                  onChange={(e) =>
-                    handleOffsetChange(parseInt(e.target.value) || 0)
-                  }
-                  className="h-8 text-xs"
-                  placeholder="0"
-                  disabled={disabled}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOffsetIncrement(100)}
-                  disabled={disabled}
-                  className="h-8 w-8 p-0"
-                >
-                  <Plus size={14} />
-                </Button>
-                <span className="text-xs text-foreground-muted">ms</span>
-              </div>
-              <p className="text-xs text-foreground-muted">
-                Negative values advance secondary clip, positive values delay it
-              </p>
-            </div> */}
-
             <div className="flex flex-col gap-2">
               <label className="text-xs text-foreground-subtle">
                 Output Orientation

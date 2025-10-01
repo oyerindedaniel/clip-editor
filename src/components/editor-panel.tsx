@@ -171,7 +171,7 @@ EditorPanelRoot.displayName = "EditorPanel.Root";
 const EditorPanelTrigger = forwardRef<
   HTMLButtonElement,
   EditorPanelTriggerProps
->(({ children, asChild = false, onClick, ...props }, ref) => {
+>(({ children, asChild = false, onClick, className, ...props }, ref) => {
   const { onOpenChange, open, triggerId, contentId, triggerRef } =
     useEditorPanel();
   const composedRefs = useComposedRefs(ref, triggerRef);
@@ -454,6 +454,7 @@ const EditorPanelCloseButton = forwardRef<
       ref={ref}
       type="button"
       variant="ghost"
+      size="icon"
       onClick={handleClick}
       className={cn("", className)}
       aria-label="Close panel"

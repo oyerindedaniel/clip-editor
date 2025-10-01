@@ -41,7 +41,12 @@ export function InfoTooltip({
           <Info size={12} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side={side} align={align} {...props} className="max-w-xs">
+      <TooltipContent
+        side={side}
+        align={align}
+        {...props}
+        className="max-w-xs text-center"
+      >
         <p className="text-xs leading-relaxed">{content}</p>
       </TooltipContent>
     </Tooltip>

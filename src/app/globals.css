@@ -165,7 +165,7 @@
   --animate-panel-exit-left: panel-slide-out-left 0.3s
     cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
 
-  @keyframes volume-reveal-in {
+  @keyframes volume-reveal-x-in {
     0% {
       clip-path: inset(0 100% 0 0);
       opacity: 0;
@@ -176,7 +176,7 @@
     }
   }
 
-  @keyframes volume-reveal-out {
+  @keyframes volume-reveal-x-out {
     0% {
       clip-path: inset(0 0 0 0);
       opacity: 1;
@@ -187,8 +187,65 @@
     }
   }
 
-  --animate-volume-in: volume-reveal-in 0.2s linear both;
-  --animate-volume-out: volume-reveal-out 0.2s linear both;
+  @keyframes volume-reveal-y-in {
+    0% {
+      clip-path: inset(100% 0 0 0);
+      opacity: 0;
+    }
+    100% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes volume-reveal-y-out {
+    0% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+    100% {
+      clip-path: inset(100% 0 0 0);
+      opacity: 0;
+    }
+  }
+
+  --animate-volume-reveal-x-in: volume-reveal-x-in 0.2s linear both;
+  --animate-volume-reveal-x-out: volume-reveal-x-out 0.2s linear both;
+  --animate-volume-reveal-y-in: volume-reveal-y-in 0.2s linear both;
+  --animate-volume-reveal-y-out: volume-reveal-y-out 0.2s linear both;
+
+  @keyframes expand-width {
+    0% {
+      width: var(--start);
+    }
+    100% {
+      width: var(--end);
+    }
+  }
+  @keyframes collapse-width {
+    0% {
+      width: var(--end);
+    }
+    100% {
+      width: var(--start);
+    }
+  }
+  @keyframes expand-height {
+    0% {
+      height: var(--start);
+    }
+    100% {
+      height: var(--end);
+    }
+  }
+  @keyframes collapse-height {
+    0% {
+      height: var(--end);
+    }
+    100% {
+      height: var(--start);
+    }
+  }
 }
 
 html {
@@ -218,26 +275,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: oklch(0.6 0.01 240 / 0.7);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
