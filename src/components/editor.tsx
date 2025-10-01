@@ -8,10 +8,7 @@ import type {
   ClipExportData,
   ClipMetadata,
   S3ClipData as ClipData,
-  DualVideoClip,
-  DualVideoSettings,
   Settings as SettingsType,
-  TrimData,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
@@ -55,7 +52,6 @@ interface ClipEditorProps {
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -566,13 +562,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed primary video from:", startTime, "to:", endTime);
   };
 
-  const handleTimeUpdate = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
-      setCurrentTime(video.currentTime);
-    }
-  }, []);
-
   const settings = useMemo(() => {
     const { dimensions, ...settings } = primaryClipMetaDataRef.current;
     return settings as SettingsType;
@@ -711,7 +700,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
                 Shift+T
               </kbd>
-              <EditorPanel.CloseButton size="sm" />
+              <EditorPanel.CloseButton />
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">
               <EditorRightPanel

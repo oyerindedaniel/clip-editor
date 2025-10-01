@@ -3,13 +3,13 @@ import { cn } from "@/lib/utils";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { getElementRef } from "@/lib/get-element-ref";
 
-type HitAreaVariant = "x" | "y" | "all";
+type HitAreaVariant = "x" | "y" | "all" | "l" | "r" | "t" | "b";
 
 interface HitAreaProps extends React.HTMLAttributes<HTMLElement> {
   children: React.ReactElement<
     React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement> }
   >;
-  buffer?: number; // in px
+  buffer?: number; // px value applied to hit buffer
   variant?: HitAreaVariant;
 }
 
@@ -25,6 +25,14 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
         ? "before:-mx-(--hit-buffer)"
         : variant === "y"
         ? "before:-my-(--hit-buffer)"
+        : variant === "l"
+        ? "before:-ml-(--hit-buffer)"
+        : variant === "r"
+        ? "before:-mr-(--hit-buffer)"
+        : variant === "t"
+        ? "before:-mt-(--hit-buffer)"
+        : variant === "b"
+        ? "before:-mb-(--hit-buffer)"
         : "before:-m-(--hit-buffer)";
 
     if (!React.isValidElement(children)) {
