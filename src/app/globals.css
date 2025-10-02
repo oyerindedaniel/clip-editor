@@ -104,9 +104,9 @@
   }
 
   --animate-fade-scale-in: fade-scale-in var(--duration)
-    cubic-bezier(0.2, 0.8, 0.2, 1) both var(--delay);
+    cubic-bezier(0.2, 0.8, 0.2, 1) forwards var(--delay);
   --animate-fade-scale-out: fade-scale-out var(--duration)
-    cubic-bezier(0.4, 0, 0.6, 1) both var(--delay);
+    cubic-bezier(0.4, 0, 0.6, 1) forwards var(--delay);
 
   --animate-spin-slow: spin-slow 2s linear infinite;
 
@@ -157,13 +157,13 @@
   }
 
   --animate-panel-enter-right: panel-slide-in-right 0.3s
-    cubic-bezier(0.22, 1, 0.36, 1) both;
+    cubic-bezier(0.22, 1, 0.36, 1) forwards;
   --animate-panel-enter-left: panel-slide-in-left 0.3s
-    cubic-bezier(0.22, 1, 0.36, 1) both;
+    cubic-bezier(0.22, 1, 0.36, 1) forwards;
   --animate-panel-exit-right: panel-slide-out-right 0.3s
-    cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
+    cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
   --animate-panel-exit-left: panel-slide-out-left 0.3s
-    cubic-bezier(0.6, -0.28, 0.74, 0.05) both;
+    cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
 
   @keyframes volume-reveal-x-in {
     0% {
@@ -209,41 +209,52 @@
     }
   }
 
-  --animate-volume-reveal-x-in: volume-reveal-x-in 0.2s linear both;
-  --animate-volume-reveal-x-out: volume-reveal-x-out 0.2s linear both;
-  --animate-volume-reveal-y-in: volume-reveal-y-in 0.2s linear both;
-  --animate-volume-reveal-y-out: volume-reveal-y-out 0.2s linear both;
+  --animate-volume-reveal-x-in: volume-reveal-x-in 2s linear forwards;
+  --animate-volume-reveal-x-out: volume-reveal-x-out 2s linear forwards;
+  --animate-volume-reveal-y-in: volume-reveal-y-in 2s linear forwards;
+  --animate-volume-reveal-y-out: volume-reveal-y-out 2s linear forwards;
 
   @keyframes expand-width {
     0% {
-      width: var(--start);
+      clip-path: inset(0 calc(var(--end) - var(--start)) 0 0 round 9999px);
+      opacity: 1;
     }
     100% {
-      width: var(--end);
+      clip-path: inset(0 0 0 0 round 9999px);
+      opacity: 1;
     }
   }
+
   @keyframes collapse-width {
     0% {
-      width: var(--end);
+      clip-path: inset(0 0 0 0 round 9999px);
+      opacity: 1;
     }
     100% {
-      width: var(--start);
+      clip-path: inset(0 calc(var(--end) - var(--start)) 0 0 round 9999px);
+      opacity: 1;
     }
   }
+
   @keyframes expand-height {
     0% {
-      height: var(--start);
+      clip-path: inset(calc(var(--end) - var(--start)) 0 0 0 round 9999px);
+      opacity: 1;
     }
     100% {
-      height: var(--end);
+      clip-path: inset(0 0 0 0 round 9999px);
+      opacity: 1;
     }
   }
+
   @keyframes collapse-height {
     0% {
-      height: var(--end);
+      clip-path: inset(0 0 0 0 round 9999px);
+      opacity: 1;
     }
     100% {
-      height: var(--start);
+      clip-path: inset(calc(var(--end) - var(--start)) 0 0 0 round 9999px);
+      opacity: 1;
     }
   }
 }

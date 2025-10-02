@@ -47,7 +47,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const HANDLE_WIDTH = 12;
   const EDGE_THRESHOLD = 30;
 
-  const { pxPerMs, rawPxPerMs, currentScalingType } = useScale({
+  const { pxPerMs, rawPxPerMs } = useScale({
     containerRef: scrollContainerRef,
     durationMs: duration,
     type: "auto",
@@ -336,13 +336,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
 
       <div
         ref={scrollContainerRef}
-        className="relative w-(--width) rounded-md overflow-x-auto bg-surface-secondary overflow-y-hidden"
-        style={
-          {
-            "--width":
-              currentScalingType === "container" ? timelineWidth : "100%",
-          } as React.CSSProperties
-        }
+        className="relative w-full rounded-md overflow-x-auto bg-surface-secondary overflow-y-hidden"
       >
         <div
           ref={timelineRef}
@@ -356,10 +350,10 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
           <div className="absolute inset-0 bg-gradient-to-b from-surface-primary/40 to-transparent pointer-events-none" />
 
           <div className="absolute left-0 right-0 top-6 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
+            <div className="absolute inset-0 rounded bg-surface-tertiary" />
             <div
               ref={blockRef}
-              className="absolute top-0 h-14 rounded-md border border-default overflow-hidden shadow-inner"
+              className="absolute inset-0 rounded-md border border-default overflow-hidden shadow-inner"
               title="Video timeline"
             >
               <div

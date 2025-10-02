@@ -243,8 +243,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     []
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
       e.preventDefault();
       setIsDragging(true);
 
@@ -259,8 +259,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [getTimeFromPosition, timelineDurationMs, scheduleVisualUpdate]
   );
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
       if (!isDragging) return;
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
@@ -278,24 +278,24 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     ]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setIsDragging(false);
   }, []);
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
 
       return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging, handlePointerMove, handlePointerUp]);
 
   const handleHover = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       const seekBar = seekBarRef.current;
       if (!seekBar) return;
 
@@ -338,9 +338,9 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
         variant="y"
         className="relative cursor-pointer rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-300"
         ref={seekBarRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleHover}
-        onMouseLeave={handleHoverLeave}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handleHover}
+        onPointerLeave={handleHoverLeave}
       >
         <div>
           <div

@@ -256,41 +256,87 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     } = useEditorPanel();
 
     const ref = useRef<HTMLDivElement | null>(null);
-
     const composedRefs = useComposedRefs(ref, forwardedRef, contentRef);
+
+    const getFocusable = useCallback((container: HTMLElement | null) => {
+      if (!container) return [];
+      return Array.from(
+        container.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(
+        (el) => !el.hasAttribute("disabled") && !el.getAttribute("aria-hidden")
+      );
+    }, []);
+
+    const handleFocusTrapBefore = useCallback(() => {
+      const focusables = getFocusable(ref.current);
+      focusables[focusables.length - 1]?.focus();
+    }, [getFocusable]);
+
+    const handleFocusTrapAfter = useCallback(() => {
+      const focusables = getFocusable(ref.current);
+      focusables[0]?.focus();
+    }, [getFocusable]);
+
+    useEffect(() => {
+      if (!open) return;
+      const panel = ref.current;
+      if (!panel) return;
+
+      const triggerEl = triggerRef.current;
+      const focusables = getFocusable(panel);
+
+      if (focusFirst && focusables.length > 0) {
+        focusables[0].focus();
+      } else {
+        panel.focus();
+      }
+
+      return () => {
+        triggerEl?.focus();
+      };
+    }, [open, focusFirst, triggerRef, getFocusable]);
 
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         if (event.key === "Escape" && open) {
-          event.preventDefault();
           onEscapeKeyDown?.(event);
-          onOpenChange(false);
+
+          if (!event.defaultPrevented) {
+            event.preventDefault();
+            onOpenChange(false);
+          }
         }
       };
 
       if (open) {
         document.addEventListener("keydown", handleKeyDown, { capture: true });
-        return () =>
+        return () => {
           document.removeEventListener("keydown", handleKeyDown, {
             capture: true,
           });
+        };
       }
     }, [open, onEscapeKeyDown, onOpenChange]);
 
     useEffect(() => {
       const handlePointerDown = (event: PointerEvent) => {
-        const target = event.target as Node;
+        if (!open) return;
+
         const content = ref.current;
         const trigger = triggerRef.current;
 
-        if (
-          open &&
-          content &&
-          !content.contains(target) &&
-          trigger &&
-          !trigger.contains(target)
-        ) {
+        const path = event.composedPath();
+        const isInContent = content ? path.includes(content) : false;
+        const isInTrigger = trigger ? path.includes(trigger) : false;
+
+        if (!isInContent && !isInTrigger) {
           onPointerDownOutside?.(event);
+
+          if (!event.defaultPrevented) {
+            onOpenChange(false);
+          }
         }
       };
 
@@ -298,52 +344,17 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
         document.addEventListener("pointerdown", handlePointerDown, {
           capture: true,
         });
-        return () =>
+        return () => {
           document.removeEventListener("pointerdown", handlePointerDown, {
             capture: true,
           });
-      }
-    }, [open, onPointerDownOutside, triggerRef]);
-
-    useEffect(() => {
-      const content = ref.current;
-      if (!content) return;
-
-      if (open) {
-        const focusableElements = content.querySelectorAll(
-          'input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        const firstFocusable = focusableElements[0] as HTMLElement;
-        firstFocusable?.focus();
-
-        const handleTabKey = (event: KeyboardEvent) => {
-          if (event.key !== "Tab") return;
-
-          const focusableArray = Array.from(focusableElements) as HTMLElement[];
-          const firstElement = focusableArray[0];
-          const lastElement = focusableArray[focusableArray.length - 1];
-
-          if (event.shiftKey) {
-            if (document.activeElement === firstElement) {
-              event.preventDefault();
-              lastElement?.focus();
-            }
-          } else {
-            if (document.activeElement === lastElement) {
-              event.preventDefault();
-              firstElement?.focus();
-            }
-          }
         };
-
-        content.addEventListener("keydown", handleTabKey);
-        return () => content.removeEventListener("keydown", handleTabKey);
       }
-    }, [open]);
+    }, [open, onPointerDownOutside, onOpenChange, triggerRef]);
 
     if (!shouldRender && !forceMount) return null;
 
-    const dataState =
+    const state =
       animationState === "entering"
         ? "open"
         : animationState === "exiting"
@@ -351,36 +362,42 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
         : undefined;
 
     return (
-      <div
-        ref={composedRefs}
-        id={contentId}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-        data-state={dataState}
-        className={cn(
-          "fixed top-0 bottom-0 z-50",
-          "bg-surface-secondary/95 backdrop-blur-sm",
-          "border-l border-default",
-          "shadow-2xl shadow-black/20",
-          side === "right" ? "right-0" : "left-0",
-          side === "right"
-            ? "data-[state=open]:animate-panel-enter-right data-[state=closed]:animate-panel-exit-right"
-            : "data-[state=open]:animate-panel-enter-left data-[state=closed]:animate-panel-exit-left",
-          className
-        )}
-        style={{
-          ...(side === "right"
-            ? { marginRight: `${sideOffset}px` }
-            : { marginLeft: `${sideOffset}px` }),
-          ...style,
-        }}
-        {...props}
-      >
-        {children}
-      </div>
+      <>
+        <div tabIndex={0} aria-hidden="true" onFocus={handleFocusTrapBefore} />
+
+        <div
+          ref={composedRefs}
+          id={contentId}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          tabIndex={-1}
+          data-state={state}
+          className={cn(
+            "fixed top-0 bottom-0 z-50 outline-none focus:outline-none",
+            "bg-surface-secondary/95 backdrop-blur-sm",
+            "border-l border-default",
+            "shadow-2xl shadow-black/20",
+            side === "right" ? "right-0" : "left-0",
+            side === "right"
+              ? "data-[state=open]:animate-panel-enter-right data-[state=closed]:animate-panel-exit-right"
+              : "data-[state=open]:animate-panel-enter-left data-[state=closed]:animate-panel-exit-left",
+            className
+          )}
+          style={{
+            ...(side === "right"
+              ? { marginRight: `${sideOffset}px` }
+              : { marginLeft: `${sideOffset}px` }),
+            ...style,
+          }}
+          {...props}
+        >
+          {children}
+        </div>
+
+        <div tabIndex={0} aria-hidden="true" onFocus={handleFocusTrapAfter} />
+      </>
     );
   }
 );

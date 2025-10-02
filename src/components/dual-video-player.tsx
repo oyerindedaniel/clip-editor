@@ -42,8 +42,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const [isBuffering, setIsBuffering] = useState(false);
   const [hasPlayIntent, setHasPlayIntent] = useState(false);
   const hasPlayIntentRef = useLatestValue(hasPlayIntent);
-  const [primaryError, setPrimaryError] = useState<string | null>(null);
-  const [secondaryError, setSecondaryError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const [primaryBuffered, setPrimaryBuffered] = useState<TimeRanges | null>(
     null
   );
@@ -84,7 +83,9 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const primaryTrimRef = useLatestValue(primaryTrim);
   const isRepeatRef = useLatestValue(isRepeat);
   const isSeekingRef = useRef(false);
-  const bufferingTimeoutRef = useRef<number>(0);
+  const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const isPrimaryBuffering = useRef(false);
   const isSecondaryBuffering = useRef(false);
 
@@ -96,7 +97,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     if (shouldBuffer) {
       setIsBuffering(true);
     } else {
-      bufferingTimeoutRef.current = window.setTimeout(() => {
+      bufferingTimeoutRef.current = setTimeout(() => {
         setIsBuffering(false);
       }, 200);
     }
@@ -389,19 +390,19 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   }, [setDualVideoRef, primaryVideoRef]);
 
   useEffect(() => {
-    if (primaryVideoRef.current && dualVideoSettings?.primaryVolume != null) {
+    if (primaryVideoRef.current && dualVideoSettings.primaryVolume != null) {
       primaryVideoRef.current.volume = dualVideoSettings.primaryVolume;
     }
-  }, [dualVideoSettings?.primaryVolume]);
+  }, [dualVideoSettings.primaryVolume]);
 
   useEffect(() => {
     if (
       secondaryVideoRef.current &&
-      dualVideoSettings?.secondaryVolume != null
+      dualVideoSettings.secondaryVolume != null
     ) {
       secondaryVideoRef.current.volume = dualVideoSettings.secondaryVolume;
     }
-  }, [dualVideoSettings?.secondaryVolume]);
+  }, [dualVideoSettings.secondaryVolume]);
 
   useEffect(() => {
     const primary = primaryVideoRef.current;
@@ -437,7 +438,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       setBufferingState(true);
     };
     const onPrimaryError = () => {
-      setPrimaryError("Failed to load primary video");
+      setHasError(true);
       setBufferingState(false);
     };
     const onPrimaryProgress = () => updateBufferedRanges();
@@ -529,7 +530,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
     };
 
     const onSecondaryError = () => {
-      setSecondaryError("Failed to load secondary video");
+      setHasError(true);
       setBufferingState(false);
     };
     const onSecondaryProgress = () => updateBufferedRanges();
@@ -652,7 +653,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
             <Volume.Root
               value={dualVideoSettings.primaryVolume}
               onValueChange={(v) =>
-                setDualVideoSettings?.({
+                setDualVideoSettings({
                   ...dualVideoSettings,
                   primaryVolume: v,
                 })
@@ -702,7 +703,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
               <Volume.Root
                 value={dualVideoSettings.secondaryVolume}
                 onValueChange={(v) =>
-                  setDualVideoSettings?.({
+                  setDualVideoSettings({
                     ...dualVideoSettings,
                     secondaryVolume: v,
                   })
@@ -723,7 +724,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
         )}
 
         {secondaryClip && (
-          <div className="absolute top-1/2 left-0 right-0 h-px bg-red-600 transform -translate-y-px" />
+          <div className="absolute top-1/2 left-0 right-0 h-px bg-error transform -translate-y-px" />
         )}
 
         {isBuffering && (
@@ -732,11 +733,13 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
           </div>
         )}
 
-        {(primaryError || secondaryError) && (
-          <div className="absolute inset-0 bg-error/50 backdrop-blur-sm flex items-center justify-center z-10">
-            <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2">
-              <AlertTriangle className="h-6 w-6" />
-              <div className="text-sm">{primaryError || secondaryError}</div>
+        {hasError && (
+          <div className="absolute inset-0 bg-black/80 text-white backdrop-blur-sm flex items-center justify-center z-10">
+            <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2 w-[85%]">
+              <AlertTriangle className="size-8 text-error mb-px" />
+              <div className="text-sm font-semibold tracking-tight">
+                Video failed to load
+              </div>
             </div>
           </div>
         )}

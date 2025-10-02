@@ -151,74 +151,23 @@ const VolumeLabel = React.forwardRef<HTMLLabelElement, VolumeLabelProps>(
 );
 VolumeLabel.displayName = "VolumeLabel";
 
-interface VolumeButtonProps
-  extends Omit<React.ComponentProps<typeof Button>, "children">,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
-  children?:
-    | ((props: { muted: boolean; volume: number }) => React.ReactNode)
-    | React.ReactNode;
-}
+type AnimationState = "idle" | "entering" | "exiting";
 
-const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
-  (
-    {
-      asChild = false,
-      children,
-      onClick,
-      variant = "ghost",
-      className,
-      size = "icon",
-      ...props
-    },
-    ref
-  ) => {
-    const { muted, volume, toggleMute } = useVolumeContext();
+type State = "open" | "closed" | undefined;
 
-    const Comp = asChild ? Slot : Button;
-
-    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (onClick) {
-        onClick(event);
-        if (event.defaultPrevented) return;
-      }
-      toggleMute();
-    };
-
-    const renderDefaultIcon = () => {
-      if (muted || volume === 0) return <VolumeX className="size-5" />;
-      if (volume < 0.5) return <Volume1 className="size-5" />;
-      return <Volume2 className="size-5" />;
-    };
-
-    const label = muted || volume === 0 ? "Unmute" : "Mute";
-
-    return (
-      <Comp
-        ref={ref}
-        variant={variant}
-        size={size}
-        data-slot="volume-button"
-        className={cn("", className)}
-        aria-label={label}
-        onClick={handleClick}
-        {...props}
-      >
-        {typeof children === "function"
-          ? children({ muted, volume })
-          : children ?? renderDefaultIcon()}
-      </Comp>
-    );
-  }
-);
-VolumeButton.displayName = "VolumeButton";
+type VolumeControlsVariant = "pill" | "soft" | "default";
 
 interface ControlsContextValue {
   forceOpenRef: React.RefObject<boolean>;
   trackRef: React.RefObject<HTMLDivElement | null>;
   sliderRef: React.RefObject<HTMLDivElement | null>;
   thumbRef: React.RefObject<HTMLDivElement | null>;
+  shouldRender: boolean;
+  animationState: AnimationState;
+  state: State;
+  variant: VolumeControlsVariant;
 }
+
 const ControlsContext = React.createContext<ControlsContextValue | null>(null);
 function useControlsContext() {
   const ctx = React.useContext(ControlsContext);
@@ -226,26 +175,26 @@ function useControlsContext() {
   return ctx;
 }
 
-type VolumeControlsVariant = "pill" | "soft" | "default";
-
 interface VolumeControlsProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: VolumeControlsVariant;
 }
 
 const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
-  ({ className, children, variant = "default", style, ...props }, ref) => {
-    const { orientation } = useVolumeContext();
-    const forceOpenRef = React.useRef(true);
+  (
+    { className, children, variant = "default", style, ...props },
+    forwardedRef
+  ) => {
+    const { hovering, orientation } = useVolumeContext();
 
     const sliderRef = React.useRef<HTMLDivElement>(null);
     const trackRef = React.useRef<HTMLDivElement>(null);
     const thumbRef = React.useRef<HTMLDivElement>(null);
     const controlsRef = React.useRef<HTMLDivElement>(null);
-    const composedRefs = useComposedRefs(ref, controlsRef);
+    const composedRefs = useComposedRefs(forwardedRef, controlsRef);
 
     const startRef = React.useRef<number>(0);
     const endRef = React.useRef<number>(0);
-
+    const forceOpenRef = React.useRef(true);
     const [isMeasured, setIsMeasured] = React.useState(false);
 
     React.useEffect(() => {
@@ -275,17 +224,67 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
       controls.style.animation = "";
 
       forceOpenRef.current = false;
-
       setIsMeasured(true);
     }, [orientation]);
 
+    const [animationState, setAnimationState] =
+      React.useState<AnimationState>("idle");
+
+    const handleAnimation = (presence: boolean) => {
+      return new Promise<void>((resolve) => {
+        const el = controlsRef.current!;
+
+        if (!el) {
+          resolve();
+          return;
+        }
+
+        if (presence) {
+          setAnimationState("entering");
+          resolve();
+          return;
+        }
+
+        setAnimationState("exiting");
+
+        const onEnd = () => {
+          setAnimationState("idle");
+          el.removeEventListener("animationend", onEnd);
+          resolve();
+        };
+
+        el.addEventListener("animationend", onEnd);
+      });
+    };
+
+    const shouldRender = useAnimatePresence(hovering, handleAnimation, {
+      initial: false,
+    });
+
+    const state =
+      animationState === "entering"
+        ? "open"
+        : animationState === "exiting"
+        ? "closed"
+        : undefined;
+
     return (
       <ControlsContext.Provider
-        value={{ forceOpenRef, trackRef, sliderRef, thumbRef }}
+        value={{
+          forceOpenRef,
+          trackRef,
+          sliderRef,
+          thumbRef,
+          shouldRender,
+          animationState,
+          state,
+          variant,
+        }}
       >
         <HitArea buffer={30} variant={orientation === "horizontal" ? "x" : "y"}>
           <div
             ref={composedRefs}
+            data-state={state}
             className={cn(
               "relative flex gap-2",
               orientation === "horizontal"
@@ -296,8 +295,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
               variant === "soft" &&
                 "bg-surface-secondary/50 backdrop-blur-sm rounded-md p-1",
               orientation === "horizontal"
-                ? "has-[[data-state=open]]:animate-[expand-width_250ms_linear_both] has-[[data-state=closed]]:animate-[collapse-width_250ms_linear_both]"
-                : "has-[[data-state=open]]:animate-[expand-height_250ms_linear_both] has-[[data-state=closed]]:animate-[collapse-height_250ms_linear_both]",
+                ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
+                : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]",
               className
             )}
             style={{
@@ -323,70 +322,96 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
 
 VolumeControls.displayName = "VolumeControls";
 
+interface VolumeButtonProps
+  extends Omit<React.ComponentProps<typeof Button>, "children">,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+  children?:
+    | ((props: { muted: boolean; volume: number }) => React.ReactNode)
+    | React.ReactNode;
+}
+
+const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
+  (
+    {
+      asChild = false,
+      children,
+      onClick,
+      variant = "ghost",
+      className,
+      size = "icon",
+      ...props
+    },
+    ref
+  ) => {
+    const { muted, volume, toggleMute } = useVolumeContext();
+    const { state } = useControlsContext();
+
+    const Comp = asChild ? Slot : Button;
+
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (onClick) {
+        onClick(event);
+        if (event.defaultPrevented) return;
+      }
+      toggleMute();
+    };
+
+    const renderDefaultIcon = () => {
+      if (muted || volume === 0) return <VolumeX className="size-5" />;
+      if (volume < 0.5) return <Volume1 className="size-5" />;
+      return <Volume2 className="size-5" />;
+    };
+
+    const label = muted || volume === 0 ? "Unmute" : "Mute";
+
+    return (
+      <Comp
+        ref={ref}
+        variant={variant}
+        size={size}
+        data-slot="volume-button"
+        data-state={state}
+        className={cn(
+          "transition-transform duration-300 data-[state=open]:scale-95 data-[state=closed]:scale-100",
+          className
+        )}
+        aria-label={label}
+        onClick={handleClick}
+        {...props}
+      >
+        {typeof children === "function"
+          ? children({ muted, volume })
+          : children ?? renderDefaultIcon()}
+      </Comp>
+    );
+  }
+);
+VolumeButton.displayName = "VolumeButton";
+
 interface VolumeSliderProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
 const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
   ({ children, ...props }, forwardedRef) => {
-    const { hovering, orientation } = useVolumeContext();
-    const { forceOpenRef, sliderRef } = useControlsContext();
-
-    type AnimationState = "idle" | "entering" | "exiting";
+    const { orientation } = useVolumeContext();
+    const { forceOpenRef, sliderRef, shouldRender, state, variant } =
+      useControlsContext();
 
     const ref = React.useRef<HTMLDivElement>(null);
     const composedRefs = useComposedRefs(forwardedRef, ref, sliderRef);
 
-    const [animationState, setAnimationState] =
-      React.useState<AnimationState>("idle");
-
-    const handleAnimation = (presence: boolean) => {
-      return new Promise<void>((resolve) => {
-        const el = ref.current!;
-
-        if (presence) {
-          setAnimationState("entering");
-          resolve();
-          return;
-        }
-
-        setAnimationState("exiting");
-
-        const onEnd = () => {
-          setAnimationState("idle");
-          el.removeEventListener("animationend", onEnd);
-          el.removeEventListener("transitionend", onEnd);
-          resolve();
-        };
-
-        el.addEventListener("animationend", onEnd);
-        el.addEventListener("transitionend", onEnd);
-      });
-    };
-
-    const shouldRender = useAnimatePresence(hovering, handleAnimation, {
-      initial: false,
-    });
-
     if (!forceOpenRef.current && !shouldRender) return null;
-
-    const dataState =
-      animationState === "entering"
-        ? "open"
-        : animationState === "exiting"
-        ? "closed"
-        : undefined;
 
     return (
       <div
         ref={composedRefs}
         role="presentation"
-        data-state={dataState}
+        data-state={state}
         className={cn(
-          "flex items-center overflow-hidden",
-          orientation === "horizontal"
-            ? "h-4 w-24 data-[state=open]:animate-volume-reveal-x-in data-[state=closed]:animate-volume-reveal-x-out"
-            : "w-4 h-24 flex-col data-[state=open]:animate-volume-reveal-y-in data-[state=closed]:animate-volume-reveal-y-out"
+          "flex items-center overflow-hidden [will-change:opacity,transform]",
+          orientation === "horizontal" ? "h-4 w-24" : "w-4 h-24 flex-col"
         )}
         {...props}
       >
@@ -582,11 +607,11 @@ VolumeSliderThumb.displayName = "VolumeSliderThumb";
 export const Volume = {
   Root: VolumeRoot,
   Label: VolumeLabel,
+  Controls: VolumeControls,
   Button: VolumeButton,
   Slider: Object.assign(VolumeSlider, {
     Track: VolumeSliderTrack,
     Range: VolumeSliderRange,
     Thumb: VolumeSliderThumb,
   }),
-  Controls: VolumeControls,
 };
