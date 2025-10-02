@@ -194,19 +194,21 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
 
     const startRef = React.useRef<number>(0);
     const endRef = React.useRef<number>(0);
-    const forceOpenRef = React.useRef(true);
-    const [isMeasured, setIsMeasured] = React.useState(false);
+    const forceOpenRef = React.useRef(variant !== "default");
+    const [isMeasured, setIsMeasured] = React.useState(variant === "default");
 
     React.useEffect(() => {
+      if (variant === "default") return;
       const controls = controlsRef.current;
       if (!controls || forceOpenRef.current || !isMeasured) return;
       startRef.current =
         orientation === "horizontal"
           ? controls.offsetWidth
           : controls.offsetHeight;
-    }, [orientation, isMeasured]);
+    }, [orientation, isMeasured, variant]);
 
     React.useLayoutEffect(() => {
+      if (variant === "default") return;
       const slider = sliderRef.current;
       const controls = controlsRef.current;
       if (!slider || !controls) return;
@@ -225,19 +227,15 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
 
       forceOpenRef.current = false;
       setIsMeasured(true);
-    }, [orientation]);
+    }, [orientation, variant]);
 
     const [animationState, setAnimationState] =
       React.useState<AnimationState>("idle");
 
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
-        const el = controlsRef.current!;
-
-        if (!el) {
-          resolve();
-          return;
-        }
+        const el =
+          variant === "default" ? sliderRef.current! : controlsRef.current!;
 
         if (presence) {
           setAnimationState("entering");
@@ -294,9 +292,10 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
                 "bg-surface-secondary/70 backdrop-blur-sm rounded-full p-1",
               variant === "soft" &&
                 "bg-surface-secondary/50 backdrop-blur-sm rounded-md p-1",
-              orientation === "horizontal"
-                ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
-                : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]",
+              variant !== "default" &&
+                (orientation === "horizontal"
+                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
+                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]"),
               className
             )}
             style={{
@@ -411,7 +410,11 @@ const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
         data-state={state}
         className={cn(
           "flex items-center overflow-hidden [will-change:opacity,transform]",
-          orientation === "horizontal" ? "h-4 w-24" : "w-4 h-24 flex-col"
+          orientation === "horizontal" ? "h-4 w-24" : "w-4 h-24 flex-col",
+          variant === "default" &&
+            (orientation === "horizontal"
+              ? "data-[state=open]:animate-volume-reveal-x-in data-[state=closed]:animate-volume-reveal-x-out"
+              : "data-[state=open]:animate-volume-reveal-y-in data-[state=closed]:animate-volume-reveal-y-out")
         )}
         {...props}
       >

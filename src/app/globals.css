@@ -209,10 +209,10 @@
     }
   }
 
-  --animate-volume-reveal-x-in: volume-reveal-x-in 2s linear forwards;
-  --animate-volume-reveal-x-out: volume-reveal-x-out 2s linear forwards;
-  --animate-volume-reveal-y-in: volume-reveal-y-in 2s linear forwards;
-  --animate-volume-reveal-y-out: volume-reveal-y-out 2s linear forwards;
+  --animate-volume-reveal-x-in: volume-reveal-x-in 0.25s linear both;
+  --animate-volume-reveal-x-out: volume-reveal-x-out 0.25s linear both;
+  --animate-volume-reveal-y-in: volume-reveal-y-in 0.25s linear both;
+  --animate-volume-reveal-y-out: volume-reveal-y-out 0.25s linear both;
 
   @keyframes expand-width {
     0% {
