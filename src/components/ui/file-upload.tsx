@@ -2,7 +2,15 @@
 
 import React, { useRef, useCallback, useId, useMemo, useState } from "react";
 import { Button } from "./button";
-import { Upload, X, Image as ImageIcon, File as FileIcon } from "lucide-react";
+import {
+  Upload,
+  X,
+  Image as ImageIcon,
+  File as FileIcon,
+  Video as VideoIcon,
+  Music as MusicIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface FileUploadProps {
   accept: string;
@@ -95,52 +103,63 @@ const FileUpload: React.FC<FileUploadProps> = ({
     [disabled]
   );
 
+  const baseIcon = useMemo(() => {
+    if (previewUrl) return null;
+    if (accept.includes("video"))
+      return <VideoIcon size={14} className="text-foreground-muted" />;
+    if (accept.includes("audio"))
+      return <MusicIcon size={14} className="text-foreground-muted" />;
+    if (accept.includes("image"))
+      return <ImageIcon size={14} className="text-foreground-muted" />;
+    return <FileIcon size={14} className="text-foreground-muted" />;
+  }, [accept, previewUrl]);
+
+  const addLabel = useMemo(() => {
+    if (accept.includes("video")) return "Add video";
+    if (accept.includes("audio")) return "Add audio";
+    if (accept.includes("image")) return "Add image";
+    return "Add file";
+  }, [accept]);
+
   return (
-    <div className="rounded-lg border border-subtle bg-surface-secondary overflow-hidden">
+    <div className="rounded-3xl border border-subtle bg-surface-secondary">
       <div
         onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={
-          "cursor-pointer p-3 transition-colors " +
-          (isDragging ? "bg-surface-hover" : "bg-surface-secondary")
-        }
+        className={cn(
+          "cursor-pointer h-10 px-3 flex items-center transition-colors rounded-3xl",
+          isDragging ? "bg-surface-hover" : "bg-surface-secondary"
+        )}
         aria-disabled={disabled}
       >
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-md border border-subtle flex items-center justify-center bg-surface-tertiary overflow-hidden">
+        <div className="flex items-center gap-3 w-full">
+          <div className="h-7 w-7 rounded-xl border border-subtle flex items-center justify-center bg-surface-tertiary overflow-hidden">
             {previewUrl ? (
               <img
                 src={previewUrl}
                 alt="preview"
                 className="h-full w-full object-cover"
               />
-            ) : isFile ? (
-              <FileIcon size={20} className="text-foreground-muted" />
             ) : (
-              <ImageIcon size={20} className="text-foreground-muted" />
+              baseIcon
             )}
           </div>
+
           <div className="min-w-0 flex-1">
-            <div className="text-sm text-foreground-default truncate">
-              {isFile ? selectedFile!.name : hint}
-            </div>
-            <div className="text-xs text-foreground-subtle">
-              {isFile
-                ? `${selectedFile!.type || "Unknown type"} • ${formatSize(
-                    selectedFile!.size
-                  )}`
-                : formatAccept(accept)}
+            <div className="text-xs tracking-wide font-medium text-foreground-default truncate">
+              {addLabel}
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             {isFile ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-7 w-7"
                 onClick={(e) => {
                   e.stopPropagation();
                   clearFile();
@@ -154,17 +173,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 px-2 text-xs"
+                className="h-7 px-2 text-[11px]"
                 disabled={disabled}
               >
-                <Upload size={12} className="mr-2" />
+                <Upload size={12} className="mr-1" />
                 Browse
               </Button>
             )}
           </div>
-        </div>
-        <div className="mt-3 text-xs text-foreground-subtle">
-          Drag & drop or click to {isFile ? "replace" : "upload"}
         </div>
       </div>
 

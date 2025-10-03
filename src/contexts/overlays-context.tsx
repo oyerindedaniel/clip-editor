@@ -285,12 +285,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      if (
-        target instanceof HTMLElement &&
-        (target.closest("[data-radix-select-content]") ||
-          target.closest("[data-radix-select-item]") ||
-          target.closest("[data-radix-select-trigger]"))
-      ) {
+      if (target instanceof HTMLElement && target.closest("[data-portal]")) {
         return;
       }
 

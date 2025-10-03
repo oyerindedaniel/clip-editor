@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLatestValue } from "../use-latest-value";
 
 /**
@@ -10,8 +10,7 @@ type FixedScalingConfig = {
 };
 
 /**
- * Container-based scaling configuration - scales timeline
- * proportionally to the container width.
+ * Container-based scaling configuration - scales timeline to fit the scroll container.
  */
 type ContainerScalingConfig = {
   type: "container";
@@ -19,7 +18,7 @@ type ContainerScalingConfig = {
 
 /**
  * Auto scaling configuration - chooses between fixed scaling
- * and container-based scaling depending on container width and
+ * and container-based scaling depending on scroll container width and
  * min/max usability constraints.
  */
 type AutoScalingConfig = {
@@ -45,6 +44,11 @@ type ScalingType = "fixed" | "container" | "auto";
 /**
  * React hook for calculating timeline scaling (pixels per millisecond).
  * Supports fixed, container-based, and auto scaling strategies.
+ *
+ * @param containerRef - ref to the scroll container
+ * @param durationMs - total timeline duration in milliseconds
+ * @param paddingPx - optional padding to subtract from container/timeline width
+ * @param config - scaling configuration (fixed, container, or auto)
  */
 export function useScale({
   containerRef,
@@ -56,6 +60,8 @@ export function useScale({
   durationMs: number;
   paddingPx?: number;
 } & UseScaleConfig) {
+  const FALLBACK_PX_PER_MS = 0.05;
+
   const [pxPerMs, setPxPerMs] = useState(0);
   const [currentScalingType, setCurrentScalingType] =
     useState<ScalingType>("auto");
@@ -63,69 +69,59 @@ export function useScale({
 
   const recalc = useCallback(() => {
     const config = configRef.current;
+    const containerEl = containerRef.current;
+
+    if (!containerEl) return;
+
+    const containerWidth = containerEl.clientWidth;
+    const usableWidth = Math.max(0, containerWidth - paddingPx);
+
+    const fixedPxPerMs =
+      config.type !== "container" ? config.fixedPxPerSecond / 1000 : 0;
+
+    let newPxPerMs: number;
+    let newScalingType: ScalingType = "fixed";
 
     if (config.type === "fixed") {
-      const value = config.fixedPxPerSecond / 1000;
-      setPxPerMs(value);
-      setCurrentScalingType("fixed");
-      return;
-    }
-
-    if (config.type === "container") {
-      const el = containerRef.current;
-      if (!el) return;
-
-      const usableWidth = Math.max(0, el.clientWidth - paddingPx);
+      newPxPerMs = fixedPxPerMs;
+      newScalingType = "fixed";
+    } else if (config.type === "container") {
+      newPxPerMs =
+        durationMs > 0 ? usableWidth / durationMs : FALLBACK_PX_PER_MS;
+      newScalingType = "container";
+    } else if (config.type === "auto") {
       const containerPxPerMs =
-        durationMs > 0 && usableWidth > 0 ? usableWidth / durationMs : 0.05;
-
-      setPxPerMs(containerPxPerMs);
-      setCurrentScalingType("container");
-      return;
-    }
-
-    if (config.type === "auto") {
-      const el = containerRef.current;
-      if (!el) return;
-
-      const usableWidth = Math.max(0, el.clientWidth - paddingPx);
-      const containerPxPerMs =
-        durationMs > 0 && usableWidth > 0 ? usableWidth / durationMs : 0;
-      const fixedPxPerMs = config.fixedPxPerSecond / 1000;
+        durationMs > 0 ? usableWidth / durationMs : FALLBACK_PX_PER_MS;
 
       const containerPxPerSecond = containerPxPerMs * 1000;
-
       const minPxPerSecond = config.minPxPerSecond ?? config.fixedPxPerSecond;
-      const isContainerTooSmall = containerPxPerSecond < minPxPerSecond;
-
-      const isContainerTooLarge =
+      const isTooSmall = containerPxPerSecond < minPxPerSecond;
+      const isTooLarge =
         config.maxPxPerSecond && containerPxPerSecond > config.maxPxPerSecond;
 
-      const isContainerWiderThanWindow = el.clientWidth > window.innerWidth;
-
-      let finalValue: number;
-      if (
-        isContainerTooSmall ||
-        isContainerTooLarge ||
-        isContainerWiderThanWindow
-      ) {
-        finalValue = fixedPxPerMs;
-        setPxPerMs(finalValue);
-        setCurrentScalingType("fixed");
+      if (!isTooSmall && !isTooLarge) {
+        newPxPerMs = containerPxPerMs;
+        newScalingType = "container";
       } else {
-        finalValue = containerPxPerMs;
-        setPxPerMs(finalValue);
-        setCurrentScalingType("container");
+        newPxPerMs = fixedPxPerMs;
+        newScalingType = "fixed";
       }
+    } else {
+      newPxPerMs = FALLBACK_PX_PER_MS;
+      newScalingType = "fixed";
     }
-  }, [durationMs]);
+
+    setPxPerMs(newPxPerMs);
+    setCurrentScalingType(newScalingType);
+  }, [durationMs, paddingPx]);
 
   useEffect(() => {
     recalc();
 
     if (config.type === "container" || config.type === "auto") {
-      window.addEventListener("resize", recalc);
-      return () => window.removeEventListener("resize", recalc);
+      const handleResize = () => recalc();
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
     }
   }, [recalc, config.type]);
 

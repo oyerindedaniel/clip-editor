@@ -164,7 +164,6 @@ export interface DualVideoClip {
   timelineOffset: number; // When this clip starts on the timeline (milliseconds from timeline start)
   trimStart: number; // Where to start within this clip's source video (milliseconds)
   trimEnd: number; // Where to end within this clip's source video (milliseconds)
-  volume: number; // clip volume (0-1)
   visible: boolean; // Whether this clip should be included in export
 }
 
