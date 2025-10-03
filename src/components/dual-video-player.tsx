@@ -59,7 +59,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useLatestValue(isPlaying);
   const [isRepeat, setIsRepeat] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const primaryVideoRef = useRef<HTMLVideoElement>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement>(null);
@@ -788,9 +787,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
       <div
         data-container-context="dual"
         ref={secondaryContainerRef}
-        className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md group"
       >
         <div
           className={cn(
@@ -862,7 +859,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
               onLoadedMetadata={(e) => {
                 const video = e.currentTarget;
                 if (dualVideoSettings.secondaryVolume != null) {
-                  console.log("ni here");
                   video.volume = dualVideoSettings.secondaryVolume;
                 }
               }}
@@ -872,12 +868,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
                 displayMode === "stretch" && "object-cover w-full h-full"
               )}
             />
-            {/* <Badge
-              variant="secondary"
-              className="absolute top-2 left-2 text-[10px] uppercase font-mono"
-            >
-              Secondary
-            </Badge> */}
 
             <div className="absolute top-2 left-2 z-10">
               <Volume.Root
@@ -925,10 +915,8 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
         )}
 
         <div
-          data-hovered={isHovered}
           className={cn(
-            "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out",
-            isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 z-20"
           )}
         >
           <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
@@ -998,8 +986,7 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
 
         <div
           className={cn(
-            "absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent transition-opacity duration-200 ease-out",
-            isHovered ? "opacity-100" : "opacity-0"
+            "absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent transition-opacity duration-200 ease-out opacity-0 group-hover:opacity-100"
           )}
         />
       </div>

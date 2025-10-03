@@ -157,12 +157,16 @@ export default function DualVideoControls({
           buffer,
           metadata,
           visible: true,
+          trimStart: 0,
+          trimEnd: 0,
+          timelineOffset: 0,
         };
 
         tempVideo.addEventListener("loadedmetadata", () => {
           const durationMs = tempVideo.duration * 1000;
           setSecondaryClip({
             ...newSecondaryClip,
+            trimEnd: durationMs,
             metadata: {
               ...newSecondaryClip.metadata,
               clipDurationMs: durationMs,

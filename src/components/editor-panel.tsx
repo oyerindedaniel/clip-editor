@@ -354,11 +354,18 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
             el instanceof HTMLElement && el.hasAttribute("data-overlay-id")
         );
 
+        // console.log({
+        //   isInNestedPortal,
+        //   isInContent,
+        //   isInTrigger,
+        //   isInOverlay,
+        // });
+
         if (!isInContent && !isInTrigger && !isInNestedPortal && !isInOverlay) {
           onPointerDownOutside?.(event);
 
           if (!event.defaultPrevented) {
-            onOpenChange(false);
+            // onOpenChange(false);
           }
         }
       };

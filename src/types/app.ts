@@ -161,14 +161,16 @@ export interface DualVideoClip {
   url: string;
   buffer: ArrayBuffer | null;
   metadata: S3ClipMetadata;
-  visible: boolean; // Whether this clip should be included in export
-}
-
-export interface TrimData {
   timelineOffset: number; // When this clip starts on the timeline (milliseconds from timeline start)
   trimStart: number; // Where to start within this clip's source video (milliseconds)
   trimEnd: number; // Where to end within this clip's source video (milliseconds)
+  visible: boolean; // Whether this clip should be included in export
 }
+
+export type TrimData = Pick<
+  DualVideoClip,
+  "timelineOffset" | "trimStart" | "trimEnd"
+>;
 
 /**
  * Information required to export a clip.
