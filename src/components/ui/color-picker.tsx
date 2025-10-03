@@ -32,14 +32,18 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             color={color}
             onChange={onChange}
             prefixed
-            className="flex-1 rounded-lg bg-surface-secondary px-2 py-1 text-xs text-foreground-default"
+            className="flex-1 rounded-3xl bg-surface-secondary px-2 py-1 text-xs text-foreground-default"
             onClick={(e) => e.stopPropagation()}
             onFocus={() => setOpen(true)}
           />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-2 w-56">
-        <HexColorPicker color={color} onChange={onChange} className="w-full" />
+      <PopoverContent className="p-2 w-56 rounded-lg">
+        <HexColorPicker
+          color={color}
+          onChange={onChange}
+          className="w-full mx-auto"
+        />
       </PopoverContent>
     </Popover>
   );

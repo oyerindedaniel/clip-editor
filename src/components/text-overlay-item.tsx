@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import FontSelector from "@/components/font-selector";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -50,19 +51,16 @@ const TextOverlayItem = ({
     <div
       data-overlay-inspector
       className={cn(
-        "rounded-lg border text-sm overflow-hidden",
+        "w-full rounded-3xl border overflow-hidden",
         selectedOverlay === overlay.id
           ? "border-primary/60 bg-primary/5"
           : "border-subtle bg-surface-secondary"
       )}
     >
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-subtle">
+      <div className="flex items-center justify-between px-3 h-10">
         <div className="min-w-0 mr-2">
-          <div className="text-foreground-default text-sm font-medium truncate">
+          <div className="text-foreground-default text-xs font-medium tracking-wide truncate">
             {overlay.text || "Text Overlay"}
-          </div>
-          <div className="text-foreground-subtle text-[11px]">
-            {overlay.endTime === duration ? "Persistent" : "Timed"}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -92,200 +90,217 @@ const TextOverlayItem = ({
         </div>
       </div>
 
-      {selectedOverlay === overlay.id && (
-        <div className="px-3 py-3 space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs text-foreground-subtle">Text</label>
-            <Input
-              type="text"
-              value={overlay.text}
-              onChange={(e) =>
-                updateTextOverlay(overlay.id, {
-                  text: e.target.value,
-                })
-              }
-              className="text-sm"
-              placeholder="Enter text"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs text-foreground-subtle">
-              Font Family
-            </label>
-            <FontSelector
-              value={overlay.fontFamily}
-              onChange={(font) =>
-                updateTextOverlay(overlay.id, { fontFamily: font })
-              }
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs text-foreground-subtle">
-              Opacity:{" "}
-              <span className="font-bold text-foreground-default">
-                {Math.round(overlay.opacity * 100)}%
-              </span>
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={Math.round(overlay.opacity * 100)}
-              onChange={(e) =>
-                updateTextOverlay(overlay.id, {
-                  opacity: Number(e.target.value) / 100,
-                })
-              }
-              className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs text-foreground-subtle">
-                Display
-              </label>
-              <Select
-                value={overlay.endTime === duration ? "persistent" : "timed"}
-                onValueChange={(value) => {
-                  if (value === "persistent") {
+      <AnimatePresence initial={false}>
+        {selectedOverlay === overlay.id && (
+          <motion.div
+            key="inspector"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 py-3 space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs text-foreground-subtle">
+                  Text
+                </label>
+                <Input
+                  type="text"
+                  value={overlay.text}
+                  onChange={(e) =>
                     updateTextOverlay(overlay.id, {
-                      startTime: 0,
-                      endTime: duration,
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Display" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="persistent">Persistent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs text-foreground-subtle">
-                Font size
-              </label>
-              <Select
-                value={String(overlay.fontSize)}
-                onValueChange={(value) =>
-                  updateTextOverlay(overlay.id, { fontSize: parseInt(value) })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Font size" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fontSizes.map((size) => (
-                    <SelectItem key={size} value={String(size)}>
-                      {size}px
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs text-foreground-subtle">Styles</div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() =>
-                  updateTextOverlay(overlay.id, { bold: !overlay.bold })
-                }
-                className={cn(
-                  "h-7 w-7 p-0 rounded",
-                  overlay.bold ? "bg-primary" : "bg-surface-tertiary"
-                )}
-                variant="ghost"
-                size="icon"
-              >
-                <Bold size={16} />
-              </Button>
-              <Button
-                onClick={() =>
-                  updateTextOverlay(overlay.id, { italic: !overlay.italic })
-                }
-                className={cn(
-                  "h-7 w-7 p-0 rounded",
-                  overlay.italic ? "bg-primary" : "bg-surface-tertiary"
-                )}
-                variant="ghost"
-                size="icon"
-              >
-                <Italic size={16} />
-              </Button>
-              <Button
-                onClick={() =>
-                  updateTextOverlay(overlay.id, {
-                    underline: !overlay.underline,
-                  })
-                }
-                className={cn(
-                  "h-7 w-7 p-0 rounded",
-                  overlay.underline ? "bg-primary" : "bg-surface-tertiary"
-                )}
-                variant="ghost"
-                size="icon"
-              >
-                <Underline size={16} />
-              </Button>
-              <div className="mx-2 h-5 w-px bg-subtle" />
-              {[
-                { value: "left", icon: AlignLeft },
-                { value: "center", icon: AlignCenter },
-                { value: "right", icon: AlignRight },
-              ].map(({ value, icon: Icon }) => (
-                <Button
-                  key={value}
-                  onClick={() =>
-                    updateTextOverlay(overlay.id, {
-                      alignment: value as "left" | "center" | "right",
+                      text: e.target.value,
                     })
                   }
-                  className={cn("h-7 w-7 p-0 rounded", {
-                    "bg-primary": overlay.alignment === value,
-                    "bg-surface-tertiary": overlay.alignment !== value,
-                  })}
-                  variant="ghost"
-                  size="icon"
-                >
-                  <Icon size={16} />
-                </Button>
-              ))}
-            </div>
-          </div>
+                  className="text-sm"
+                  placeholder="Enter text"
+                />
+              </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="space-y-1.5 w-full">
-              <label className="block text-xs text-foreground-subtle">
-                Text color
-              </label>
-              <ColorPicker
-                color={overlay.color}
-                onChange={(value) =>
-                  updateTextOverlay(overlay.id, { color: value })
-                }
-              />
+              <div className="space-y-1.5">
+                <label className="block text-xs text-foreground-subtle">
+                  Font Family
+                </label>
+                <FontSelector
+                  value={overlay.fontFamily}
+                  onChange={(font) =>
+                    updateTextOverlay(overlay.id, { fontFamily: font })
+                  }
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-foreground-subtle">
+                  Opacity:{" "}
+                  <span className="font-bold text-foreground-default">
+                    {Math.round(overlay.opacity * 100)}%
+                  </span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(overlay.opacity * 100)}
+                  onChange={(e) =>
+                    updateTextOverlay(overlay.id, {
+                      opacity: Number(e.target.value) / 100,
+                    })
+                  }
+                  className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs text-foreground-subtle">
+                    Display
+                  </label>
+                  <Select
+                    value={
+                      overlay.endTime === duration ? "persistent" : "timed"
+                    }
+                    onValueChange={(value) => {
+                      if (value === "persistent") {
+                        updateTextOverlay(overlay.id, {
+                          startTime: 0,
+                          endTime: duration,
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Display" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="persistent">Persistent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs text-foreground-subtle">
+                    Font size
+                  </label>
+                  <Select
+                    value={String(overlay.fontSize)}
+                    onValueChange={(value) =>
+                      updateTextOverlay(overlay.id, {
+                        fontSize: parseInt(value),
+                      })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Font size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fontSizes.map((size) => (
+                        <SelectItem key={size} value={String(size)}>
+                          {size}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs text-foreground-subtle">Styles</div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() =>
+                      updateTextOverlay(overlay.id, { bold: !overlay.bold })
+                    }
+                    className={cn(
+                      "h-7 w-7 p-0 rounded",
+                      overlay.bold ? "bg-primary" : "bg-surface-tertiary"
+                    )}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <Bold size={16} />
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      updateTextOverlay(overlay.id, { italic: !overlay.italic })
+                    }
+                    className={cn(
+                      "h-7 w-7 p-0 rounded",
+                      overlay.italic ? "bg-primary" : "bg-surface-tertiary"
+                    )}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <Italic size={16} />
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      updateTextOverlay(overlay.id, {
+                        underline: !overlay.underline,
+                      })
+                    }
+                    className={cn(
+                      "h-7 w-7 p-0 rounded",
+                      overlay.underline ? "bg-primary" : "bg-surface-tertiary"
+                    )}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <Underline size={16} />
+                  </Button>
+                  <div className="h-5 w-px bg-subtle" />
+                  {[
+                    { value: "left", icon: AlignLeft },
+                    { value: "center", icon: AlignCenter },
+                    { value: "right", icon: AlignRight },
+                  ].map(({ value, icon: Icon }) => (
+                    <Button
+                      key={value}
+                      onClick={() =>
+                        updateTextOverlay(overlay.id, {
+                          alignment: value as "left" | "center" | "right",
+                        })
+                      }
+                      className={cn("h-7 w-7 p-0 rounded", {
+                        "bg-primary": overlay.alignment === value,
+                        "bg-surface-tertiary": overlay.alignment !== value,
+                      })}
+                      variant="ghost"
+                      size="icon"
+                    >
+                      <Icon size={16} />
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="space-y-1.5 w-full">
+                  <label className="block text-xs text-foreground-subtle">
+                    Text color
+                  </label>
+                  <ColorPicker
+                    color={overlay.color}
+                    onChange={(value) =>
+                      updateTextOverlay(overlay.id, { color: value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5 w-full">
+                  <label className="block text-xs text-foreground-subtle">
+                    Background
+                  </label>
+                  <ColorPicker
+                    color={overlay.backgroundColor}
+                    onChange={(value) =>
+                      updateTextOverlay(overlay.id, { backgroundColor: value })
+                    }
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-1.5 w-full">
-              <label className="block text-xs text-foreground-subtle">
-                Background
-              </label>
-              <ColorPicker
-                color={overlay.backgroundColor}
-                onChange={(value) =>
-                  updateTextOverlay(overlay.id, { backgroundColor: value })
-                }
-              />
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -43,7 +43,7 @@ import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "./ui/button";
-import { Settings } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 
 interface ClipEditorProps {
@@ -57,6 +57,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const {
     isOpen: isAspectRatioModalOpen,
@@ -371,8 +373,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     if (!video) return;
 
     const handleLoadedMetadata = () => {
+      const duration = video.duration * 1000;
       setIsVideoLoaded(true);
-      setDuration(video.duration * 1000);
+      setDuration(duration);
+      setPrimaryTrim((prev) => ({
+        ...prev,
+        trimEnd: duration,
+      }));
       adjustOverlayBounds();
 
       primaryClipMetaDataRef.current = {
@@ -508,7 +515,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
             ...primaryTrimRef.current,
-            volume: 0.8,
             visible: true,
           },
           ...(secondaryClip && {
@@ -566,6 +572,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     const { dimensions, ...settings } = primaryClipMetaDataRef.current;
     return settings as SettingsType;
   }, [isAspectRatioModalOpen]);
+
+  const primaryTrimData = primaryTrimRef.current;
+
+  const primaryDurationMs =
+    primaryTrimData &&
+    (primaryTrimData.trimEnd !== 0 || primaryTrimData.trimStart !== 0)
+      ? primaryTrimData.trimEnd - primaryTrimData.trimStart
+      : duration;
 
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
@@ -625,6 +639,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
             </div>
 
             <DualVideoPlayer
+              isPrimaryVideoLoaded={isVideoLoaded}
               primaryClip={{ ...clipData, url: originalPrimaryUrl }}
               secondaryClip={secondaryClip}
               duration={duration}
@@ -634,7 +649,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           <div className="flex-1 min-h-0">
             {secondaryClip ? (
               <DualVideoTracks
-                primaryDurationMs={duration}
+                primaryDurationMs={primaryDurationMs}
                 secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
                 initialOffsetMs={0}
                 primaryPreviewFrames={primaryFrames}
@@ -693,9 +708,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenChange={setToolPanelOpen}
         side="right"
         disablePortal={false}
+        triggerRef={triggerRef}
       >
         <EditorPanel.Portal>
-          <EditorPanel.Content className="w-[300px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
+          <EditorPanel.Content className="pb-[49px] w-[280px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
               <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
                 Shift+T
@@ -719,14 +735,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       <Button
         type="button"
+        ref={triggerRef}
         onClick={() => setToolPanelOpen(true)}
-        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl hover:scale-105 transition-transform duration-200 ease-in-out"
-        size="sm"
+        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl rounded-full hover:scale-105 transition-transform duration-200 ease-in-out focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-surface-primary"
+        size="icon"
         variant="default"
         aria-label="Open Tools (T)"
       >
-        <Settings size={14} className="mr-2" />
-        Tools
+        <SlidersHorizontal size={14} />
       </Button>
     </div>
   );

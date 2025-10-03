@@ -1,4 +1,11 @@
-import React, { useRef, useCallback, useState, memo, useEffect } from "react";
+import React, {
+  useRef,
+  useCallback,
+  useState,
+  memo,
+  useEffect,
+  useLayoutEffect,
+} from "react";
 import { GripVertical } from "lucide-react";
 import { useScale } from "@/hooks/app/use-scale";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
@@ -96,13 +103,6 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       blockRef.current.style.left = `0px`;
     }
   }, [duration, maxContentWidth]);
-
-  useEffect(() => {
-    setPrimaryTrim((prev) => ({
-      ...prev,
-      trimEnd: duration,
-    }));
-  }, []);
 
   useEffect(() => {
     rafIdRef.current = requestAnimationFrame(() => {

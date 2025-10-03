@@ -69,7 +69,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
       data-selected={isSelected ? "" : undefined}
       className={cn(
         "absolute top-0 left-0 cursor-move select-none pointer-events-auto origin-center will-change-transform",
-        "w-[var(--width)] h-[var(--height)] opacity-[var(--opacity)]",
+        "w-(--width) h-(--height) opacity-(--opacity)",
         isSelected && "ring-2 ring-primary/50 z-10"
       )}
       style={
@@ -85,6 +85,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
         } as React.CSSProperties
       }
       onMouseDown={(e) => onMouseDown(e)}
+      data-overlay-id={overlay.id}
     >
       <img
         src={objectUrl.current}

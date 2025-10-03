@@ -55,7 +55,7 @@ function EditPageSkeleton() {
           </div>
 
           {/* Timeline section */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 h-[150px]">
             <div className="space-y-3">
               {/* Timeline header */}
               <div className="flex items-center justify-between">

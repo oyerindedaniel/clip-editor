@@ -117,8 +117,8 @@ function VolumeRoot({
     <VolumeContext.Provider value={ctx}>
       <div
         className="space-x-2 space-y-2"
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
+        onPointerEnter={() => setHovering(true)}
+        onPointerLeave={() => setHovering(false)}
       >
         {children}
       </div>
@@ -279,7 +279,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
           variant,
         }}
       >
-        <HitArea buffer={30} variant={orientation === "horizontal" ? "x" : "y"}>
+        <HitArea buffer={30} variant={orientation === "horizontal" ? "r" : "t"}>
           <div
             ref={composedRefs}
             data-state={state}
@@ -289,9 +289,9 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
                 ? "flex-row items-center justify-center"
                 : "flex-col items-center justify-center [&>[data-slot=volume-button]]:order-2",
               variant === "pill" &&
-                "bg-surface-secondary/70 backdrop-blur-sm rounded-full p-1",
+                "bg-surface-secondary/70 w-fit backdrop-blur-sm rounded-full p-1",
               variant === "soft" &&
-                "bg-surface-secondary/50 backdrop-blur-sm rounded-md p-1",
+                "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
               variant !== "default" &&
                 (orientation === "horizontal"
                   ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
@@ -303,10 +303,10 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
               ...({
                 "--start":
                   startRef.current === 0
-                    ? "min-content"
+                    ? "fit-content"
                     : `${startRef.current}px`,
                 "--end":
-                  endRef.current === 0 ? "min-content" : `${endRef.current}px`,
+                  endRef.current === 0 ? "fit-content" : `${endRef.current}px`,
               } as React.CSSProperties),
             }}
             {...props}
@@ -336,6 +336,7 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
       asChild = false,
       children,
       onClick,
+      onKeyDown,
       variant = "ghost",
       className,
       size = "icon",
@@ -343,7 +344,7 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
     },
     ref
   ) => {
-    const { muted, volume, toggleMute } = useVolumeContext();
+    const { muted, volume, toggleMute, setHovering } = useVolumeContext();
     const { state } = useControlsContext();
 
     const Comp = asChild ? Slot : Button;
@@ -354,6 +355,19 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
         if (event.defaultPrevented) return;
       }
       toggleMute();
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (onKeyDown) {
+        onKeyDown(event);
+        if (event.defaultPrevented) return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        toggleMute();
+        setHovering(true);
+        event.preventDefault();
+      }
     };
 
     const renderDefaultIcon = () => {
@@ -377,6 +391,7 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
         )}
         aria-label={label}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
         {...props}
       >
         {typeof children === "function"
@@ -430,16 +445,16 @@ interface VolumeSliderTrackProps extends React.HTMLAttributes<HTMLDivElement> {}
 const VolumeSliderTrack = React.forwardRef<
   HTMLDivElement,
   VolumeSliderTrackProps
->(({ children, onMouseDown, ...props }, forwardedRef) => {
+>(({ children, onPointerDown, ...props }, forwardedRef) => {
   const { setVolume, min, max, orientation } = useVolumeContext();
   const { trackRef } = useControlsContext();
 
   const ref = React.useRef<HTMLDivElement>(null);
   const composedRefs = useComposedRefs(forwardedRef, ref, trackRef);
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (onMouseDown) {
-      onMouseDown(event);
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (onPointerDown) {
+      onPointerDown(event);
       if (event.defaultPrevented) return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
@@ -465,7 +480,7 @@ const VolumeSliderTrack = React.forwardRef<
           "relative bg-surface-tertiary rounded",
           orientation === "horizontal" ? "w-full h-1" : "h-full w-1"
         )}
-        onMouseDown={handleMouseDown}
+        onPointerDown={handlePointerDown}
         {...props}
       >
         {children}
@@ -506,7 +521,7 @@ VolumeSliderRange.displayName = "VolumeSliderRange";
 const VolumeSliderThumb = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ onKeyDown, onMouseDown, className, style, ...props }, forwardedRef) => {
+>(({ onKeyDown, onPointerDown, className, style, ...props }, forwardedRef) => {
   const { volume, setVolume, min, max, orientation, step, setThumbId } =
     useVolumeContext();
   const { trackRef, thumbRef } = useControlsContext();
@@ -532,16 +547,16 @@ const VolumeSliderThumb = React.forwardRef<
     }
   };
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (onMouseDown) {
-      onMouseDown(event);
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (onPointerDown) {
+      onPointerDown?.(event);
       if (event.defaultPrevented) return;
     }
 
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const updateFromMouse = (clientX: number, clientY: number) => {
+    const updateFromPointer = (clientX: number, clientY: number) => {
       let ratio =
         orientation === "horizontal"
           ? (clientX - rect.left) / rect.width
@@ -552,16 +567,17 @@ const VolumeSliderThumb = React.forwardRef<
       setVolume(newValue);
     };
 
-    updateFromMouse(event.clientX, event.clientY);
+    updateFromPointer(event.clientX, event.clientY);
 
-    const handleMove = (e: MouseEvent) => updateFromMouse(e.clientX, e.clientY);
+    const handleMove = (e: PointerEvent) =>
+      updateFromPointer(e.clientX, e.clientY);
     const handleUp = () => {
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleUp);
     };
 
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", handleUp);
   };
 
   React.useLayoutEffect(() => {
@@ -585,7 +601,7 @@ const VolumeSliderThumb = React.forwardRef<
         aria-valuenow={volume}
         aria-orientation={orientation}
         onKeyDown={handleKeyDown}
-        onMouseDown={handleMouseDown}
+        onPointerDown={handlePointerDown}
         className={cn(
           "absolute size-3 bg-primary rounded-full cursor-pointer focus-visible:ring-2 focus-visible:ring-primary/50",
           orientation === "horizontal"

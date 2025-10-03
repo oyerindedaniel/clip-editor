@@ -89,6 +89,16 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     const primaryTimelinePos = primaryRelativeMs;
     const secondaryTimelinePos = secondaryOffset + secondaryRelativeMs;
 
+    // If primary is at its end but secondary is still playing, use secondary position
+    const primaryEnd = primaryTrim.trimEnd - primaryTrim.trimStart;
+    const secondaryDuration = secondaryTrim.trimEnd - secondaryTrim.trimStart;
+    const secondaryTimelineEnd = secondaryOffset + secondaryDuration;
+
+    if (primaryTimelinePos >= primaryEnd && secondaryTimelineEnd > primaryEnd) {
+      // Primary finished, secondary still going - use secondary position
+      return secondaryTimelinePos;
+    }
+
     return Math.max(primaryTimelinePos, secondaryTimelinePos);
   }, [primaryTrim, secondaryTrim]);
 

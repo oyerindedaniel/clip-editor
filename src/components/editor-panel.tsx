@@ -35,6 +35,7 @@ interface EditorPanelContextType {
   contentRef: React.RefObject<HTMLDivElement | null>;
   animationState: AnimationState;
   shouldRender: boolean;
+  forwardedTriggerRef: React.RefObject<HTMLButtonElement | null> | undefined;
 }
 
 interface EditorPanelRootProps extends React.ComponentPropsWithoutRef<"div"> {
@@ -44,6 +45,7 @@ interface EditorPanelRootProps extends React.ComponentPropsWithoutRef<"div"> {
   defaultOpen?: boolean;
   side?: EditorSide;
   disablePortal?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 interface EditorPanelTriggerProps
@@ -87,6 +89,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       defaultOpen = false,
       side = "right",
       disablePortal = false,
+      triggerRef: forwardedTriggerRef,
       ...props
     },
     ref
@@ -151,6 +154,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
       titleId,
       descriptionId,
       triggerRef,
+      forwardedTriggerRef,
       contentRef,
       animationState,
       shouldRender,
@@ -172,9 +176,15 @@ const EditorPanelTrigger = forwardRef<
   HTMLButtonElement,
   EditorPanelTriggerProps
 >(({ children, asChild = false, onClick, className, ...props }, ref) => {
-  const { onOpenChange, open, triggerId, contentId, triggerRef } =
-    useEditorPanel();
-  const composedRefs = useComposedRefs(ref, triggerRef);
+  const {
+    onOpenChange,
+    open,
+    triggerId,
+    contentId,
+    triggerRef,
+    forwardedTriggerRef,
+  } = useEditorPanel();
+  const composedRefs = useComposedRefs(ref, triggerRef, forwardedTriggerRef);
 
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -248,6 +258,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       side,
       contentId,
       triggerRef,
+      forwardedTriggerRef,
       contentRef,
       titleId,
       descriptionId,
@@ -284,7 +295,6 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       const panel = ref.current;
       if (!panel) return;
 
-      const triggerEl = triggerRef.current;
       const focusables = getFocusable(panel);
 
       if (focusFirst && focusables.length > 0) {
@@ -294,7 +304,11 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       }
 
       return () => {
-        triggerEl?.focus();
+        if (triggerRef?.current) {
+          triggerRef.current.focus();
+        } else if (forwardedTriggerRef?.current) {
+          forwardedTriggerRef.current.focus();
+        }
       };
     }, [open, focusFirst, triggerRef, getFocusable]);
 
@@ -331,7 +345,16 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
         const isInContent = content ? path.includes(content) : false;
         const isInTrigger = trigger ? path.includes(trigger) : false;
 
-        if (!isInContent && !isInTrigger) {
+        const isInNestedPortal = path.some(
+          (el) => el instanceof HTMLElement && el.hasAttribute("data-portal")
+        );
+
+        const isInOverlay = path.some(
+          (el) =>
+            el instanceof HTMLElement && el.hasAttribute("data-overlay-id")
+        );
+
+        if (!isInContent && !isInTrigger && !isInNestedPortal && !isInOverlay) {
           onPointerDownOutside?.(event);
 
           if (!event.defaultPrevented) {
