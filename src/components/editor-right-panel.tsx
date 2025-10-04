@@ -98,7 +98,7 @@ export function EditorRightPanel({
         <AccordionItem value="clips">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Scissors size={16} />
+              <Scissors size={14} />
               <span>Clips</span>
             </div>
           </AccordionTrigger>
@@ -125,7 +125,7 @@ export function EditorRightPanel({
         <AccordionItem value="text">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Type size={16} />
+              <Type size={14} />
               <span>Text</span>
             </div>
           </AccordionTrigger>
@@ -149,7 +149,7 @@ export function EditorRightPanel({
         <AccordionItem value="image">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <ImageIcon size={16} />
+              <ImageIcon size={14} />
               <span>Image</span>
             </div>
           </AccordionTrigger>
@@ -169,7 +169,7 @@ export function EditorRightPanel({
         <AccordionItem value="audio">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Music size={16} />
+              <Music size={14} />
               <span>Audio</span>
             </div>
           </AccordionTrigger>
@@ -199,7 +199,7 @@ export function EditorRightPanel({
         <AccordionItem value="dual">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Video size={16} />
+              <Video size={14} />
               <span>Dual Video</span>
             </div>
           </AccordionTrigger>

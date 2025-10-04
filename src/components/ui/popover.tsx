@@ -27,12 +27,13 @@ function PopoverContent({
   return (
     <PopoverPrimitive.Portal forceMount={forceMount}>
       <PopoverPrimitive.Content
+        data-radix-popper-content-wrapper
         data-portal
         data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "bg-surface-tertiary text-white",
+          "bg-surface-secondary text-foreground-default",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",

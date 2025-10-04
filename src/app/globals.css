@@ -104,9 +104,9 @@
   }
 
   --animate-fade-scale-in: fade-scale-in var(--duration)
-    cubic-bezier(0.2, 0.8, 0.2, 1) forwards var(--delay);
+    cubic-bezier(0.2, 0.8, 0.2, 1) both var(--delay);
   --animate-fade-scale-out: fade-scale-out var(--duration)
-    cubic-bezier(0.4, 0, 0.6, 1) forwards var(--delay);
+    cubic-bezier(0.4, 0, 0.6, 1) both var(--delay);
 
   --animate-spin-slow: spin-slow 2s linear infinite;
 

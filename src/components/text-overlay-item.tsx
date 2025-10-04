@@ -77,7 +77,7 @@ const TextOverlayItem = ({
             variant="ghost"
             size="icon"
           >
-            {overlay.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+            {overlay.visible ? <Eye size={14} /> : <EyeOff size={14} />}
           </Button>
           <Button
             onClick={() => deleteTextOverlay(overlay.id)}
@@ -85,7 +85,7 @@ const TextOverlayItem = ({
             variant="ghost"
             size="icon"
           >
-            <Trash2 size={16} />
+            <Trash2 size={14} />
           </Button>
         </div>
       </div>
@@ -217,7 +217,7 @@ const TextOverlayItem = ({
                     variant="ghost"
                     size="icon"
                   >
-                    <Bold size={16} />
+                    <Bold size={14} />
                   </Button>
                   <Button
                     onClick={() =>
@@ -230,7 +230,7 @@ const TextOverlayItem = ({
                     variant="ghost"
                     size="icon"
                   >
-                    <Italic size={16} />
+                    <Italic size={14} />
                   </Button>
                   <Button
                     onClick={() =>
@@ -245,7 +245,7 @@ const TextOverlayItem = ({
                     variant="ghost"
                     size="icon"
                   >
-                    <Underline size={16} />
+                    <Underline size={14} />
                   </Button>
                   <div className="h-5 w-px bg-subtle" />
                   {[
@@ -267,7 +267,7 @@ const TextOverlayItem = ({
                       variant="ghost"
                       size="icon"
                     >
-                      <Icon size={16} />
+                      <Icon size={14} />
                     </Button>
                   ))}
                 </div>

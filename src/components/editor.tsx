@@ -26,7 +26,7 @@ import {
   getBufferKey,
   getOriginalBufferKey,
 } from "@/utils/video";
-import AspectRatioSelector from "./aspect-ratio-selector";
+import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
@@ -45,6 +45,8 @@ import EditorPanel from "./editor-panel";
 import { Button } from "./ui/button";
 import { SlidersHorizontal } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
+import { AspectRatio, BoundaryBox, Transform } from "./boundary-box";
+import AspectRatioSelector from "./aspect-ratio-selector";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -111,6 +113,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setPrimaryTrim: state.setPrimaryTrim,
       setSecondaryTrim: state.setSecondaryTrim,
     }));
+
+  const [boundaryAspectRatio, setBoundaryAspectRatio] =
+    useState<AspectRatio | null>(null);
+  const [boundaryVisible, setBoundaryVisible] = useState(false);
+  const [boundaryTransform, setBoundaryTransform] = useState<Transform | null>(
+    null
+  );
 
   const isValidBufferState = useMemo(() => {
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
@@ -588,54 +597,90 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         isExporting={isExporting}
         showTrace={showTrace}
         onToggleTrace={toggleTrace}
-        onOpenAdjust={openAspectRatioModal}
         onOpenExport={openExportNamingModal}
+        onOpenAdjust={openAspectRatioModal}
+        settings={settings}
+        onSettingsApplied={handleSettingsApplied}
+        isBufferDownloaded={isValidBufferState}
       />
 
       <div className="flex-1 min-h-0">
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
           <div className="w-full flex flex-col lg:flex-row items-center gap-4">
-            {/* 16:9 primary player (original) */}
-            <div
-              data-container-context="primary"
-              ref={containerRef}
-              className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-            >
-              <MediaPlayer.Root>
-                <MediaPlayer.Video
-                  src={primaryUrl}
-                  ref={(el) => {
-                    videoRef.current = el;
-                    setVideoRef(el);
-                  }}
-                  playsInline
-                  className="w-full aspect-video"
-                  poster={"/thumbnails/video-thumb-2.webp"}
-                  // onTimeUpdate={handleTimeUpdate}
+            <div>
+              <div className="flex justify-start p-2">
+                <AspectRatioPicker
+                  screenSize="16:9"
+                  aspectRatio={boundaryAspectRatio}
+                  onAspectRatioChange={setBoundaryAspectRatio}
+                  visible={boundaryVisible}
+                  onVisibleChange={setBoundaryVisible}
+                  disabled={!isValidBufferState || isExporting}
                 />
-                <MediaPlayer.Loading />
-                <MediaPlayer.Error />
-                <MediaPlayer.VolumeIndicator />
-                <MediaPlayer.Controls>
-                  <MediaPlayer.ControlsOverlay />
-                  <MediaPlayer.Play />
-                  <MediaPlayer.SeekBackward />
-                  <MediaPlayer.SeekForward />
-                  <MediaPlayer.Volume />
-                  <MediaPlayer.Seek />
-                  <MediaPlayer.Time />
-                  <MediaPlayer.PlaybackSpeed />
-                  <MediaPlayer.Loop />
-                  <MediaPlayer.Captions />
-                  <MediaPlayer.PiP />
-                  <MediaPlayer.Fullscreen />
-                  <MediaPlayer.Download />
-                </MediaPlayer.Controls>
-              </MediaPlayer.Root>
+              </div>
+              {/* 16:9 primary player (original) */}
+              <div
+                data-container-context="primary"
+                ref={containerRef}
+                className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
+              >
+                <BoundaryBox
+                  screenSize="16:9"
+                  videoWidth={1920}
+                  videoHeight={1080}
+                  aspectRatio={boundaryAspectRatio as AspectRatio}
+                  visible={boundaryVisible}
+                  onTransformChange={setBoundaryTransform}
+                >
+                  <BoundaryBox.Container
+                    ref={containerRef}
+                    className="relative flex-1 min-w-0 bg-surface-secondary shadow-md"
+                  >
+                    <MediaPlayer.Root>
+                      <MediaPlayer.Video
+                        src={primaryUrl}
+                        ref={(el) => {
+                          videoRef.current = el;
+                          setVideoRef(el);
+                        }}
+                        playsInline
+                        className="w-full aspect-video"
+                        poster={"/thumbnails/video-thumb-2.webp"}
+                      />
+                      <MediaPlayer.Loading />
+                      <MediaPlayer.Error />
+                      <MediaPlayer.VolumeIndicator />
+                      <MediaPlayer.Controls>
+                        <MediaPlayer.ControlsOverlay />
+                        <MediaPlayer.Play />
+                        <MediaPlayer.SeekBackward />
+                        <MediaPlayer.SeekForward />
+                        <MediaPlayer.Volume />
+                        <MediaPlayer.Seek />
+                        <MediaPlayer.Time />
+                        <MediaPlayer.PlaybackSpeed />
+                        <MediaPlayer.Loop />
+                        <MediaPlayer.Captions />
+                        <MediaPlayer.PiP />
+                        <MediaPlayer.Fullscreen />
+                        <MediaPlayer.Download />
+                      </MediaPlayer.Controls>
+                    </MediaPlayer.Root>
 
-              <div ref={traceRef} />
+                    <div ref={traceRef} />
+                    <PersistentOverlays duration={duration} />
 
-              <PersistentOverlays duration={duration} />
+                    <BoundaryBox.Draggable>
+                      <BoundaryBox.Overlay>
+                        <BoundaryBox.Resizable side="top-left" />
+                        <BoundaryBox.Resizable side="top-right" />
+                        <BoundaryBox.Resizable side="bottom-left" />
+                        <BoundaryBox.Resizable side="bottom-right" />
+                      </BoundaryBox.Overlay>
+                    </BoundaryBox.Draggable>
+                  </BoundaryBox.Container>
+                </BoundaryBox>
+              </div>
             </div>
 
             <DualVideoPlayer
@@ -685,15 +730,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           </div>
         </div>
       </div>
-
-      <AspectRatioSelector
-        isOpen={isAspectRatioModalOpen}
-        onOpenChange={closeAspectRatioModal}
-        settings={settings}
-        onSettingsApplied={handleSettingsApplied}
-        isBufferDownloaded={isValidBufferState}
-        isExporting={isExporting}
-      />
 
       <ExportNamingDialog
         isOpen={isExportNamingModalOpen}
