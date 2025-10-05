@@ -70,7 +70,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
 
-  const pxPerSecond = pxPerMs * 1000;
+  const pxPerSecond = pxPerMs * 1000; // in px
   const maxContentWidth = duration * pxPerMs;
 
   const drawRuler = useCallback(() => {
@@ -108,7 +108,7 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
       renderBlock();
       renderStrip();
 
-      if (spacerRef.current) spacerRef.current.style.height = "90px";
+      if (spacerRef.current) spacerRef.current.style.height = "90px"; // ruler + track
 
       const left = leftHandleRef.current;
       const right = rightHandleRef.current;
