@@ -299,18 +299,19 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
     const boxRef = useComposedRefs(localRef, forwardedRef, parentRef);
     const positionRef = React.useRef({ x: 100, y: 100 });
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
       if (defaultOpen) toggleBox(keyframeId);
     }, [defaultOpen, keyframeId, toggleBox]);
-
-    const isOpen = openBoxes.has(keyframeId);
-    const keyframe = getKeyframe(keyframeId);
-    if (!isOpen || !keyframe) return null;
 
     const value = React.useMemo(
       () => ({ keyframeId, parentRef }),
       [keyframeId]
     );
+
+    const isOpen = openBoxes.has(keyframeId);
+    const keyframe = getKeyframe(keyframeId);
+
+    if (!isOpen || !keyframe) return null;
 
     return (
       <KeyframeBoxContext.Provider value={value}>
