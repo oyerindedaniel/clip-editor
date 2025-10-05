@@ -54,6 +54,10 @@ export function useAnimatePresence(
           setInternalPresence(presence);
         }
       } catch (error) {
+        // You may see this warning in edge cases—for example, when an animation is
+        // running and the user switches windows or tabs mid-transition. It can be
+        // safely ignored, as the animation will resolve correctly (animate out)
+        // once the window regains focus.
         logger.warn("Animation failed:", error);
         if (currentAnimationIdRef.current === animationId) {
           setInternalPresence(presence);
