@@ -46,7 +46,6 @@ import { Button } from "./ui/button";
 import { SlidersHorizontal } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { AspectRatio, BoundaryBox, Transform } from "./boundary-box";
-import AspectRatioSelector from "./aspect-ratio-selector";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -209,7 +208,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     if (!video || !container || !trace) return;
 
-    video.style.width = `${container.clientWidth}px`;
+    // video.style.width = `${container.clientWidth}px`;
 
     const { x, y, width, height } = getVideoBoundingBox(video);
 

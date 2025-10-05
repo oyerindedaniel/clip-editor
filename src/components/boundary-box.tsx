@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { debounce } from "@/utils/app";
 
 const DEFAULT_VIDEO_WIDTH = 1920;
 const DEFAULT_VIDEO_HEIGHT = 1080;
@@ -242,7 +243,7 @@ const BoundaryBoxOverlay = React.forwardRef<
     <div
       ref={composedRef}
       className={cn(
-        "absolute will-change-transform pointer-events-auto border-2 border-primary bg-primary/10 shadow-lg",
+        "absolute will-change-transform pointer-events-auto border border-primary bg-primary/10 shadow-lg",
         className
       )}
       {...rest}
@@ -269,14 +270,12 @@ const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
 
     const clampPosition = React.useCallback(
       (x: number, y: number, width: number, height: number) => {
-        const container = containerRef.current;
-        if (!container) return { x, y };
+        const containerEl = containerRef.current;
+        if (!containerEl) return { x, y };
 
-        const { width: containerWidth, height: containerHeight } =
-          container.getBoundingClientRect();
-
-        const maxX = containerWidth - width;
-        const maxY = containerHeight - height;
+        const { width: cw, height: ch } = containerEl.getBoundingClientRect();
+        const maxX = cw - width;
+        const maxY = ch - height;
 
         return {
           x: Math.max(0, Math.min(x, maxX)),
@@ -288,59 +287,61 @@ const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
 
     const onPointerDown = React.useCallback(
       (e: React.PointerEvent) => {
-        const overlay = overlayRef.current;
-        const container = containerRef.current;
-        if (!overlay || !container) return;
+        const overlayEl = overlayRef.current;
+        const containerEl = containerRef.current;
+        if (!overlayEl || !containerEl) return;
 
         e.preventDefault();
         e.stopPropagation();
+        const targetEl = e.target as HTMLElement;
+        targetEl.setPointerCapture(e.pointerId);
 
-        const overlayRect = overlay.getBoundingClientRect();
+        const overlayRect = overlayEl.getBoundingClientRect();
+        const state = dragStateRef.current;
 
-        dragStateRef.current.isDragging = true;
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-
-        dragStateRef.current.offsetX = e.clientX - overlayRect.left;
-        dragStateRef.current.offsetY = e.clientY - overlayRect.top;
+        state.isDragging = true;
+        state.offsetX = e.clientX - overlayRect.left;
+        state.offsetY = e.clientY - overlayRect.top;
 
         const move = (ev: PointerEvent) => {
-          if (!dragStateRef.current.isDragging) return;
+          if (!state.isDragging) return;
 
-          if (dragStateRef.current.rafId) {
-            cancelAnimationFrame(dragStateRef.current.rafId);
-          }
+          if (state.rafId) cancelAnimationFrame(state.rafId);
 
-          dragStateRef.current.rafId = requestAnimationFrame(() => {
-            const containerRect = container.getBoundingClientRect();
+          state.rafId = requestAnimationFrame(() => {
+            const containerRect = containerEl.getBoundingClientRect();
+            const { offsetX, offsetY } = state;
 
-            let x =
-              ev.clientX - containerRect.left - dragStateRef.current.offsetX;
-            let y =
-              ev.clientY - containerRect.top - dragStateRef.current.offsetY;
+            const x = ev.clientX - containerRect.left - offsetX;
+            const y = ev.clientY - containerRect.top - offsetY;
 
-            const width = overlay.offsetWidth;
-            const height = overlay.offsetHeight;
+            const width = overlayEl.offsetWidth;
+            const height = overlayEl.offsetHeight;
+            const { x: clampedX, y: clampedY } = clampPosition(
+              x,
+              y,
+              width,
+              height
+            );
 
-            const clamped = clampPosition(x, y, width, height);
-
-            overlay.style.transform = `translate3d(${clamped.x}px, ${clamped.y}px, 0)`;
+            overlayEl.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
           });
         };
 
         const up = (ev: PointerEvent) => {
-          dragStateRef.current.isDragging = false;
-          (e.target as HTMLElement).releasePointerCapture(ev.pointerId);
+          state.isDragging = false;
+          targetEl.releasePointerCapture(ev.pointerId);
 
-          if (dragStateRef.current.rafId) {
-            cancelAnimationFrame(dragStateRef.current.rafId);
-            dragStateRef.current.rafId = null;
+          if (state.rafId) {
+            cancelAnimationFrame(state.rafId);
+            state.rafId = null;
           }
 
           document.removeEventListener("pointermove", move);
           document.removeEventListener("pointerup", up);
 
-          const overlayRect = overlay.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
+          const overlayRect = overlayEl.getBoundingClientRect();
+          const containerRect = containerEl.getBoundingClientRect();
 
           setTransform({
             x: overlayRect.left - containerRect.left,
@@ -361,7 +362,7 @@ const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
         ref={ref}
         onPointerDown={onPointerDown}
         className={cn(
-          "absolute inset-0 cursor-move pointer-events-auto select-none touch-none",
+          "absolute inset-0 cursor-move pointer-events-none select-none touch-none",
           className
         )}
         {...props}
@@ -400,16 +401,18 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
     const onPointerDown = React.useCallback(
       (e: React.PointerEvent) => {
-        const overlay = overlayRef.current;
-        const container = containerRef.current;
-        if (!overlay || !container) return;
+        const overlayEl = overlayRef.current;
+        const containerEl = containerRef.current;
+        if (!overlayEl || !containerEl) return;
 
         e.preventDefault();
         e.stopPropagation();
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-        const overlayRect = overlay.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
+        const targetEl = e.target as HTMLElement;
+        targetEl.setPointerCapture(e.pointerId);
+
+        const overlayRect = overlayEl.getBoundingClientRect();
+        const containerRect = containerEl.getBoundingClientRect();
 
         resizeStateRef.current = {
           isResizing: true,
@@ -423,83 +426,93 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
         };
 
         const move = (ev: PointerEvent) => {
-          if (!resizeStateRef.current.isResizing) return;
+          const state = resizeStateRef.current;
+          if (!state.isResizing) return;
 
-          if (resizeStateRef.current.rafId) {
-            cancelAnimationFrame(resizeStateRef.current.rafId);
-          }
+          if (state.rafId) cancelAnimationFrame(state.rafId);
 
-          resizeStateRef.current.rafId = requestAnimationFrame(() => {
-            const containerRect = container.getBoundingClientRect();
-            const dx = ev.clientX - resizeStateRef.current.startX;
-            const dy = ev.clientY - resizeStateRef.current.startY;
+          state.rafId = requestAnimationFrame(() => {
+            const { startX, startWidth, startHeight, startPosX, startPosY } =
+              state;
+            const containerRect = containerEl.getBoundingClientRect();
+            const dx = ev.clientX - startX;
 
-            let delta: number;
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            let newX = startPosX;
+            let newY = startPosY;
+
             switch (side) {
-              case "top-left":
-                delta = -Math.max(dx, dy);
-                break;
-              case "top-right":
-                delta = Math.max(dx, -dy);
-                break;
-              case "bottom-left":
-                delta = Math.max(-dx, dy);
-                break;
               case "bottom-right":
-              default:
-                delta = Math.max(dx, dy);
-                break;
-            }
-
-            const minWidth = 100;
-            let newWidth = Math.max(
-              minWidth,
-              resizeStateRef.current.startWidth + delta
-            );
-            let newHeight = newWidth / ratio;
-
-            let newX = resizeStateRef.current.startPosX;
-            let newY = resizeStateRef.current.startPosY;
-
-            switch (side) {
-              case "top-left":
-                newX -= newWidth - resizeStateRef.current.startWidth;
-                newY -= newHeight - resizeStateRef.current.startHeight;
-                break;
-              case "top-right":
-                newY -= newHeight - resizeStateRef.current.startHeight;
+                newWidth = startWidth + dx;
+                newHeight = newWidth / ratio;
                 break;
               case "bottom-left":
-                newX -= newWidth - resizeStateRef.current.startWidth;
+                newWidth = startWidth - dx;
+                newHeight = newWidth / ratio;
+                newX = startPosX + (startWidth - newWidth);
+                break;
+              case "top-right":
+                newWidth = startWidth + dx;
+                newHeight = newWidth / ratio;
+                newY = startPosY - (newHeight - startHeight);
+                break;
+              case "top-left":
+                newWidth = startWidth - dx;
+                newHeight = newWidth / ratio;
+                newX = startPosX + (startWidth - newWidth);
+                newY = startPosY - (newHeight - startHeight);
                 break;
             }
 
-            const maxX = containerRect.width - newWidth;
-            const maxY = containerRect.height - newHeight;
+            const maxWidthRight = containerRect.width - newX;
+            const maxHeightBottom = containerRect.height - newY;
+            const maxWidthLeft = startPosX + startWidth;
+            const maxHeightTop = startPosY + startHeight;
 
-            newX = Math.max(0, Math.min(newX, maxX));
-            newY = Math.max(0, Math.min(newY, maxY));
+            if (side.includes("right")) {
+              newWidth = Math.min(newWidth, maxWidthRight);
+              newHeight = newWidth / ratio;
+            }
+            if (side.includes("left")) {
+              newWidth = Math.min(newWidth, maxWidthLeft);
+              newHeight = newWidth / ratio;
+              newX = startPosX + (startWidth - newWidth);
+            }
+            if (side.includes("bottom")) {
+              newHeight = Math.min(newHeight, maxHeightBottom);
+              newWidth = newHeight * ratio;
+            }
+            if (side.includes("top")) {
+              newHeight = Math.min(newHeight, maxHeightTop);
+              newWidth = newHeight * ratio;
+              newY = startPosY + (startHeight - newHeight);
+            }
 
-            overlay.style.width = `${newWidth}px`;
-            overlay.style.height = `${newHeight}px`;
-            overlay.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
+            newWidth = Math.max(newWidth, MIN_OVERLAY_WIDTH);
+            newHeight = Math.max(newHeight, MIN_OVERLAY_WIDTH / ratio);
+
+            overlayEl.style.width = `${newWidth}px`;
+            overlayEl.style.height = `${newHeight}px`;
+            overlayEl.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
           });
         };
 
         const up = (ev: PointerEvent) => {
-          resizeStateRef.current.isResizing = false;
-          (e.target as HTMLElement).releasePointerCapture(ev.pointerId);
+          const state = resizeStateRef.current;
+          state.isResizing = false;
+          targetEl.releasePointerCapture(ev.pointerId);
 
-          if (resizeStateRef.current.rafId) {
-            cancelAnimationFrame(resizeStateRef.current.rafId);
-            resizeStateRef.current.rafId = null;
+          if (state.rafId) {
+            cancelAnimationFrame(state.rafId);
+            state.rafId = null;
           }
 
           document.removeEventListener("pointermove", move);
           document.removeEventListener("pointerup", up);
 
-          const overlayRect = overlay.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
+          const overlayRect = overlayEl.getBoundingClientRect();
+          const containerRect = containerEl.getBoundingClientRect();
 
           setTransform({
             x: overlayRect.left - containerRect.left,
@@ -514,6 +527,71 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
       },
       [ratio, side, setTransform, containerRef, overlayRef]
     );
+
+    const debouncedUpdateTransform = React.useMemo(
+      () =>
+        debounce((x: number, y: number, width: number, height: number) => {
+          setTransform({ x, y, width, height });
+        }, 150),
+      [setTransform]
+    );
+
+    React.useEffect(() => {
+      const containerEl = containerRef.current;
+      const overlayEl = overlayRef.current;
+      if (!containerEl || !overlayEl) return;
+
+      const update = () => {
+        if (resizeStateRef.current.rafId)
+          cancelAnimationFrame(resizeStateRef.current.rafId);
+
+        resizeStateRef.current.rafId = requestAnimationFrame(() => {
+          const containerRect = containerEl.getBoundingClientRect();
+          const overlayRect = overlayEl.getBoundingClientRect();
+
+          let newX = overlayRect.left - containerRect.left;
+          let newY = overlayRect.top - containerRect.top;
+          let newWidth = overlayRect.width;
+          let newHeight = overlayRect.height;
+
+          if (
+            newWidth > containerRect.width ||
+            newHeight > containerRect.height
+          ) {
+            const scale = Math.min(
+              containerRect.width / newWidth,
+              containerRect.height / newHeight
+            );
+            newWidth *= scale;
+            newHeight *= scale;
+          }
+
+          if (newX + newWidth > containerRect.width)
+            newX = containerRect.width - newWidth;
+          if (newY + newHeight > containerRect.height)
+            newY = containerRect.height - newHeight;
+          if (newX < 0) newX = 0;
+          if (newY < 0) newY = 0;
+
+          overlayEl.style.width = `${newWidth}px`;
+          overlayEl.style.height = `${newHeight}px`;
+          overlayEl.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
+
+          debouncedUpdateTransform(newX, newY, newWidth, newHeight);
+        });
+      };
+
+      const resizeObserver = new ResizeObserver(update);
+      resizeObserver.observe(containerEl);
+      window.addEventListener("resize", update);
+
+      return () => {
+        if (resizeStateRef.current.rafId)
+          cancelAnimationFrame(resizeStateRef.current.rafId);
+        resizeObserver.disconnect();
+        window.removeEventListener("resize", update);
+      };
+    }, [containerRef, overlayRef, debouncedUpdateTransform]);
 
     const positionClass = React.useMemo(() => {
       switch (side) {
@@ -534,7 +612,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
         ref={ref}
         onPointerDown={onPointerDown}
         className={cn(
-          "absolute w-3 h-3 bg-primary rounded-full pointer-events-auto border-2 border-surface-primary shadow-md hover:scale-125 transition-transform z-10",
+          "absolute w-2.5 h-2.5 bg-primary pointer-events-auto border border-surface-primary shadow-md hover:scale-110 transition-transform z-10",
           positionClass,
           className
         )}

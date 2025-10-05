@@ -156,6 +156,8 @@ function KeyframeRoot({
   );
 }
 
+KeyframeRoot.displayName = "Keyframe.Root";
+
 interface KeyframeMarkerProps {
   keyframeId: string;
   time: number;
@@ -165,10 +167,7 @@ interface KeyframeMarkerProps {
   onTimeChange?: (time: number) => void;
 }
 
-export const KeyframeMarker = React.forwardRef<
-  HTMLDivElement,
-  KeyframeMarkerProps
->(
+const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
   (
     {
       keyframeId,
@@ -285,6 +284,8 @@ export const KeyframeMarker = React.forwardRef<
   }
 );
 
+KeyframeMarker.displayName = "Keyframe.Marker";
+
 interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframeId: string;
   defaultOpen?: boolean;
@@ -329,6 +330,8 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
     );
   }
 );
+
+KeyframeBox.displayName = "Keyframe.Box";
 
 interface KeyframeBoxHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -401,6 +404,8 @@ const KeyframeBoxHeader = React.forwardRef<
   );
 });
 
+KeyframeBoxHeader.displayName = "Keyframe.BoxHeader";
+
 interface KeyframeBoxCloseProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
 
@@ -425,6 +430,8 @@ const KeyframeBoxClose = React.forwardRef<
   );
 });
 
+KeyframeBoxClose.displayName = "Keyframe.BoxClose";
+
 interface KeyframeBoxContentProps
   extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -441,6 +448,8 @@ const KeyframeBoxContent = React.forwardRef<
     />
   );
 });
+
+KeyframeBoxContent.displayName = "Keyframe.BoxContent";
 
 export const Keyframe = Object.assign(KeyframeRoot, {
   Marker: KeyframeMarker,

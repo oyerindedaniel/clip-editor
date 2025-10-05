@@ -121,7 +121,7 @@ const AspectRatioSelector = ({
                 variant={
                   localAspectRatio === ratio.value ? "default" : "outline"
                 }
-                className="w-full text-left block text-xs"
+                className="w-full text-left block text-xs overflow-hidden"
               >
                 <span className="font-medium mr-2">{ratio.label}</span>
                 <Badge variant="secondary">{ratio.description}</Badge>
