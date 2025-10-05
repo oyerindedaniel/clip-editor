@@ -11,27 +11,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-
-interface KeyframeTransform {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-interface KeyframeData {
-  id: string;
-  time: number;
-  transform: KeyframeTransform;
-  easing: string;
-}
+import type { KeyframeTransform, KeyframeData } from "@/types/keyframe";
 
 interface KeyframeContextValue {
-  keyframes: Map<string, KeyframeData>;
+  keyframes: KeyframeData[];
+  currentKeyframeId: string | null;
+  setCurrentKeyframeId: (id: string | null) => void;
+  addKeyframe: (data: Omit<KeyframeData, "id">) => string;
   updateKeyframe: (id: string, updates: Partial<KeyframeData>) => void;
+  deleteKeyframe: (id: string) => void;
   getKeyframe: (id: string) => KeyframeData | undefined;
-  openBoxes: Set<string>;
-  toggleBox: (id: string) => void;
-  closeBox: (id: string) => void;
   maxTime: number;
   pxPerMs: number;
 }
@@ -46,25 +35,27 @@ const KeyframeBoxContext = React.createContext<KeyframeBoxContextValue | null>(
   null
 );
 
-function useKeyframeContext() {
+export function useKeyframeContext() {
   const ctx = React.useContext(KeyframeContext);
-  if (!ctx) throw new Error("Must be used within Keyframe.Root");
+  if (!ctx) throw new Error("Must be within Keyframe.Root");
   return ctx;
 }
 
 function useKeyframeBoxContext() {
   const ctx = React.useContext(KeyframeBoxContext);
-  if (!ctx) throw new Error("Must be used within Keyframe.Box");
+  if (!ctx) throw new Error("Must be within Keyframe.Box");
   return ctx;
 }
 
 interface KeyframeRootProps {
-  children: React.ReactNode;
+  children: (context: KeyframeContextValue) => React.ReactNode;
   maxTime?: number;
   pxPerMs?: number;
   defaultKeyframes?: KeyframeData[];
-  keyframes?: Map<string, KeyframeData>;
-  onKeyframesChange?: (keyframes: Map<string, KeyframeData>) => void;
+  keyframes?: KeyframeData[];
+  onKeyframesChange?: (keyframes: KeyframeData[]) => void;
+  currentKeyframeId?: string | null;
+  onCurrentKeyframeIdChange?: (id: string | null) => void;
 }
 
 function KeyframeRoot({
@@ -74,76 +65,82 @@ function KeyframeRoot({
   defaultKeyframes = [],
   keyframes: controlledKeyframes,
   onKeyframesChange,
+  currentKeyframeId: controlledCurrentId,
+  onCurrentKeyframeIdChange,
 }: KeyframeRootProps) {
-  const [keyframes, setKeyframes] = useControllableState<
-    Map<string, KeyframeData>
-  >({
-    defaultValue: new Map(defaultKeyframes.map((kf) => [kf.id, kf])),
+  const [keyframes, setKeyframes] = useControllableState<KeyframeData[]>({
+    defaultValue: defaultKeyframes,
     controlled: controlledKeyframes,
     onChange: onKeyframesChange,
   });
 
-  const [openBoxes, setOpenBoxes] = React.useState<Set<string>>(new Set());
+  const [currentKeyframeId, setCurrentKeyframeId] = useControllableState<
+    string | null
+  >({
+    defaultValue: null,
+    controlled: controlledCurrentId,
+    onChange: onCurrentKeyframeIdChange,
+  });
+
+  const addKeyframe = React.useCallback(
+    (data: Omit<KeyframeData, "id">) => {
+      const id = `kf-${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(2, 9)}`;
+      const newKeyframe: KeyframeData = { ...data, id };
+
+      setKeyframes((prev) => [...prev, newKeyframe]);
+      setCurrentKeyframeId(id);
+
+      return id;
+    },
+    [setKeyframes, setCurrentKeyframeId]
+  );
 
   const updateKeyframe = React.useCallback(
     (id: string, updates: Partial<KeyframeData>) => {
-      setKeyframes((prev) => {
-        const next = new Map(prev);
-        const current = next.get(id);
-        if (current) next.set(id, { ...current, ...updates });
-        else
-          next.set(id, {
-            id,
-            time: 0,
-            transform: { x: 0, y: 0, scale: 1 },
-            easing: "ease-in-out",
-            ...updates,
-          });
-        return next;
-      });
+      setKeyframes((prev) =>
+        prev.map((kf) => (kf.id === id ? { ...kf, ...updates } : kf))
+      );
     },
     [setKeyframes]
   );
 
-  const getKeyframe = React.useCallback(
-    (id: string) => keyframes.get(id),
-    [keyframes]
+  const deleteKeyframe = React.useCallback(
+    (id: string) => {
+      setKeyframes((prev) => prev.filter((kf) => kf.id !== id));
+      if (currentKeyframeId === id) {
+        setCurrentKeyframeId(null);
+      }
+    },
+    [setKeyframes, currentKeyframeId, setCurrentKeyframeId]
   );
 
-  const toggleBox = React.useCallback((id: string) => {
-    setOpenBoxes((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
-
-  const closeBox = React.useCallback((id: string) => {
-    setOpenBoxes((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
+  const getKeyframe = React.useCallback(
+    (id: string) => keyframes.find((kf) => kf.id === id),
+    [keyframes]
+  );
 
   const value = React.useMemo(
     () => ({
       keyframes,
+      currentKeyframeId,
+      setCurrentKeyframeId,
+      addKeyframe,
       updateKeyframe,
+      deleteKeyframe,
       getKeyframe,
-      openBoxes,
-      toggleBox,
-      closeBox,
       maxTime,
       pxPerMs,
     }),
     [
       keyframes,
+      currentKeyframeId,
+      setCurrentKeyframeId,
+      addKeyframe,
       updateKeyframe,
+      deleteKeyframe,
       getKeyframe,
-      openBoxes,
-      toggleBox,
-      closeBox,
       maxTime,
       pxPerMs,
     ]
@@ -151,55 +148,35 @@ function KeyframeRoot({
 
   return (
     <KeyframeContext.Provider value={value}>
-      {children}
+      {children(value)}
     </KeyframeContext.Provider>
   );
 }
 
 KeyframeRoot.displayName = "Keyframe.Root";
 
-interface KeyframeMarkerProps {
+interface KeyframeMarkerProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframeId: string;
-  time: number;
   color?: string;
-  transform?: KeyframeTransform;
-  easing?: string;
-  onTimeChange?: (time: number) => void;
 }
 
 const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
-  (
-    {
-      keyframeId,
-      time: initialTime,
-      color = "#3b82f6",
-      transform = { x: 0, y: 0, scale: 1 },
-      easing = "ease-in-out",
-      onTimeChange,
-      ...props
-    },
-    forwardedRef
-  ) => {
-    const { updateKeyframe, toggleBox, maxTime } = useKeyframeContext();
+  ({ keyframeId, color = "#3b82f6", className, ...props }, forwardedRef) => {
+    const { getKeyframe, updateKeyframe, setCurrentKeyframeId, maxTime } =
+      useKeyframeContext();
+
     const localRef = React.useRef<HTMLDivElement>(null);
     const markerRef = useComposedRefs(localRef, forwardedRef);
     const isDraggingRef = React.useRef(false);
     const rafRef = React.useRef<number | null>(null);
     const timelineRef = React.useRef<HTMLElement | null>(null);
-    const [time, setTime] = React.useState(initialTime);
+
+    const keyframe = getKeyframe(keyframeId);
+    if (!keyframe) return null;
 
     const setTimelineRef = React.useCallback((el: HTMLElement | null) => {
       timelineRef.current = el;
     }, []);
-
-    React.useLayoutEffect(() => {
-      updateKeyframe(keyframeId, {
-        id: keyframeId,
-        time: initialTime,
-        transform,
-        easing,
-      });
-    }, [keyframeId, initialTime, transform, easing, updateKeyframe]);
 
     const handlePointerDown = React.useCallback(
       (event: React.PointerEvent) => {
@@ -224,29 +201,44 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
             const x = e.clientX - rect.left;
             const ratio = Math.max(0, Math.min(1, x / rect.width));
             const newTime = Math.round((ratio * maxTime) / 100) * 100;
-            setTime(newTime);
+
             const left = (newTime / maxTime) * 100;
-            marker.style.transform = `translate3d(calc(${left}% - 50%),0,0)`;
+            marker.style.transform = `translate3d(calc(${left}% - 50%), 0, 0)`;
           });
         };
 
         const handleUp = (e: PointerEvent) => {
           isDraggingRef.current = false;
           marker.releasePointerCapture(e.pointerId);
+
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
           document.removeEventListener("pointermove", handleMove);
           document.removeEventListener("pointerup", handleUp);
-          updateKeyframe(keyframeId, { time });
-          onTimeChange?.(time);
+
+          const x = e.clientX - rect.left;
+          const ratio = Math.max(0, Math.min(1, x / rect.width));
+          const newTime = Math.round((ratio * maxTime) / 100) * 100;
+
+          updateKeyframe(keyframeId, { time: newTime });
         };
 
         document.addEventListener("pointermove", handleMove);
         document.addEventListener("pointerup", handleUp);
       },
-      [keyframeId, maxTime, updateKeyframe, onTimeChange, time]
+      [keyframeId, maxTime, updateKeyframe]
     );
 
-    const left = (time / maxTime) * 100;
+    const handleClick = React.useCallback(
+      (e: React.MouseEvent) => {
+        if (e.defaultPrevented) return;
+        e.stopPropagation();
+        setCurrentKeyframeId(keyframeId);
+      },
+      [keyframeId, setCurrentKeyframeId]
+    );
+
+    const left = (keyframe.time / maxTime) * 100;
 
     return (
       <Tooltip>
@@ -255,15 +247,12 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
             ref={markerRef}
             data-timeline-ref-capture={setTimelineRef}
             className={cn(
-              "absolute top-0 bottom-0 flex flex-col items-center cursor-ew-resize group z-10 will-change-transform"
+              "absolute top-0 bottom-0 flex flex-col items-center cursor-ew-resize group z-10 will-change-transform",
+              className
             )}
-            style={{ transform: `translate3d(calc(${left}% - 50%),0,0)` }}
+            style={{ transform: `translate3d(calc(${left}% - 50%), 0, 0)` }}
             onPointerDown={handlePointerDown}
-            onClick={(e) => {
-              if (e.defaultPrevented) return;
-              e.stopPropagation();
-              toggleBox(keyframeId);
-            }}
+            onClick={handleClick}
             {...props}
           >
             <div
@@ -277,7 +266,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           </div>
         </TooltipTrigger>
         <TooltipContent sideOffset={10}>
-          {(time / 1000).toFixed(1)}s
+          {(keyframe.time / 1000).toFixed(1)}s
         </TooltipContent>
       </Tooltip>
     );
@@ -286,32 +275,25 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
 KeyframeMarker.displayName = "Keyframe.Marker";
 
-interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {
-  keyframeId: string;
-  defaultOpen?: boolean;
-}
+interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
-  ({ keyframeId, defaultOpen = false, className, children }, forwardedRef) => {
-    const { openBoxes, getKeyframe, toggleBox } = useKeyframeContext();
+  ({ className, children, ...props }, forwardedRef) => {
+    const { currentKeyframeId, getKeyframe } = useKeyframeContext();
+
     const parentRef = React.useRef<HTMLDivElement>(null);
     const localRef = React.useRef<HTMLDivElement>(null);
     const boxRef = useComposedRefs(localRef, forwardedRef, parentRef);
     const positionRef = React.useRef({ x: 100, y: 100 });
 
-    React.useLayoutEffect(() => {
-      if (defaultOpen) toggleBox(keyframeId);
-    }, [defaultOpen, keyframeId, toggleBox]);
+    const keyframe = currentKeyframeId ? getKeyframe(currentKeyframeId) : null;
 
     const value = React.useMemo(
-      () => ({ keyframeId, parentRef }),
-      [keyframeId]
+      () => ({ keyframeId: currentKeyframeId || "", parentRef }),
+      [currentKeyframeId]
     );
 
-    const isOpen = openBoxes.has(keyframeId);
-    const keyframe = getKeyframe(keyframeId);
-
-    if (!isOpen || !keyframe) return null;
+    if (!keyframe || !currentKeyframeId) return null;
 
     return (
       <KeyframeBoxContext.Provider value={value}>
@@ -322,8 +304,9 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
             className
           )}
           style={{
-            transform: `translate3d(${positionRef.current.x}px,${positionRef.current.y}px,0)`,
+            transform: `translate3d(${positionRef.current.x}px, ${positionRef.current.y}px, 0)`,
           }}
+          {...props}
         >
           {children}
         </div>
@@ -353,25 +336,31 @@ const KeyframeBoxHeader = React.forwardRef<
         return;
       if (event.defaultPrevented) return;
       event.preventDefault();
+
       const header = localRef.current;
       const box = parentRef.current;
       if (!header || !box) return;
+
       isDraggingRef.current = true;
       header.setPointerCapture(event.pointerId);
+
       const rect = box.getBoundingClientRect();
       offsetRef.current = {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       };
+
       const handleMove = (e: PointerEvent) => {
         if (!isDraggingRef.current) return;
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
         rafRef.current = requestAnimationFrame(() => {
           const x = e.clientX - offsetRef.current.x;
           const y = e.clientY - offsetRef.current.y;
-          box.style.transform = `translate3d(${x}px,${y}px,0)`;
+          box.style.transform = `translate3d(${x}px, ${y}px, 0)`;
         });
       };
+
       const handleUp = (e: PointerEvent) => {
         isDraggingRef.current = false;
         header.releasePointerCapture(e.pointerId);
@@ -379,6 +368,7 @@ const KeyframeBoxHeader = React.forwardRef<
         document.removeEventListener("pointermove", handleMove);
         document.removeEventListener("pointerup", handleUp);
       };
+
       document.addEventListener("pointermove", handleMove);
       document.addEventListener("pointerup", handleUp);
     },
@@ -414,15 +404,15 @@ const KeyframeBoxClose = React.forwardRef<
   HTMLButtonElement,
   KeyframeBoxCloseProps
 >((props, forwardedRef) => {
-  const { keyframeId } = useKeyframeBoxContext();
-  const { closeBox } = useKeyframeContext();
+  const { setCurrentKeyframeId } = useKeyframeContext();
+
   return (
     <Button
       ref={forwardedRef}
       data-close-button
       variant="ghost"
       size="icon"
-      onClick={() => closeBox(keyframeId)}
+      onClick={() => setCurrentKeyframeId(null)}
       className="ml-auto"
       {...props}
     >
@@ -440,10 +430,9 @@ const KeyframeBoxContent = React.forwardRef<
   HTMLDivElement,
   KeyframeBoxContentProps
 >(({ className, ...props }, forwardedRef) => {
-  const composedRef = useComposedRefs(forwardedRef);
   return (
     <div
-      ref={composedRef}
+      ref={forwardedRef}
       className={cn("p-4 space-y-3", className)}
       {...props}
     />
@@ -452,10 +441,11 @@ const KeyframeBoxContent = React.forwardRef<
 
 KeyframeBoxContent.displayName = "Keyframe.BoxContent";
 
-export const Keyframe = Object.assign(KeyframeRoot, {
+export const Keyframe = {
+  Root: KeyframeRoot,
   Marker: KeyframeMarker,
   Box: KeyframeBox,
   BoxHeader: KeyframeBoxHeader,
   BoxClose: KeyframeBoxClose,
   BoxContent: KeyframeBoxContent,
-});
+};

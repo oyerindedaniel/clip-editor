@@ -98,7 +98,7 @@ const AspectRatioSelector = ({
           )}
         >
           <Crop size={14} className="mr-1" />
-          <span className="text-xs">{aspectRatio || "Aspect"}</span>
+          <span>{aspectRatio || "Aspect"}</span>
         </Button>
       </PopoverTrigger>
 

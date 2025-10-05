@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { debounce } from "@/utils/app";
+import { DEFAULT_TRANSFORM } from "@/constants/transform";
+import { useStableHandler } from "@/hooks/use-stable-handler";
+import { equalTransform } from "@/utils/optimise";
+import { ASPECT_RATIOS } from "@/utils/aspect-ratios";
 
 const DEFAULT_VIDEO_WIDTH = 1920;
 const DEFAULT_VIDEO_HEIGHT = 1080;
@@ -21,6 +25,9 @@ export interface Transform {
   y: number;
   width: number;
   height: number;
+  scale: number;
+  normX: number;
+  normY: number;
 }
 
 interface BoundaryBoxContextValue {
@@ -36,15 +43,6 @@ interface BoundaryBoxContextValue {
   visible: boolean;
   setVisible: (v: boolean) => void;
 }
-
-const ASPECT_RATIOS: Record<AspectRatio, number> = {
-  "16:9": 16 / 9,
-  "9:16": 9 / 16,
-  "1:1": 1,
-  "4:3": 4 / 3,
-  "3:4": 3 / 4,
-  "21:9": 21 / 9,
-};
 
 const BoundaryBoxContext = React.createContext<BoundaryBoxContextValue | null>(
   null
@@ -95,9 +93,13 @@ export const BoundaryBoxRoot = ({
   });
 
   const [transform, setTransform] = useControllableState<Transform>({
-    defaultValue: defaultTransform || { x: 0, y: 0, width: 0, height: 0 },
+    defaultValue: defaultTransform || DEFAULT_TRANSFORM,
     controlled: controlledTransform,
-    onChange: onTransformChange,
+    onChange: (nextTransform) => {
+      if (!equalTransform(transform, nextTransform)) {
+        onTransformChange?.(nextTransform);
+      }
+    },
   });
 
   const [visible, setVisible] = useControllableState<boolean>({
@@ -109,6 +111,8 @@ export const BoundaryBoxRoot = ({
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
 
+  const stableSetTransform = useStableHandler(setTransform);
+
   const value = React.useMemo(
     () => ({
       screenSize,
@@ -117,7 +121,7 @@ export const BoundaryBoxRoot = ({
       videoWidth,
       videoHeight,
       transform,
-      setTransform,
+      setTransform: stableSetTransform,
       containerRef,
       overlayRef,
       visible,
@@ -130,7 +134,7 @@ export const BoundaryBoxRoot = ({
       videoWidth,
       videoHeight,
       transform,
-      setTransform,
+      stableSetTransform,
       visible,
       setVisible,
     ]
@@ -177,8 +181,15 @@ const BoundaryBoxOverlay = React.forwardRef<
   BoundaryBoxOverlayProps
 >((props, ref) => {
   const { className, children, ...rest } = props;
-  const { aspectRatio, containerRef, overlayRef, setTransform, visible } =
-    useBoundaryBoxContext();
+  const {
+    aspectRatio,
+    containerRef,
+    overlayRef,
+    setTransform,
+    visible,
+    videoWidth,
+    videoHeight,
+  } = useBoundaryBoxContext();
 
   const composedRef = useComposedRefs(ref, overlayRef);
   const targetAspectRatio = ASPECT_RATIOS[aspectRatio];
@@ -195,17 +206,17 @@ const BoundaryBoxOverlay = React.forwardRef<
     let height: number;
 
     if (targetAspectRatio >= 1) {
-      height = ch * 0.8;
+      height = ch * OVERLAY_SCALE_FACTOR;
       width = height * targetAspectRatio;
       if (width > cw) {
-        width = cw * 0.8;
+        width = cw * OVERLAY_SCALE_FACTOR;
         height = width / targetAspectRatio;
       }
     } else {
-      width = cw * 0.8;
+      width = cw * OVERLAY_SCALE_FACTOR;
       height = width / targetAspectRatio;
       if (height > ch) {
-        height = ch * 0.8;
+        height = ch * OVERLAY_SCALE_FACTOR;
         width = height * targetAspectRatio;
       }
     }
@@ -218,7 +229,9 @@ const BoundaryBoxOverlay = React.forwardRef<
     const overlay = overlayRef.current;
     if (!container || !overlay) return;
 
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
+      if (!containerRef.current || !overlayRef.current) return;
+
       const { width, height } = calculateInitialSize();
       const { width: cw, height: ch } = container.getBoundingClientRect();
 
@@ -229,13 +242,23 @@ const BoundaryBoxOverlay = React.forwardRef<
       overlay.style.width = `${width}px`;
       overlay.style.height = `${height}px`;
 
-      setTransform({ x, y, width, height });
+      const scaleX = width / videoWidth;
+      const scaleY = height / videoHeight;
+      const scale = Math.max(scaleX, scaleY);
+      const normX = x / cw;
+      const normY = y / ch;
+
+      setTransform({ x, y, width, height, scale, normX, normY });
     });
-  }, [containerRef, overlayRef, calculateInitialSize, setTransform]);
+
+    return () => cancelAnimationFrame(rafId);
+  }, [calculateInitialSize, setTransform, videoWidth, videoHeight]);
 
   React.useLayoutEffect(() => {
-    if (visible) initializeOverlay();
-  }, [initializeOverlay, aspectRatio, visible]);
+    if (!visible) return;
+    const cleanup = initializeOverlay();
+    return cleanup;
+  }, [initializeOverlay, visible]);
 
   if (!visible) return null;
 
@@ -259,7 +282,8 @@ interface DraggableProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
   function BoundaryBoxDraggable({ className, children, ...props }, ref) {
-    const { containerRef, overlayRef, setTransform } = useBoundaryBoxContext();
+    const { containerRef, overlayRef, setTransform, videoWidth, videoHeight } =
+      useBoundaryBoxContext();
 
     const dragStateRef = React.useRef({
       isDragging: false,
@@ -343,12 +367,18 @@ const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
           const overlayRect = overlayEl.getBoundingClientRect();
           const containerRect = containerEl.getBoundingClientRect();
 
-          setTransform({
-            x: overlayRect.left - containerRect.left,
-            y: overlayRect.top - containerRect.top,
-            width: overlayRect.width,
-            height: overlayRect.height,
-          });
+          const x = overlayRect.left - containerRect.left;
+          const y = overlayRect.top - containerRect.top;
+          const width = overlayRect.width;
+          const height = overlayRect.height;
+
+          const scaleX = width / videoWidth;
+          const scaleY = height / videoHeight;
+          const scale = Math.max(scaleX, scaleY);
+          const normX = x / containerRect.width;
+          const normY = y / containerRect.height;
+
+          setTransform({ x, y, width, height, scale, normX, normY });
         };
 
         document.addEventListener("pointermove", move);
@@ -384,8 +414,14 @@ interface ResizableProps extends React.HTMLAttributes<HTMLDivElement> {
 const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
   (props, ref) => {
     const { className, side, ...rest } = props;
-    const { setTransform, aspectRatio, containerRef, overlayRef } =
-      useBoundaryBoxContext();
+    const {
+      setTransform,
+      aspectRatio,
+      containerRef,
+      overlayRef,
+      videoWidth,
+      videoHeight,
+    } = useBoundaryBoxContext();
 
     const ratio = ASPECT_RATIOS[aspectRatio];
     const resizeStateRef = React.useRef({
@@ -514,12 +550,18 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
           const overlayRect = overlayEl.getBoundingClientRect();
           const containerRect = containerEl.getBoundingClientRect();
 
-          setTransform({
-            x: overlayRect.left - containerRect.left,
-            y: overlayRect.top - containerRect.top,
-            width: overlayRect.width,
-            height: overlayRect.height,
-          });
+          const x = overlayRect.left - containerRect.left;
+          const y = overlayRect.top - containerRect.top;
+          const width = overlayRect.width;
+          const height = overlayRect.height;
+
+          const scaleX = width / videoWidth;
+          const scaleY = height / videoHeight;
+          const scale = Math.max(scaleX, scaleY);
+          const normX = x / containerRect.width;
+          const normY = y / containerRect.height;
+
+          setTransform({ x, y, width, height, scale, normX, normY });
         };
 
         document.addEventListener("pointermove", move);
@@ -530,10 +572,10 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
     const debouncedUpdateTransform = React.useMemo(
       () =>
-        debounce((x: number, y: number, width: number, height: number) => {
-          setTransform({ x, y, width, height });
+        debounce((transform: Transform) => {
+          setTransform(transform);
         }, 150),
-      [setTransform]
+      []
     );
 
     React.useEffect(() => {
@@ -577,21 +619,36 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
           overlayEl.style.height = `${newHeight}px`;
           overlayEl.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
 
-          debouncedUpdateTransform(newX, newY, newWidth, newHeight);
+          const scaleX = newWidth / videoWidth;
+          const scaleY = newHeight / videoHeight;
+          const scale = Math.max(scaleX, scaleY);
+          const normX = newX / containerRect.width;
+          const normY = newY / containerRect.height;
+
+          debouncedUpdateTransform({
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight,
+            scale,
+            normX,
+            normY,
+          });
         });
       };
 
-      const resizeObserver = new ResizeObserver(update);
-      resizeObserver.observe(containerEl);
+      // const resizeObserver = new ResizeObserver(update);
+      // resizeObserver.observe(containerEl);
+
       window.addEventListener("resize", update);
 
       return () => {
         if (resizeStateRef.current.rafId)
           cancelAnimationFrame(resizeStateRef.current.rafId);
-        resizeObserver.disconnect();
         window.removeEventListener("resize", update);
+        // resizeObserver.disconnect();
       };
-    }, [containerRef, overlayRef, debouncedUpdateTransform]);
+    }, [debouncedUpdateTransform, videoWidth, videoHeight]);
 
     const positionClass = React.useMemo(() => {
       switch (side) {

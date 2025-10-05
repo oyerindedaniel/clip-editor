@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-
 import type {
   AudioTrack,
   ExportSettings,
@@ -42,10 +41,21 @@ import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
-import { Button } from "./ui/button";
-import { SlidersHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SlidersHorizontal, Film } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
+import { KeyframeContext } from "@/contexts/keyframe-context";
 import { AspectRatio, BoundaryBox, Transform } from "./boundary-box";
+import { Keyframe } from "./keyframe";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -113,12 +123,21 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setSecondaryTrim: state.setSecondaryTrim,
     }));
 
-  const [boundaryAspectRatio, setBoundaryAspectRatio] =
-    useState<AspectRatio | null>(null);
-  const [boundaryVisible, setBoundaryVisible] = useState(false);
-  const [boundaryTransform, setBoundaryTransform] = useState<Transform | null>(
-    null
-  );
+  const {
+    boundaryAspectRatio,
+    setBoundaryAspectRatio,
+    boundaryVisible,
+    setBoundaryVisible,
+    boundaryTransform,
+    setBoundaryTransform,
+  } = useShallowSelector(KeyframeContext, (state) => ({
+    boundaryAspectRatio: state.boundaryAspectRatio,
+    setBoundaryAspectRatio: state.setBoundaryAspectRatio,
+    boundaryVisible: state.boundaryVisible,
+    setBoundaryVisible: state.setBoundaryVisible,
+    boundaryTransform: state.boundaryTransform,
+    setBoundaryTransform: state.setBoundaryTransform,
+  }));
 
   const isValidBufferState = useMemo(() => {
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
@@ -605,128 +624,353 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       <div className="flex-1 min-h-0">
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-          <div className="w-full flex flex-col lg:flex-row items-center gap-4">
-            <div>
-              <div className="flex justify-start p-2">
-                <AspectRatioPicker
-                  screenSize="16:9"
-                  aspectRatio={boundaryAspectRatio}
-                  onAspectRatioChange={setBoundaryAspectRatio}
-                  visible={boundaryVisible}
-                  onVisibleChange={setBoundaryVisible}
-                  disabled={!isValidBufferState || isExporting}
-                />
-              </div>
-              {/* 16:9 primary player (original) */}
-              <div
-                data-container-context="primary"
-                ref={containerRef}
-                className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-              >
-                <BoundaryBox
-                  screenSize="16:9"
-                  videoWidth={1920}
-                  videoHeight={1080}
-                  aspectRatio={boundaryAspectRatio as AspectRatio}
-                  visible={boundaryVisible}
-                  onTransformChange={setBoundaryTransform}
-                >
-                  <BoundaryBox.Container
-                    ref={containerRef}
-                    className="relative flex-1 min-w-0 bg-surface-secondary shadow-md"
-                  >
-                    <MediaPlayer.Root>
-                      <MediaPlayer.Video
-                        src={primaryUrl}
-                        ref={(el) => {
-                          videoRef.current = el;
-                          setVideoRef(el);
-                        }}
-                        playsInline
-                        className="w-full aspect-video"
-                        poster={"/thumbnails/video-thumb-2.webp"}
+          <Keyframe.Root maxTime={duration} pxPerMs={0.05}>
+            {({
+              keyframes,
+              currentKeyframeId,
+              addKeyframe,
+              updateKeyframe,
+              deleteKeyframe,
+              getKeyframe,
+            }) => (
+              <>
+                <div className="w-full flex flex-col lg:flex-row items-center gap-4">
+                  <div>
+                    <div className="flex justify-start p-2">
+                      <AspectRatioPicker
+                        screenSize="16:9"
+                        aspectRatio={boundaryAspectRatio}
+                        onAspectRatioChange={setBoundaryAspectRatio}
+                        visible={boundaryVisible}
+                        onVisibleChange={setBoundaryVisible}
+                        disabled={!isValidBufferState || isExporting}
                       />
-                      <MediaPlayer.Loading />
-                      <MediaPlayer.Error />
-                      <MediaPlayer.VolumeIndicator />
-                      <MediaPlayer.Controls>
-                        <MediaPlayer.ControlsOverlay />
-                        <MediaPlayer.Play />
-                        <MediaPlayer.SeekBackward />
-                        <MediaPlayer.SeekForward />
-                        <MediaPlayer.Volume />
-                        <MediaPlayer.Seek />
-                        <MediaPlayer.Time />
-                        <MediaPlayer.PlaybackSpeed />
-                        <MediaPlayer.Loop />
-                        <MediaPlayer.Captions />
-                        <MediaPlayer.PiP />
-                        <MediaPlayer.Fullscreen />
-                        <MediaPlayer.Download />
-                      </MediaPlayer.Controls>
-                    </MediaPlayer.Root>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (boundaryTransform) {
+                            addKeyframe({
+                              time: videoRef.current?.currentTime
+                                ? videoRef.current.currentTime * 1000
+                                : 0,
+                              transform: {
+                                x: boundaryTransform.x,
+                                y: boundaryTransform.y,
+                                scale: boundaryTransform.scale,
+                                normX: boundaryTransform.normX,
+                                normY: boundaryTransform.normY,
+                              },
+                              easing: "ease-in-out",
+                            });
+                          }
+                        }}
+                        disabled={!boundaryTransform}
+                        className="ml-2"
+                      >
+                        <Film className="mr-2" size={14} />
+                        Add Keyframe
+                      </Button>
+                    </div>
 
-                    <div ref={traceRef} />
-                    <PersistentOverlays duration={duration} />
+                    <BoundaryBox
+                      screenSize="16:9"
+                      videoWidth={videoRef.current?.videoWidth || 1920}
+                      videoHeight={videoRef.current?.videoHeight || 1080}
+                      aspectRatio={boundaryAspectRatio as AspectRatio}
+                      visible={boundaryVisible}
+                      transform={boundaryTransform!}
+                      onTransformChange={(transform) => {
+                        // console.log("in here transform", transform);
+                        setBoundaryTransform(transform);
+                        if (currentKeyframeId) {
+                          updateKeyframe(currentKeyframeId, {
+                            transform: {
+                              x: transform.x,
+                              y: transform.y,
+                              scale: transform.scale,
+                              normX: transform.normX,
+                              normY: transform.normY,
+                            },
+                          });
+                        }
+                      }}
+                    >
+                      <BoundaryBox.Container className="relative flex-1 min-w-0 bg-surface-secondary shadow-md">
+                        <MediaPlayer.Root>
+                          <MediaPlayer.Video
+                            src={primaryUrl}
+                            ref={(el) => {
+                              videoRef.current = el;
+                              setVideoRef(el);
+                            }}
+                            playsInline
+                            className="w-full aspect-video"
+                            poster={"/thumbnails/video-thumb-2.webp"}
+                          />
+                          <MediaPlayer.Loading />
+                          <MediaPlayer.Error />
+                          <MediaPlayer.VolumeIndicator />
+                          <MediaPlayer.Controls>
+                            <MediaPlayer.ControlsOverlay />
+                            <MediaPlayer.Play />
+                            <MediaPlayer.SeekBackward />
+                            <MediaPlayer.SeekForward />
+                            <MediaPlayer.Volume />
+                            <MediaPlayer.Seek />
+                            <MediaPlayer.Time />
+                            <MediaPlayer.PlaybackSpeed />
+                            <MediaPlayer.Loop />
+                            <MediaPlayer.Captions />
+                            <MediaPlayer.PiP />
+                            <MediaPlayer.Fullscreen />
+                            <MediaPlayer.Download />
+                          </MediaPlayer.Controls>
+                        </MediaPlayer.Root>
 
-                    <BoundaryBox.Draggable>
-                      <BoundaryBox.Overlay>
-                        <BoundaryBox.Resizable side="top-left" />
-                        <BoundaryBox.Resizable side="top-right" />
-                        <BoundaryBox.Resizable side="bottom-left" />
-                        <BoundaryBox.Resizable side="bottom-right" />
-                      </BoundaryBox.Overlay>
-                    </BoundaryBox.Draggable>
-                  </BoundaryBox.Container>
-                </BoundaryBox>
-              </div>
-            </div>
+                        <div ref={traceRef} />
+                        <PersistentOverlays duration={duration} />
 
-            <DualVideoPlayer
-              isPrimaryVideoLoaded={isVideoLoaded}
-              primaryClip={{ ...clipData, url: originalPrimaryUrl }}
-              secondaryClip={secondaryClip}
-              duration={duration}
-            />
-          </div>
+                        <BoundaryBox.Draggable>
+                          <BoundaryBox.Overlay>
+                            <BoundaryBox.Resizable side="top-left" />
+                            <BoundaryBox.Resizable side="top-right" />
+                            <BoundaryBox.Resizable side="bottom-left" />
+                            <BoundaryBox.Resizable side="bottom-right" />
+                          </BoundaryBox.Overlay>
+                        </BoundaryBox.Draggable>
+                      </BoundaryBox.Container>
+                    </BoundaryBox>
+                  </div>
 
-          <div className="flex-1 min-h-0">
-            {secondaryClip ? (
-              <DualVideoTracks
-                primaryDurationMs={primaryDurationMs}
-                secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
-                initialOffsetMs={0}
-                primaryPreviewFrames={primaryFrames}
-                secondaryPreviewFrames={secondaryFrames}
-                // onOffsetChange={(liveOffsetMs) => {
-                //   setSecondaryTrim((prev) => ({
-                //     ...prev,
-                //     timelineOffset: liveOffsetMs,
-                //   }));
-                // }}
-                onCommitOffset={(offsetMs) => {
-                  setSecondaryTrim((prev) => ({
-                    ...prev,
-                    timelineOffset: offsetMs,
-                  }));
-                }}
-                onCutSecondaryAt={(trimData) => {
-                  setSecondaryTrim((prev) => ({
-                    ...prev,
-                    ...trimData,
-                  }));
-                }}
-              />
-            ) : isVideoLoaded ? (
-              <Timeline
-                duration={duration}
-                onTrim={handleTrim}
-                frames={primaryFrames}
-              />
-            ) : (
-              <TimelineSkeleton />
+                  <DualVideoPlayer
+                    isPrimaryVideoLoaded={isVideoLoaded}
+                    primaryClip={{ ...clipData, url: originalPrimaryUrl }}
+                    secondaryClip={secondaryClip}
+                    duration={duration}
+                  />
+                </div>
+
+                <div className="flex-1 min-h-0">
+                  {secondaryClip ? (
+                    <DualVideoTracks
+                      primaryDurationMs={primaryDurationMs}
+                      secondaryDurationMs={
+                        secondaryClip.metadata.clipDurationMs
+                      }
+                      initialOffsetMs={0}
+                      primaryPreviewFrames={primaryFrames}
+                      secondaryPreviewFrames={secondaryFrames}
+                      // onOffsetChange={(liveOffsetMs) => {
+                      //   setSecondaryTrim((prev) => ({
+                      //     ...prev,
+                      //     timelineOffset: liveOffsetMs,
+                      //   }));
+                      // }}
+                      onCommitOffset={(offsetMs) => {
+                        setSecondaryTrim((prev) => ({
+                          ...prev,
+                          timelineOffset: offsetMs,
+                        }));
+                      }}
+                      onCutSecondaryAt={(trimData) => {
+                        setSecondaryTrim((prev) => ({
+                          ...prev,
+                          ...trimData,
+                        }));
+                      }}
+                    />
+                  ) : isVideoLoaded ? (
+                    <div className="relative">
+                      <Timeline
+                        duration={duration}
+                        onTrim={handleTrim}
+                        frames={primaryFrames}
+                      />
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        data-timeline-track
+                      >
+                        <div className="relative h-full pointer-events-auto">
+                          {keyframes.map((kf) => (
+                            <Keyframe.Marker
+                              key={kf.id}
+                              keyframeId={kf.id}
+                              color={
+                                currentKeyframeId === kf.id
+                                  ? "#ec4899"
+                                  : "#3b82f6"
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <TimelineSkeleton />
+                  )}
+                </div>
+
+                <Keyframe.Box>
+                  <Keyframe.BoxHeader>
+                    {currentKeyframeId &&
+                      getKeyframe(currentKeyframeId) &&
+                      `Keyframe @ ${(
+                        getKeyframe(currentKeyframeId)!.time / 1000
+                      ).toFixed(1)}s`}
+                    <Keyframe.BoxClose />
+                  </Keyframe.BoxHeader>
+                  <Keyframe.BoxContent>
+                    {currentKeyframeId && getKeyframe(currentKeyframeId) && (
+                      <>
+                        <div className="space-y-3">
+                          <div>
+                            <Label>X Position</Label>
+                            <Input
+                              type="number"
+                              step={10}
+                              value={
+                                getKeyframe(currentKeyframeId)!.transform.x
+                              }
+                              onChange={(e) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  transform: {
+                                    ...getKeyframe(currentKeyframeId)!
+                                      .transform,
+                                    x: parseFloat(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Y Position</Label>
+                            <Input
+                              type="number"
+                              step={10}
+                              value={
+                                getKeyframe(currentKeyframeId)!.transform.y
+                              }
+                              onChange={(e) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  transform: {
+                                    ...getKeyframe(currentKeyframeId)!
+                                      .transform,
+                                    y: parseFloat(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Scale</Label>
+                            <Input
+                              type="number"
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                              value={
+                                getKeyframe(currentKeyframeId)!.transform.scale
+                              }
+                              onChange={(e) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  transform: {
+                                    ...getKeyframe(currentKeyframeId)!
+                                      .transform,
+                                    scale: parseFloat(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Normalized X</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={
+                                getKeyframe(currentKeyframeId)!.transform.normX
+                              }
+                              onChange={(e) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  transform: {
+                                    ...getKeyframe(currentKeyframeId)!
+                                      .transform,
+                                    normX: parseFloat(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Normalized Y</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={
+                                getKeyframe(currentKeyframeId)!.transform.normY
+                              }
+                              onChange={(e) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  transform: {
+                                    ...getKeyframe(currentKeyframeId)!
+                                      .transform,
+                                    normY: parseFloat(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Easing</Label>
+                            <Select
+                              value={getKeyframe(currentKeyframeId)!.easing}
+                              onValueChange={(value) =>
+                                updateKeyframe(currentKeyframeId, {
+                                  easing: value,
+                                })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select easing" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="linear">linear</SelectItem>
+                                <SelectItem value="ease-in">ease-in</SelectItem>
+                                <SelectItem value="ease-out">
+                                  ease-out
+                                </SelectItem>
+                                <SelectItem value="ease-in-out">
+                                  ease-in-out
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => deleteKeyframe(currentKeyframeId)}
+                            className="w-full mt-2"
+                          >
+                            Delete Keyframe
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </Keyframe.BoxContent>
+                </Keyframe.Box>
+              </>
             )}
-          </div>
+          </Keyframe.Root>
         </div>
       </div>
 
