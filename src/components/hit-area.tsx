@@ -49,7 +49,7 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
       debug = false,
       className,
       style,
-      ...rest
+      ...props
     },
     ref
   ) => {
@@ -58,7 +58,7 @@ export const HitArea = React.forwardRef<HTMLElement, HitAreaProps>(
     if (!React.isValidElement(children)) return null;
 
     return React.cloneElement(children, {
-      ...rest,
+      ...props,
       ref: composedRef,
       className: cn(
         children.props.className,

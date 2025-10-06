@@ -1,17 +1,16 @@
 "use client";
 
 import * as React from "react";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
 import { X, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import type { KeyframeTransform, KeyframeData } from "@/types/keyframe";
+import type { KeyframeData } from "@/utils/keyframe";
+import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
+import { TOOLTIP_OFFSET_Y, TimelineTooltip } from "./timeline-tooltip";
+import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
+import type { AnimationState } from "@/hooks/use-animate-presence";
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -22,18 +21,9 @@ interface KeyframeContextValue {
   deleteKeyframe: (id: string) => void;
   getKeyframe: (id: string) => KeyframeData | undefined;
   maxTime: number;
-  pxPerMs: number;
-}
-
-interface KeyframeBoxContextValue {
-  keyframeId: string;
-  parentRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const KeyframeContext = React.createContext<KeyframeContextValue | null>(null);
-const KeyframeBoxContext = React.createContext<KeyframeBoxContextValue | null>(
-  null
-);
 
 export function useKeyframeContext() {
   const ctx = React.useContext(KeyframeContext);
@@ -41,16 +31,11 @@ export function useKeyframeContext() {
   return ctx;
 }
 
-function useKeyframeBoxContext() {
-  const ctx = React.useContext(KeyframeBoxContext);
-  if (!ctx) throw new Error("Must be within Keyframe.Box");
-  return ctx;
-}
-
 interface KeyframeRootProps {
-  children: (context: KeyframeContextValue) => React.ReactNode;
+  children:
+    | React.ReactNode
+    | ((context: KeyframeContextValue) => React.ReactNode);
   maxTime?: number;
-  pxPerMs?: number;
   defaultKeyframes?: KeyframeData[];
   keyframes?: KeyframeData[];
   onKeyframesChange?: (keyframes: KeyframeData[]) => void;
@@ -61,7 +46,6 @@ interface KeyframeRootProps {
 function KeyframeRoot({
   children,
   maxTime = 20000,
-  pxPerMs = 0.05,
   defaultKeyframes = [],
   keyframes: controlledKeyframes,
   onKeyframesChange,
@@ -131,7 +115,6 @@ function KeyframeRoot({
       deleteKeyframe,
       getKeyframe,
       maxTime,
-      pxPerMs,
     }),
     [
       keyframes,
@@ -142,13 +125,12 @@ function KeyframeRoot({
       deleteKeyframe,
       getKeyframe,
       maxTime,
-      pxPerMs,
     ]
   );
 
   return (
     <KeyframeContext.Provider value={value}>
-      {children(value)}
+      {typeof children === "function" ? children(value) : children}
     </KeyframeContext.Provider>
   );
 }
@@ -158,149 +140,376 @@ KeyframeRoot.displayName = "Keyframe.Root";
 interface KeyframeMarkerProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframeId: string;
   color?: string;
+  timelineRef: React.RefObject<HTMLDivElement | null>;
+  pxPerMs: number;
+  edgeThreshold?: number;
 }
 
 const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
-  ({ keyframeId, color = "#3b82f6", className, ...props }, forwardedRef) => {
-    const { getKeyframe, updateKeyframe, setCurrentKeyframeId, maxTime } =
+  (
+    {
+      keyframeId,
+      color = "#3b82f6",
+      className,
+      style,
+      timelineRef,
+      pxPerMs,
+      edgeThreshold = 50,
+      ...props
+    },
+    forwardedRef
+  ) => {
+    const { getKeyframe, updateKeyframe, setCurrentKeyframeId } =
       useKeyframeContext();
-
-    const localRef = React.useRef<HTMLDivElement>(null);
-    const markerRef = useComposedRefs(localRef, forwardedRef);
-    const isDraggingRef = React.useRef(false);
-    const rafRef = React.useRef<number | null>(null);
-    const timelineRef = React.useRef<HTMLElement | null>(null);
-
     const keyframe = getKeyframe(keyframeId);
-    if (!keyframe) return null;
 
-    const setTimelineRef = React.useCallback((el: HTMLElement | null) => {
-      timelineRef.current = el;
-    }, []);
+    const markerRef = React.useRef<HTMLDivElement>(null);
+    const tooltipRef = React.useRef<HTMLDivElement>(null);
+    const composedRef = useComposedRefs(forwardedRef, markerRef);
+    const scrollEl = timelineRef?.current;
+
+    const isDragging = React.useRef(false);
+    const startX = React.useRef(0);
+    const startTime = React.useRef(0);
+    const rafId = React.useRef(0);
+    const moved = React.useRef(false);
+
+    const [visible, setVisible] = React.useState(false);
+
+    const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll(
+      {
+        edgeThreshold,
+        maxScrollSpeed: 10,
+        acceleration: 1.2,
+      }
+    );
+
+    const updateTooltipPosition = React.useCallback(
+      (clientX: number, displayTime: number) => {
+        const tooltip = tooltipRef.current;
+        const container = scrollEl;
+        if (!tooltip || !container) return;
+
+        const rect = container.getBoundingClientRect();
+        const relativeX = clientX - rect.left;
+        const clampedX = Math.min(
+          rect.width - edgeThreshold,
+          Math.max(edgeThreshold, relativeX)
+        );
+        tooltip.style.transform = `translate3d(${rect.left + clampedX}px, ${
+          rect.top - TOOLTIP_OFFSET_Y
+        }px, 0)`;
+        tooltip.textContent = `${displayTime.toFixed(2)}s`;
+      },
+      []
+    );
 
     const handlePointerDown = React.useCallback(
-      (event: React.PointerEvent) => {
-        if (event.defaultPrevented) return;
-        event.preventDefault();
-        event.stopPropagation();
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!keyframe || !scrollEl) return;
+        const marker = markerRef.current;
+        if (!marker) return;
 
-        const marker = localRef.current;
-        const timeline = timelineRef.current;
-        if (!marker || !timeline) return;
+        marker.setPointerCapture(e.pointerId);
+        isDragging.current = true;
+        moved.current = false;
+        startX.current = e.clientX;
+        startTime.current = keyframe.time;
+        setCurrentKeyframeId(keyframeId);
+        setVisible(true);
 
-        isDraggingRef.current = true;
-        marker.setPointerCapture(event.pointerId);
+        updateTooltipPosition(e.clientX, keyframe.time / 1000);
+        startAutoScroll(scrollEl, (scrollDelta) => {
+          const el = markerRef.current;
+          const container = scrollEl;
+          const currentKeyframe = keyframe;
 
-        const rect = timeline.getBoundingClientRect();
+          if (!isDragging.current || !el || !container || !currentKeyframe)
+            return;
 
-        const handleMove = (e: PointerEvent) => {
-          if (!isDraggingRef.current) return;
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          const rect = container.getBoundingClientRect();
+          const scrollLeft = container.scrollLeft;
+          const maxScroll = container.scrollWidth - rect.width;
 
-          rafRef.current = requestAnimationFrame(() => {
-            const x = e.clientX - rect.left;
-            const ratio = Math.max(0, Math.min(1, x / rect.width));
-            const newTime = Math.round((ratio * maxTime) / 100) * 100;
+          if (
+            (scrollDelta < 0 && scrollLeft <= 0) ||
+            (scrollDelta > 0 && scrollLeft >= maxScroll)
+          ) {
+            return;
+          }
 
-            const left = (newTime / maxTime) * 100;
-            marker.style.transform = `translate3d(calc(${left}% - 50%), 0, 0)`;
+          const newTime = Math.max(
+            0,
+            startTime.current + scrollDelta / pxPerMs
+          );
+          const newLeftPx = newTime * pxPerMs;
+
+          if (newLeftPx < 0 || newLeftPx > container.scrollWidth) return;
+
+          el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
+
+          const newTimeSec = newTime / 1000;
+          updateTooltipPosition(rect.left + newLeftPx - scrollLeft, newTimeSec);
+          updateKeyframe(keyframeId, { time: newTime });
+        });
+
+        const onPointerMove = (ev: PointerEvent) => {
+          if (!isDragging.current) return;
+          cancelAnimationFrame(rafId.current);
+          rafId.current = requestAnimationFrame(() => {
+            const rect = scrollEl.getBoundingClientRect();
+            const mouseX = ev.clientX - rect.left;
+            const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
+
+            const needsLeft = mouseX <= edgeThreshold && scrollLeft > 0;
+            const needsRight =
+              mouseX >= clientWidth - edgeThreshold &&
+              scrollLeft + clientWidth < scrollWidth;
+
+            if (needsLeft || needsRight) handleAutoScroll(ev);
+
+            const deltaPx = ev.clientX - startX.current;
+            const newLeftPx =
+              startTime.current * pxPerMs + deltaPx + scrollLeft;
+            const el = markerRef.current;
+            if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
+            moved.current = true;
+
+            const newTimeSec = Math.max(
+              0,
+              (startTime.current + deltaPx / pxPerMs) / 1000
+            );
+            updateTooltipPosition(ev.clientX, newTimeSec);
           });
         };
 
-        const handleUp = (e: PointerEvent) => {
-          isDraggingRef.current = false;
+        const onPointerUp = (ev: PointerEvent) => {
+          if (!isDragging.current) return;
+          isDragging.current = false;
+          cancelAnimationFrame(rafId.current);
+          stopAutoScroll();
+          setVisible(false);
           marker.releasePointerCapture(e.pointerId);
 
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-
-          document.removeEventListener("pointermove", handleMove);
-          document.removeEventListener("pointerup", handleUp);
-
-          const x = e.clientX - rect.left;
-          const ratio = Math.max(0, Math.min(1, x / rect.width));
-          const newTime = Math.round((ratio * maxTime) / 100) * 100;
-
+          if (!moved.current) return;
+          const deltaPx = ev.clientX - startX.current;
+          const newTime = Math.max(0, startTime.current + deltaPx / pxPerMs);
           updateKeyframe(keyframeId, { time: newTime });
+
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
         };
 
-        document.addEventListener("pointermove", handleMove);
-        document.addEventListener("pointerup", handleUp);
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
       },
-      [keyframeId, maxTime, updateKeyframe]
+      [
+        keyframe,
+        keyframeId,
+        pxPerMs,
+        scrollEl,
+        startAutoScroll,
+        stopAutoScroll,
+        handleAutoScroll,
+        setCurrentKeyframeId,
+        updateTooltipPosition,
+        updateKeyframe,
+      ]
     );
 
     const handleClick = React.useCallback(
-      (e: React.MouseEvent) => {
+      (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.defaultPrevented) return;
-        e.stopPropagation();
+        if (moved.current) return;
         setCurrentKeyframeId(keyframeId);
       },
       [keyframeId, setCurrentKeyframeId]
     );
 
-    const left = (keyframe.time / maxTime) * 100;
+    const left = keyframe ? keyframe.time * pxPerMs : 0;
+
+    React.useLayoutEffect(() => {
+      const el = markerRef.current;
+      if (el) el.style.transform = `translate3d(${left}px,0,0)`;
+    }, []);
 
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <>
+        <div
+          ref={composedRef}
+          className={cn(
+            "absolute top-0 bottom-0 flex flex-col items-center cursor-ew-resize z-10 will-change-transform",
+            className
+          )}
+          style={{
+            ...style,
+            transform: `translate3d(${left}px,0,0)`,
+          }}
+          onPointerDown={handlePointerDown}
+          onClick={handleClick}
+          {...props}
+        >
           <div
-            ref={markerRef}
-            data-timeline-ref-capture={setTimelineRef}
-            className={cn(
-              "absolute top-0 bottom-0 flex flex-col items-center cursor-ew-resize group z-10 will-change-transform",
-              className
-            )}
-            style={{ transform: `translate3d(calc(${left}% - 50%), 0, 0)` }}
-            onPointerDown={handlePointerDown}
-            onClick={handleClick}
-            {...props}
-          >
-            <div
-              className="w-0.5 h-full transition-all group-hover:w-1 bg-(--color)"
-              style={{ "--color": color } as React.CSSProperties}
-            />
-            <div
-              className="absolute top-0 -translate-x-1/2 w-3 h-3 bg-(--color) rounded-full border-2 border-surface-primary shadow-lg transition-transform group-hover:scale-125"
-              style={{ "--color": color } as React.CSSProperties}
-            />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent sideOffset={10}>
-          {(keyframe.time / 1000).toFixed(1)}s
-        </TooltipContent>
-      </Tooltip>
+            className="w-0.5 h-full transition-all group-hover:w-1 bg-(--color)"
+            style={{ "--color": color } as React.CSSProperties}
+          />
+          <div
+            className="absolute top-0 -translate-x-1/2 w-3 h-3 bg-(--color) rounded-full border-2 border-surface-primary shadow-lg transition-transform group-hover:scale-125"
+            style={{ "--color": color } as React.CSSProperties}
+          />
+        </div>
+
+        <TimelineTooltip
+          ref={tooltipRef}
+          visible={visible}
+          containerRef={timelineRef}
+        />
+      </>
     );
   }
 );
 
-KeyframeMarker.displayName = "Keyframe.Marker";
+KeyframeMarker.displayName = "KeyframeMarker";
+
+interface KeyframeBoxContextValue {
+  keyframeId: string;
+  boxRef: React.RefObject<HTMLDivElement | null>;
+  boxId: string;
+  boxHeaderId: string;
+  boxContentId: string;
+}
+
+const KeyframeBoxContext = React.createContext<KeyframeBoxContextValue | null>(
+  null
+);
+
+function useKeyframeBoxContext() {
+  const ctx = React.useContext(KeyframeBoxContext);
+  if (!ctx) throw new Error("Must be within Keyframe.Box");
+  return ctx;
+}
 
 interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
   ({ className, children, ...props }, forwardedRef) => {
-    const { currentKeyframeId, getKeyframe } = useKeyframeContext();
-
-    const parentRef = React.useRef<HTMLDivElement>(null);
-    const localRef = React.useRef<HTMLDivElement>(null);
-    const boxRef = useComposedRefs(localRef, forwardedRef, parentRef);
-    const positionRef = React.useRef({ x: 100, y: 100 });
+    const { currentKeyframeId, getKeyframe, setCurrentKeyframeId } =
+      useKeyframeContext();
 
     const keyframe = currentKeyframeId ? getKeyframe(currentKeyframeId) : null;
 
+    const boxId = React.useId();
+    const boxHeaderId = `${boxId}-header`;
+    const boxContentId = `${boxId}-content`;
+    const boxRef = React.useRef<HTMLDivElement>(null);
+    const composedRefs = useComposedRefs(boxRef, forwardedRef);
+
+    const positionRef = React.useRef({ x: 100, y: 100 });
+
+    const focusFirstElement = React.useCallback(() => {
+      const container = boxRef.current;
+      if (!container) return;
+      const firstFocusable = container.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      (firstFocusable ?? container).focus();
+    }, []);
+
+    const trapFocus = React.useCallback((reverse = false) => {
+      const container = boxRef.current;
+      if (!container) return;
+      const focusables = Array.from(
+        container.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (!focusables.length) return;
+      (reverse ? focusables.at(-1) : focusables.at(0))?.focus();
+    }, []);
+
+    const [animationState, setAnimationState] =
+      React.useState<AnimationState>("idle");
+
+    const handleAnimation = (presence: boolean) => {
+      return new Promise<void>((resolve) => {
+        const el = boxRef.current!;
+
+        if (presence) {
+          setAnimationState("entering");
+          resolve();
+          return;
+        }
+
+        setAnimationState("exiting");
+
+        const onEnd = () => {
+          setAnimationState("idle");
+          el.removeEventListener("animationend", onEnd);
+          resolve();
+        };
+
+        el.addEventListener("animationend", onEnd);
+      });
+    };
+
+    const shouldRender = useAnimatePresence(!!keyframe, handleAnimation, {
+      initial: false,
+    });
+
+    React.useEffect(() => {
+      if (shouldRender) focusFirstElement();
+    }, [shouldRender, focusFirstElement]);
+
+    React.useEffect(() => {
+      const handleKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setCurrentKeyframeId(null);
+        }
+      };
+      document.addEventListener("keydown", handleKey, { capture: true });
+      return () =>
+        document.removeEventListener("keydown", handleKey, { capture: true });
+    }, [setCurrentKeyframeId]);
+
+    // React.useEffect(() => {
+    //   if (!shouldRender || !boxRef.current) return;
+    //   const el = boxRef.current;
+    //   const focusable = el.querySelector<HTMLElement>(
+    //     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    //   );
+    //   (focusable ?? el).focus();
+    // }, [shouldRender]);
+
+    const state = getState(animationState);
+
     const value = React.useMemo(
-      () => ({ keyframeId: currentKeyframeId || "", parentRef }),
-      [currentKeyframeId]
+      () => ({
+        keyframeId: currentKeyframeId || "",
+        boxRef,
+        boxId,
+        boxHeaderId,
+        boxContentId,
+      }),
+      [currentKeyframeId, boxId, boxHeaderId, boxContentId]
     );
 
-    if (!keyframe || !currentKeyframeId) return null;
+    if (!shouldRender) return null;
 
     return (
       <KeyframeBoxContext.Provider value={value}>
+        <div tabIndex={0} aria-hidden="true" onFocus={() => trapFocus(true)} />
         <div
-          ref={boxRef}
+          ref={composedRefs}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={boxHeaderId}
+          aria-describedby={boxContentId}
+          data-state={state}
+          tabIndex={-1}
           className={cn(
-            "fixed bg-surface-primary rounded-lg shadow-2xl border border-subtle min-w-[280px] z-50 will-change-transform",
+            "fixed bg-surface-primary rounded-3xl overflow-hidden left-0 top-0 shadow-2xl border border-subtle w-[260px] z-50 will-change-transform",
+            "origin-top-left data-[state=open]:animate-box-enter data-[state=closed]:animate-box-exit",
             className
           )}
           style={{
@@ -310,6 +519,7 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
         >
           {children}
         </div>
+        <div tabIndex={0} aria-hidden="true" onFocus={() => trapFocus(false)} />
       </KeyframeBoxContext.Provider>
     );
   }
@@ -322,23 +532,22 @@ interface KeyframeBoxHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 const KeyframeBoxHeader = React.forwardRef<
   HTMLDivElement,
   KeyframeBoxHeaderProps
->(({ children, className, ...props }, forwardedRef) => {
-  const { parentRef } = useKeyframeBoxContext();
-  const localRef = React.useRef<HTMLDivElement>(null);
-  const boxRef = useComposedRefs(localRef, forwardedRef);
+>(({ children, className, onPointerDown, ...props }, forwardedRef) => {
+  const { boxRef, boxHeaderId } = useKeyframeBoxContext();
+  const boxHeaderRef = React.useRef<HTMLDivElement>(null);
+  const composedRefs = useComposedRefs(boxHeaderRef, forwardedRef);
   const isDraggingRef = React.useRef(false);
   const offsetRef = React.useRef({ x: 0, y: 0 });
   const rafRef = React.useRef<number | null>(null);
 
   const handlePointerDown = React.useCallback(
-    (event: React.PointerEvent) => {
-      if ((event.target as HTMLElement).dataset.closeButton !== undefined)
-        return;
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      onPointerDown?.(event);
       if (event.defaultPrevented) return;
       event.preventDefault();
 
-      const header = localRef.current;
-      const box = parentRef.current;
+      const header = boxHeaderRef.current;
+      const box = boxRef.current;
       if (!header || !box) return;
 
       isDraggingRef.current = true;
@@ -372,22 +581,23 @@ const KeyframeBoxHeader = React.forwardRef<
       document.addEventListener("pointermove", handleMove);
       document.addEventListener("pointerup", handleUp);
     },
-    [parentRef]
+    []
   );
 
   return (
     <div
-      ref={boxRef}
+      id={boxHeaderId}
+      ref={composedRefs}
       onPointerDown={handlePointerDown}
       className={cn(
-        "flex items-center justify-between px-4 py-3 border-b border-subtle bg-surface-secondary rounded-t-lg cursor-move",
+        "flex items-center justify-between px-4 py-2 w-full border-b border-subtle bg-surface-secondary rounded-t-3xl cursor-move",
         className
       )}
       {...props}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 w-full">
         <GripVertical className="w-4 h-4 text-foreground-muted" />
-        <div className="font-semibold text-sm text-foreground-default">
+        <div className="font-semibold flex items-center justify-between w-full text-sm text-foreground-default">
           {children}
         </div>
       </div>
@@ -413,6 +623,7 @@ const KeyframeBoxClose = React.forwardRef<
       variant="ghost"
       size="icon"
       onClick={() => setCurrentKeyframeId(null)}
+      aria-label="Close keyframe"
       className="ml-auto"
       {...props}
     >
@@ -430,10 +641,12 @@ const KeyframeBoxContent = React.forwardRef<
   HTMLDivElement,
   KeyframeBoxContentProps
 >(({ className, ...props }, forwardedRef) => {
+  const { boxContentId } = useKeyframeBoxContext();
   return (
     <div
       ref={forwardedRef}
-      className={cn("p-4 space-y-3", className)}
+      id={boxContentId}
+      className={cn("p-4 space-y-3 text-foreground-default", className)}
       {...props}
     />
   );

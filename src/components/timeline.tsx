@@ -19,16 +19,24 @@ import {
 import { cn } from "@/lib/utils";
 import { ClipContext } from "@/contexts/clip-context";
 import { useShallowSelector } from "react-shallow-store";
+import type { KeyframeData } from "@/utils/keyframe";
+import { Keyframe } from "./keyframe";
 
 interface TimelineProps {
   duration: number;
   onTrim: (startTime: number, endTime: number) => void;
   frames?: string[];
+  keyframes: KeyframeData[];
 }
 
 type Dir = "left" | "right";
 
-const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
+const Timeline: React.FC<TimelineProps> = ({
+  duration,
+  onTrim,
+  frames,
+  keyframes,
+}) => {
   const { setPrimaryTrim } = useShallowSelector(ClipContext, (state) => ({
     setPrimaryTrim: state.setPrimaryTrim,
   }));
@@ -305,6 +313,16 @@ const Timeline: React.FC<TimelineProps> = ({ duration, onTrim, frames }) => {
               />
             </div>
           </div>
+
+          {keyframes.map((kf) => (
+            <Keyframe.Marker
+              key={kf.id}
+              keyframeId={kf.id}
+              timelineRef={timelineRef!}
+              pxPerMs={pxPerMs}
+              edgeThreshold={EDGE_THRESHOLD}
+            />
+          ))}
 
           <div
             ref={leftHandleRef}

@@ -14,11 +14,14 @@ function HomePageSkeleton() {
       <div className="flex items-center justify-between">
         <Skeleton className="h-9 w-48" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="p-4 bg-surface-secondary rounded-lg">
+          <div
+            key={i}
+            className="p-4 bg-surface-secondary rounded-lg aspect-[4/3] w-full"
+          >
             <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
-              <div className="aspect-video bg-gray-800 relative overflow-hidden">
+              <div className="bg-gray-800 aspect-[4/3] w-full h-full relative overflow-hidden">
                 <Skeleton className="w-full h-full" />
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="flex space-x-2">
@@ -27,7 +30,7 @@ function HomePageSkeleton() {
                 </div>
               </div>
             </div>
-            <div className="p-4">
+            <div className="pt-4">
               <Skeleton className="h-6 w-3/4 mb-2" />
               <div className="space-y-1">
                 <Skeleton className="h-4 w-2/3" />

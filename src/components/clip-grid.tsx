@@ -136,28 +136,31 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
         {initialClips.map((clip) => (
           <Link
             href={`/edit/${clip.metadata.clipId}`}
             key={clip.metadata.clipId}
           >
-            <div className="p-4 bg-surface-secondary rounded-lg">
-              <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
-                <div className="aspect-video bg-gray-800 relative overflow-hidden">
+            <div className="p-4 bg-surface-secondary rounded-lg aspect-[4/3] w-full">
+              <div className="bg-surface-secondary rounded-lg overflow-hidden border border-subtle hover:border-primary transition-colors cursor-pointer group">
+                <div className="bg-surface-tertiary relative overflow-hidden">
                   <canvas
                     ref={setCanvasRef(clip.metadata.clipId, clip.url)}
-                    className="w-full h-full object-cover"
+                    className="aspect-[4/3] w-full h-full object-cover"
                   />
                   {loadingThumbnails.has(clip.metadata.clipId) && (
-                    <div className="absolute inset-0 bg-gray-800/80 flex items-center justify-center">
-                      <LoaderIcon className="text-white" size={32} />
+                    <div className="absolute inset-0 bg-surface-primary/80 flex items-center justify-center">
+                      <LoaderIcon
+                        className="text-foreground-default"
+                        size={32}
+                      />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-surface-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="flex space-x-2">
                       <Button
-                        size="sm"
+                        size="icon"
                         variant="default"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -171,7 +174,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
                 </div>
               </div>
 
-              <div className="p-4">
+              <div className="pt-4">
                 <h3 className="font-semibold text-foreground-default truncate text-lg font-sans tracking-wide">
                   {clip.metadata.clipId}
                 </h3>

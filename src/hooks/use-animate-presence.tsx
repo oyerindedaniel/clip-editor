@@ -9,6 +9,8 @@ interface AnimatePresenceOptions {
   timeout?: number; // Timeout for animation in ms
 }
 
+export type AnimationState = "idle" | "entering" | "exiting";
+
 export function useAnimatePresence(
   externalPresence: boolean,
   onAnimate: (presence: boolean) => Promise<void>,
@@ -91,4 +93,15 @@ export function useAnimatePresence(
       ? internalPresence && externalPresence
       : internalPresence || externalPresence;
   }, [externalPresence, internalPresence]);
+}
+
+export function getState(animationState?: string) {
+  switch (animationState) {
+    case "entering":
+      return "open";
+    case "exiting":
+      return "closed";
+    default:
+      return undefined;
+  }
 }

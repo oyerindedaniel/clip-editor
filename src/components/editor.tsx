@@ -42,12 +42,21 @@ import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, Film } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Film,
+  X,
+  Square,
+  ArrowRight,
+  ChevronsRight,
+  ChevronsLeft,
+  ChevronsLeftRight,
+} from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { KeyframeContext } from "@/contexts/keyframe-context";
-import { AspectRatio, BoundaryBox, Transform } from "./boundary-box";
+import { BoundaryBox } from "./boundary-box";
 import { Keyframe } from "./keyframe";
-import { Input } from "@/components/ui/input";
+import { ScrubbableInput } from "./scrubbable-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -56,6 +65,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AspectRatio,
+  DEFAULT_VIDEO_HEIGHT,
+  DEFAULT_VIDEO_WIDTH,
+} from "@/utils/aspect-ratios";
+import { KEYFRAME_EASINGS } from "@/utils/keyframe";
+import { roundToDecimals } from "@/utils/app";
+import type { KeyframeEasing } from "@/utils/keyframe";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -96,32 +113,21 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setVideoRef: state.setVideoRef,
     }));
 
-  const { secondaryClip, dualVideoSettingsRef } = useShallowSelector(
-    ClipContext,
-    (state) => ({
-      secondaryClip: state.secondaryClip,
-      dualVideoSettingsRef: state.dualVideoSettingsRef,
-    })
-  );
-
-  const [showTrace, setShowTrace] = useState(false);
-  const showTraceRef = useLatestValue(showTrace);
-
-  const [processedBuffers, setProcessedBuffers] = useState<
-    Map<string, { buffer: ArrayBuffer; url: string }>
-  >(() => new Map());
-
-  const processedBuffersRef = useLatestValue(processedBuffers);
-
-  const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
-
-  const { primaryTrimRef, secondaryTrimRef, setPrimaryTrim, setSecondaryTrim } =
-    useShallowSelector(ClipContext, (state) => ({
-      primaryTrimRef: state.primaryTrimRef,
-      secondaryTrimRef: state.secondaryTrimRef,
-      setPrimaryTrim: state.setPrimaryTrim,
-      setSecondaryTrim: state.setSecondaryTrim,
-    }));
+  const {
+    primaryTrimRef,
+    secondaryTrimRef,
+    setPrimaryTrim,
+    setSecondaryTrim,
+    secondaryClip,
+    dualVideoSettingsRef,
+  } = useShallowSelector(ClipContext, (state) => ({
+    primaryTrimRef: state.primaryTrimRef,
+    secondaryTrimRef: state.secondaryTrimRef,
+    setPrimaryTrim: state.setPrimaryTrim,
+    setSecondaryTrim: state.setSecondaryTrim,
+    secondaryClip: state.secondaryClip,
+    dualVideoSettingsRef: state.dualVideoSettingsRef,
+  }));
 
   const {
     boundaryAspectRatio,
@@ -138,6 +144,17 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     boundaryTransform: state.boundaryTransform,
     setBoundaryTransform: state.setBoundaryTransform,
   }));
+
+  const [showTrace, setShowTrace] = useState(false);
+  const showTraceRef = useLatestValue(showTrace);
+
+  const [processedBuffers, setProcessedBuffers] = useState<
+    Map<string, { buffer: ArrayBuffer; url: string }>
+  >(() => new Map());
+
+  const processedBuffersRef = useLatestValue(processedBuffers);
+
+  const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
 
   const isValidBufferState = useMemo(() => {
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
@@ -359,11 +376,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           updated.set(bufferKey, { buffer, url: clipData.url });
           return updated;
         });
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
+      } catch (error) {
+        if ((normalizeError(error).name = "AbortError")) {
           return;
         }
-        const errorMsg = normalizeError(err).message;
+        const errorMsg = normalizeError(error).message;
         toast.error(`Failed to load clip: ${errorMsg}`);
       }
     };
@@ -624,7 +641,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       <div className="flex-1 min-h-0">
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-          <Keyframe.Root maxTime={duration} pxPerMs={0.05}>
+          <Keyframe.Root maxTime={duration}>
             {({
               keyframes,
               currentKeyframeId,
@@ -653,13 +670,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                               time: videoRef.current?.currentTime
                                 ? videoRef.current.currentTime * 1000
                                 : 0,
-                              transform: {
-                                x: boundaryTransform.x,
-                                y: boundaryTransform.y,
-                                scale: boundaryTransform.scale,
-                                normX: boundaryTransform.normX,
-                                normY: boundaryTransform.normY,
-                              },
+                              transform: boundaryTransform,
                               easing: "ease-in-out",
                             });
                           }
@@ -674,71 +685,253 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
                     <BoundaryBox
                       screenSize="16:9"
-                      videoWidth={videoRef.current?.videoWidth || 1920}
-                      videoHeight={videoRef.current?.videoHeight || 1080}
+                      videoWidth={
+                        videoRef.current?.videoWidth || DEFAULT_VIDEO_WIDTH
+                      }
+                      videoHeight={
+                        videoRef.current?.videoHeight || DEFAULT_VIDEO_HEIGHT
+                      }
                       aspectRatio={boundaryAspectRatio as AspectRatio}
                       visible={boundaryVisible}
                       transform={boundaryTransform!}
                       onTransformChange={(transform) => {
-                        // console.log("in here transform", transform);
+                        console.log("in here transform", transform);
                         setBoundaryTransform(transform);
                         if (currentKeyframeId) {
                           updateKeyframe(currentKeyframeId, {
-                            transform: {
-                              x: transform.x,
-                              y: transform.y,
-                              scale: transform.scale,
-                              normX: transform.normX,
-                              normY: transform.normY,
-                            },
+                            transform,
                           });
                         }
                       }}
                     >
-                      <BoundaryBox.Container className="relative flex-1 min-w-0 bg-surface-secondary shadow-md">
-                        <MediaPlayer.Root>
-                          <MediaPlayer.Video
-                            src={primaryUrl}
-                            ref={(el) => {
-                              videoRef.current = el;
-                              setVideoRef(el);
-                            }}
-                            playsInline
-                            className="w-full aspect-video"
-                            poster={"/thumbnails/video-thumb-2.webp"}
-                          />
-                          <MediaPlayer.Loading />
-                          <MediaPlayer.Error />
-                          <MediaPlayer.VolumeIndicator />
-                          <MediaPlayer.Controls>
-                            <MediaPlayer.ControlsOverlay />
-                            <MediaPlayer.Play />
-                            <MediaPlayer.SeekBackward />
-                            <MediaPlayer.SeekForward />
-                            <MediaPlayer.Volume />
-                            <MediaPlayer.Seek />
-                            <MediaPlayer.Time />
-                            <MediaPlayer.PlaybackSpeed />
-                            <MediaPlayer.Loop />
-                            <MediaPlayer.Captions />
-                            <MediaPlayer.PiP />
-                            <MediaPlayer.Fullscreen />
-                            <MediaPlayer.Download />
-                          </MediaPlayer.Controls>
-                        </MediaPlayer.Root>
+                      {({
+                        updatePosition,
+                        updateScale,
+                        videoWidth,
+                        videoHeight,
+                      }) => (
+                        <>
+                          <BoundaryBox.Container className="relative flex-1 min-w-0 bg-surface-secondary shadow-md">
+                            <MediaPlayer.Root>
+                              <MediaPlayer.Video
+                                src={primaryUrl}
+                                ref={(el) => {
+                                  videoRef.current = el;
+                                  setVideoRef(el);
+                                }}
+                                playsInline
+                                className="w-full aspect-video"
+                                poster={"/thumbnails/video-thumb-2.webp"}
+                              />
+                              <MediaPlayer.Loading />
+                              <MediaPlayer.Error />
+                              <MediaPlayer.VolumeIndicator />
+                              <MediaPlayer.Controls>
+                                <MediaPlayer.ControlsOverlay />
+                                <MediaPlayer.Play />
+                                <MediaPlayer.SeekBackward />
+                                <MediaPlayer.SeekForward />
+                                <MediaPlayer.Volume />
+                                <MediaPlayer.Seek />
+                                <MediaPlayer.Time />
+                                <MediaPlayer.PlaybackSpeed />
+                                <MediaPlayer.Loop />
+                                <MediaPlayer.Captions />
+                                <MediaPlayer.PiP />
+                                <MediaPlayer.Fullscreen />
+                                <MediaPlayer.Download />
+                              </MediaPlayer.Controls>
+                            </MediaPlayer.Root>
 
-                        <div ref={traceRef} />
-                        <PersistentOverlays duration={duration} />
+                            <div ref={traceRef} />
+                            <PersistentOverlays duration={duration} />
 
-                        <BoundaryBox.Draggable>
-                          <BoundaryBox.Overlay>
-                            <BoundaryBox.Resizable side="top-left" />
-                            <BoundaryBox.Resizable side="top-right" />
-                            <BoundaryBox.Resizable side="bottom-left" />
-                            <BoundaryBox.Resizable side="bottom-right" />
-                          </BoundaryBox.Overlay>
-                        </BoundaryBox.Draggable>
-                      </BoundaryBox.Container>
+                            <BoundaryBox.Draggable>
+                              <BoundaryBox.Overlay>
+                                <BoundaryBox.Resizable side="top-left" />
+                                <BoundaryBox.Resizable side="top-right" />
+                                <BoundaryBox.Resizable side="bottom-left" />
+                                <BoundaryBox.Resizable side="bottom-right" />
+                              </BoundaryBox.Overlay>
+                            </BoundaryBox.Draggable>
+                          </BoundaryBox.Container>
+
+                          <Keyframe.Box>
+                            <Keyframe.BoxHeader>
+                              {currentKeyframeId &&
+                                getKeyframe(currentKeyframeId) &&
+                                `Keyframe @ ${(
+                                  getKeyframe(currentKeyframeId)!.time / 1000
+                                ).toFixed(1)}s`}
+
+                              <Keyframe.BoxClose />
+                            </Keyframe.BoxHeader>
+                            <Keyframe.BoxContent>
+                              {currentKeyframeId &&
+                                getKeyframe(currentKeyframeId) && (
+                                  <>
+                                    <div className="space-y-3">
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.x,
+                                          3
+                                        )}
+                                        onValueChange={(x) => {
+                                          updatePosition(
+                                            x,
+                                            getKeyframe(currentKeyframeId)!
+                                              .transform.y
+                                          );
+                                        }}
+                                        min={0}
+                                        max={
+                                          videoWidth -
+                                          (getKeyframe(currentKeyframeId)
+                                            ?.transform.width || 0)
+                                        }
+                                        step={10}
+                                        sensitivity={0.5}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-x">
+                                          X Position
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              X
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-x" />
+                                          <ScrubbableInput.Unit>
+                                            px
+                                          </ScrubbableInput.Unit>
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.y,
+                                          3
+                                        )}
+                                        onValueChange={(y) => {
+                                          updatePosition(
+                                            getKeyframe(currentKeyframeId)!
+                                              .transform.x,
+                                            y
+                                          );
+                                        }}
+                                        min={0}
+                                        max={
+                                          videoHeight -
+                                          (getKeyframe(currentKeyframeId)
+                                            ?.transform.height || 0)
+                                        }
+                                        step={10}
+                                        sensitivity={0.5}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-y">
+                                          Y Position
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              Y
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-y" />
+                                          <ScrubbableInput.Unit>
+                                            px
+                                          </ScrubbableInput.Unit>
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.scale,
+                                          3
+                                        )}
+                                        onValueChange={(scale) => {
+                                          updateScale(scale);
+                                        }}
+                                        min={0.1}
+                                        max={3}
+                                        step={0.1}
+                                        sensitivity={0.4}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-scale">
+                                          Scale
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              <Square className="w-4 h-4" />
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-scale" />
+                                          <ScrubbableInput.Unit>
+                                            x
+                                          </ScrubbableInput.Unit>
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <div className="space-y-1">
+                                        <Label
+                                          htmlFor="keyframe-easing"
+                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                        >
+                                          Easing
+                                        </Label>
+                                        <Select
+                                          value={
+                                            getKeyframe(currentKeyframeId)!
+                                              .easing
+                                          }
+                                          onValueChange={(value) =>
+                                            updateKeyframe(currentKeyframeId, {
+                                              easing: value as KeyframeEasing,
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger
+                                            id="keyframe-easing"
+                                            className="h-9 text-sm rounded-3xl bg-surface-secondary border-subtle focus:ring-0 focus:outline-none"
+                                          >
+                                            <SelectValue placeholder="Select easing" />
+                                          </SelectTrigger>
+                                          <SelectContent className="text-sm rounded-3xl bg-surface-secondary border border-subtle p-1">
+                                            {KEYFRAME_EASINGS.map((easing) => (
+                                              <SelectItem
+                                                key={easing}
+                                                value={easing}
+                                                className="text-foreground-default text-[13px] rounded-2xl"
+                                              >
+                                                {easing}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() =>
+                                          deleteKeyframe(currentKeyframeId)
+                                        }
+                                        className="w-full mt-2"
+                                      >
+                                        Delete Keyframe
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                            </Keyframe.BoxContent>
+                          </Keyframe.Box>
+                        </>
+                      )}
                     </BoundaryBox>
                   </div>
 
@@ -780,194 +973,16 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       }}
                     />
                   ) : isVideoLoaded ? (
-                    <div className="relative">
-                      <Timeline
-                        duration={duration}
-                        onTrim={handleTrim}
-                        frames={primaryFrames}
-                      />
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        data-timeline-track
-                      >
-                        <div className="relative h-full pointer-events-auto">
-                          {keyframes.map((kf) => (
-                            <Keyframe.Marker
-                              key={kf.id}
-                              keyframeId={kf.id}
-                              color={
-                                currentKeyframeId === kf.id
-                                  ? "#ec4899"
-                                  : "#3b82f6"
-                              }
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    <Timeline
+                      duration={duration}
+                      onTrim={handleTrim}
+                      frames={primaryFrames}
+                      keyframes={keyframes}
+                    />
                   ) : (
                     <TimelineSkeleton />
                   )}
                 </div>
-
-                <Keyframe.Box>
-                  <Keyframe.BoxHeader>
-                    {currentKeyframeId &&
-                      getKeyframe(currentKeyframeId) &&
-                      `Keyframe @ ${(
-                        getKeyframe(currentKeyframeId)!.time / 1000
-                      ).toFixed(1)}s`}
-                    <Keyframe.BoxClose />
-                  </Keyframe.BoxHeader>
-                  <Keyframe.BoxContent>
-                    {currentKeyframeId && getKeyframe(currentKeyframeId) && (
-                      <>
-                        <div className="space-y-3">
-                          <div>
-                            <Label>X Position</Label>
-                            <Input
-                              type="number"
-                              step={10}
-                              value={
-                                getKeyframe(currentKeyframeId)!.transform.x
-                              }
-                              onChange={(e) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  transform: {
-                                    ...getKeyframe(currentKeyframeId)!
-                                      .transform,
-                                    x: parseFloat(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <Label>Y Position</Label>
-                            <Input
-                              type="number"
-                              step={10}
-                              value={
-                                getKeyframe(currentKeyframeId)!.transform.y
-                              }
-                              onChange={(e) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  transform: {
-                                    ...getKeyframe(currentKeyframeId)!
-                                      .transform,
-                                    y: parseFloat(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <Label>Scale</Label>
-                            <Input
-                              type="number"
-                              min={0.1}
-                              max={3}
-                              step={0.1}
-                              value={
-                                getKeyframe(currentKeyframeId)!.transform.scale
-                              }
-                              onChange={(e) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  transform: {
-                                    ...getKeyframe(currentKeyframeId)!
-                                      .transform,
-                                    scale: parseFloat(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <Label>Normalized X</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={1}
-                              step={0.01}
-                              value={
-                                getKeyframe(currentKeyframeId)!.transform.normX
-                              }
-                              onChange={(e) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  transform: {
-                                    ...getKeyframe(currentKeyframeId)!
-                                      .transform,
-                                    normX: parseFloat(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <Label>Normalized Y</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={1}
-                              step={0.01}
-                              value={
-                                getKeyframe(currentKeyframeId)!.transform.normY
-                              }
-                              onChange={(e) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  transform: {
-                                    ...getKeyframe(currentKeyframeId)!
-                                      .transform,
-                                    normY: parseFloat(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <Label>Easing</Label>
-                            <Select
-                              value={getKeyframe(currentKeyframeId)!.easing}
-                              onValueChange={(value) =>
-                                updateKeyframe(currentKeyframeId, {
-                                  easing: value,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select easing" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="linear">linear</SelectItem>
-                                <SelectItem value="ease-in">ease-in</SelectItem>
-                                <SelectItem value="ease-out">
-                                  ease-out
-                                </SelectItem>
-                                <SelectItem value="ease-in-out">
-                                  ease-in-out
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteKeyframe(currentKeyframeId)}
-                            className="w-full mt-2"
-                          >
-                            Delete Keyframe
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </Keyframe.BoxContent>
-                </Keyframe.Box>
               </>
             )}
           </Keyframe.Root>

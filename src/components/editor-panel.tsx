@@ -11,16 +11,15 @@ import React, {
 import { createPortal } from "react-dom";
 import { Slot } from "@radix-ui/react-slot";
 import { X } from "lucide-react";
-import { useAnimatePresence } from "@/hooks/use-animate-presence";
+import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { useClientOnly } from "@/hooks/use-client-only";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
+import type { AnimationState } from "@/hooks/use-animate-presence";
 
 type EditorSide = "left" | "right";
-
-type AnimationState = "entering" | "exiting" | "idle";
 
 interface EditorPanelContextType {
   open: boolean;
@@ -384,12 +383,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
     if (!shouldRender && !forceMount) return null;
 
-    const state =
-      animationState === "entering"
-        ? "open"
-        : animationState === "exiting"
-        ? "closed"
-        : undefined;
+    const state = getState(animationState);
 
     return (
       <>

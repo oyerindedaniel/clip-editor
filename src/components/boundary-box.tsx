@@ -4,31 +4,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import { debounce } from "@/utils/app";
-import { DEFAULT_TRANSFORM } from "@/constants/transform";
+import { debounce, throttle } from "@/utils/app";
+import { DEFAULT_TRANSFORM } from "@/utils/keyframe";
 import { useStableHandler } from "@/hooks/use-stable-handler";
 import { equalTransform } from "@/utils/optimise";
-import { ASPECT_RATIOS } from "@/utils/aspect-ratios";
-
-const DEFAULT_VIDEO_WIDTH = 1920;
-const DEFAULT_VIDEO_HEIGHT = 1080;
-const OVERLAY_SCALE_FACTOR = 0.8;
-const MIN_OVERLAY_WIDTH = 100;
-
-export type ScreenSize = "16:9" | "9:16";
-export type AspectRatio169 = "9:16" | "1:1" | "4:3" | "3:4";
-export type AspectRatio916 = "16:9" | "1:1" | "4:3" | "21:9" | "3:4";
-export type AspectRatio = AspectRatio169 | AspectRatio916;
-
-export interface Transform {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  scale: number;
-  normX: number;
-  normY: number;
-}
+import {
+  ASPECT_RATIOS,
+  AspectRatio,
+  ScreenSize,
+  DEFAULT_VIDEO_HEIGHT,
+  DEFAULT_VIDEO_WIDTH,
+  OVERLAY_SCALE_FACTOR,
+  MIN_OVERLAY_WIDTH,
+} from "@/utils/aspect-ratios";
+import type { Transform } from "@/utils/keyframe";
 
 interface BoundaryBoxContextValue {
   screenSize: ScreenSize;
@@ -44,6 +33,16 @@ interface BoundaryBoxContextValue {
   setVisible: (v: boolean) => void;
 }
 
+type BoundaryBoxPreview = Pick<
+  BoundaryBoxContextValue,
+  | "screenSize"
+  | "aspectRatio"
+  | "transform"
+  | "videoWidth"
+  | "videoHeight"
+  | "visible"
+>;
+
 const BoundaryBoxContext = React.createContext<BoundaryBoxContextValue | null>(
   null
 );
@@ -54,8 +53,15 @@ function useBoundaryBoxContext() {
   return ctx;
 }
 
+interface BoundaryBoxMethods {
+  updatePosition: (x: number, y: number) => void;
+  updateScale: (scale: number) => void;
+}
+
 interface BoundaryBoxRootProps {
-  children: React.ReactNode;
+  children:
+    | React.ReactNode
+    | ((context: BoundaryBoxPreview & BoundaryBoxMethods) => React.ReactNode);
   screenSize: ScreenSize;
   videoWidth?: number;
   videoHeight?: number;
@@ -113,6 +119,104 @@ export const BoundaryBoxRoot = ({
 
   const stableSetTransform = useStableHandler(setTransform);
 
+  const throttledUpdateTransform = React.useMemo(
+    () =>
+      throttle((t: Transform) => {
+        console.log("in here debouncedUpdateTransform", t);
+        stableSetTransform(t);
+      }, 100),
+    []
+  );
+
+  const updatePosition = React.useCallback(
+    (x: number, y: number) => {
+      const overlay = overlayRef.current;
+      const container = containerRef.current;
+      if (!overlay || !container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const width = overlay.offsetWidth;
+      const height = overlay.offsetHeight;
+
+      const maxX = containerRect.width - width;
+      const maxY = containerRect.height - height;
+      const clampedX = Math.max(0, Math.min(x, maxX));
+      const clampedY = Math.max(0, Math.min(y, maxY));
+
+      overlay.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
+
+      const scaleX = width / videoWidth;
+      const scaleY = height / videoHeight;
+      const scale = Math.max(scaleX, scaleY);
+      const normX = clampedX / containerRect.width;
+      const normY = clampedY / containerRect.height;
+
+      const newTransform: Transform = {
+        x: clampedX,
+        y: clampedY,
+        width,
+        height,
+        scale,
+        normX,
+        normY,
+      };
+
+      throttledUpdateTransform(newTransform);
+    },
+    [videoWidth, videoHeight, throttledUpdateTransform]
+  );
+
+  const updateScale = React.useCallback(
+    (scale: number) => {
+      const overlay = overlayRef.current;
+      const container = containerRef.current;
+      if (!overlay || !container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const overlayRect = overlay.getBoundingClientRect();
+
+      const currentX = overlayRect.left - containerRect.left;
+      const currentY = overlayRect.top - containerRect.top;
+
+      const newWidth = videoWidth * scale;
+      const newHeight = videoHeight * scale;
+
+      overlay.style.width = `${newWidth}px`;
+      overlay.style.height = `${newHeight}px`;
+
+      const maxX = containerRect.width - newWidth;
+      const maxY = containerRect.height - newHeight;
+      const clampedX = Math.max(0, Math.min(currentX, maxX));
+      const clampedY = Math.max(0, Math.min(currentY, maxY));
+
+      overlay.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
+
+      const normX = clampedX / containerRect.width;
+      const normY = clampedY / containerRect.height;
+
+      const newTransform: Transform = {
+        x: clampedX,
+        y: clampedY,
+        width: newWidth,
+        height: newHeight,
+        scale,
+        normX,
+        normY,
+      };
+
+      throttledUpdateTransform(newTransform);
+    },
+    [videoWidth, videoHeight, throttledUpdateTransform]
+  );
+
+  const methods = React.useMemo(
+    () => ({
+      updatePosition,
+      updateScale,
+    }),
+    [updatePosition, updateScale]
+  );
+
   const value = React.useMemo(
     () => ({
       screenSize,
@@ -142,17 +246,27 @@ export const BoundaryBoxRoot = ({
 
   return (
     <BoundaryBoxContext.Provider value={value}>
-      {children}
+      {typeof children === "function"
+        ? children({
+            screenSize: value.screenSize,
+            aspectRatio: value.aspectRatio,
+            transform: value.transform,
+            videoWidth: value.videoWidth,
+            videoHeight: value.videoHeight,
+            visible: value.visible,
+            ...methods,
+          })
+        : children}
     </BoundaryBoxContext.Provider>
   );
 };
 
-interface BoundaryBoxContentProps
+interface BoundaryBoxContainerProps
   extends React.HTMLAttributes<HTMLDivElement> {}
 
-export const BoundaryBoxContent = React.forwardRef<
+export const BoundaryBoxContainer = React.forwardRef<
   HTMLDivElement,
-  BoundaryBoxContentProps
+  BoundaryBoxContainerProps
 >(({ className, children, ...props }, ref) => {
   const { screenSize, containerRef } = useBoundaryBoxContext();
   const composedRef = useComposedRefs(ref, containerRef);
@@ -171,7 +285,7 @@ export const BoundaryBoxContent = React.forwardRef<
     </div>
   );
 });
-BoundaryBoxContent.displayName = "BoundaryBoxContent";
+BoundaryBoxContainer.displayName = "BoundaryBoxContainer";
 
 interface BoundaryBoxOverlayProps
   extends React.HTMLAttributes<HTMLDivElement> {}
@@ -179,8 +293,7 @@ interface BoundaryBoxOverlayProps
 const BoundaryBoxOverlay = React.forwardRef<
   HTMLDivElement,
   BoundaryBoxOverlayProps
->((props, ref) => {
-  const { className, children, ...rest } = props;
+>(({ className, children, ...props }, ref) => {
   const {
     aspectRatio,
     containerRef,
@@ -269,7 +382,7 @@ const BoundaryBoxOverlay = React.forwardRef<
         "absolute will-change-transform pointer-events-auto border border-primary bg-primary/10 shadow-lg",
         className
       )}
-      {...rest}
+      {...props}
     >
       {children}
     </div>
@@ -412,8 +525,7 @@ interface ResizableProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
-  (props, ref) => {
-    const { className, side, ...rest } = props;
+  ({ className, side, ...props }, ref) => {
     const {
       setTransform,
       aspectRatio,
@@ -639,7 +751,6 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
       // const resizeObserver = new ResizeObserver(update);
       // resizeObserver.observe(containerEl);
-
       window.addEventListener("resize", update);
 
       return () => {
@@ -673,7 +784,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
           positionClass,
           className
         )}
-        {...rest}
+        {...props}
       />
     );
   }
@@ -682,7 +793,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 BoundaryBoxResizable.displayName = "BoundaryBoxResizable";
 
 export const BoundaryBox = Object.assign(BoundaryBoxRoot, {
-  Container: BoundaryBoxContent,
+  Container: BoundaryBoxContainer,
   Overlay: BoundaryBoxOverlay,
   Draggable: BoundaryBoxDraggable,
   Resizable: BoundaryBoxResizable,

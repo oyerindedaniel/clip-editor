@@ -6,10 +6,11 @@ import { VolumeX, Volume1, Volume2 } from "lucide-react";
 import { Button, type buttonVariants } from "@/components/ui/button";
 import type { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { useAnimatePresence } from "@/hooks/use-animate-presence";
+import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { HitArea } from "./hit-area";
+import type { AnimationState } from "@/hooks/use-animate-presence";
 
 interface VolumeContextValue {
   volume: number;
@@ -151,8 +152,6 @@ const VolumeLabel = React.forwardRef<HTMLLabelElement, VolumeLabelProps>(
 );
 VolumeLabel.displayName = "VolumeLabel";
 
-type AnimationState = "idle" | "entering" | "exiting";
-
 type State = "open" | "closed" | undefined;
 
 type VolumeControlsVariant = "pill" | "soft" | "default";
@@ -259,12 +258,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
       initial: false,
     });
 
-    const state =
-      animationState === "entering"
-        ? "open"
-        : animationState === "exiting"
-        ? "closed"
-        : undefined;
+    const state = getState(animationState);
 
     return (
       <ControlsContext.Provider
