@@ -136,7 +136,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
         </h2>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
         {initialClips.map((clip) => (
           <Link
             href={`/edit/${clip.metadata.clipId}`}
@@ -147,7 +147,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
                 <div className="bg-surface-tertiary relative overflow-hidden">
                   <canvas
                     ref={setCanvasRef(clip.metadata.clipId, clip.url)}
-                    className="aspect-[4/3] w-full h-full object-cover"
+                    className="aspect-[4/3] w-full object-cover"
                   />
                   {loadingThumbnails.has(clip.metadata.clipId) && (
                     <div className="absolute inset-0 bg-surface-primary/80 flex items-center justify-center">

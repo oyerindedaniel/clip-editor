@@ -11,6 +11,7 @@ import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
 import { TOOLTIP_OFFSET_Y, TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import type { AnimationState } from "@/hooks/use-animate-presence";
+import type { Color } from "./color-palette";
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -20,6 +21,7 @@ interface KeyframeContextValue {
   updateKeyframe: (id: string, updates: Partial<KeyframeData>) => void;
   deleteKeyframe: (id: string) => void;
   getKeyframe: (id: string) => KeyframeData | undefined;
+  updateColors: (id: string, color: Color) => void;
   maxTime: number;
 }
 
@@ -105,6 +107,15 @@ function KeyframeRoot({
     [keyframes]
   );
 
+  const updateColors = React.useCallback(
+    (id: string, color: Color) => {
+      setKeyframes((prev) =>
+        prev.map((kf) => (kf.id === id ? { ...kf, color } : kf))
+      );
+    },
+    [setKeyframes]
+  );
+
   const value = React.useMemo(
     () => ({
       keyframes,
@@ -114,6 +125,7 @@ function KeyframeRoot({
       updateKeyframe,
       deleteKeyframe,
       getKeyframe,
+      updateColors,
       maxTime,
     }),
     [
@@ -124,6 +136,7 @@ function KeyframeRoot({
       updateKeyframe,
       deleteKeyframe,
       getKeyframe,
+      updateColors,
       maxTime,
     ]
   );
@@ -139,7 +152,7 @@ KeyframeRoot.displayName = "Keyframe.Root";
 
 interface KeyframeMarkerProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframeId: string;
-  color?: string;
+  color?: Color;
   timelineRef: React.RefObject<HTMLDivElement | null>;
   pxPerMs: number;
   edgeThreshold?: number;
@@ -149,7 +162,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
   (
     {
       keyframeId,
-      color = "#3b82f6",
+      color = "#22c55e",
       className,
       style,
       timelineRef,
@@ -161,7 +174,9 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
   ) => {
     const { getKeyframe, updateKeyframe, setCurrentKeyframeId } =
       useKeyframeContext();
+
     const keyframe = getKeyframe(keyframeId);
+    const resolvedColor = color ?? keyframe?.color ?? "#3b82f6";
 
     const markerRef = React.useRef<HTMLDivElement>(null);
     const tooltipRef = React.useRef<HTMLDivElement>(null);
@@ -351,11 +366,11 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         >
           <div
             className="w-0.5 h-full transition-all group-hover:w-1 bg-(--color)"
-            style={{ "--color": color } as React.CSSProperties}
+            style={{ "--color": resolvedColor } as React.CSSProperties}
           />
           <div
-            className="absolute top-0 -translate-x-1/2 w-3 h-3 bg-(--color) rounded-full border-2 border-surface-primary shadow-lg transition-transform group-hover:scale-125"
-            style={{ "--color": color } as React.CSSProperties}
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-(--color) border border-surface-primary shadow-lg hover:scale-110 transition-transform"
+            style={{ "--color": resolvedColor } as React.CSSProperties}
           />
         </div>
 
@@ -377,6 +392,7 @@ interface KeyframeBoxContextValue {
   boxId: string;
   boxHeaderId: string;
   boxContentId: string;
+  handleClose: () => void;
 }
 
 const KeyframeBoxContext = React.createContext<KeyframeBoxContextValue | null>(
@@ -389,10 +405,12 @@ function useKeyframeBoxContext() {
   return ctx;
 }
 
-interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {}
+interface KeyframeBoxProps extends React.HTMLAttributes<HTMLDivElement> {
+  triggerRef?: React.RefObject<HTMLElement | null>;
+}
 
 const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
-  ({ className, children, ...props }, forwardedRef) => {
+  ({ className, children, triggerRef, ...props }, forwardedRef) => {
     const { currentKeyframeId, getKeyframe, setCurrentKeyframeId } =
       useKeyframeContext();
 
@@ -401,19 +419,18 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
     const boxId = React.useId();
     const boxHeaderId = `${boxId}-header`;
     const boxContentId = `${boxId}-content`;
+
     const boxRef = React.useRef<HTMLDivElement>(null);
     const composedRefs = useComposedRefs(boxRef, forwardedRef);
 
     const positionRef = React.useRef({ x: 100, y: 100 });
 
-    const focusFirstElement = React.useCallback(() => {
-      const container = boxRef.current;
-      if (!container) return;
-      const firstFocusable = container.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      (firstFocusable ?? container).focus();
-    }, []);
+    const [isClosing, setIsClosing] = React.useState(false);
+
+    const handleClose = React.useCallback(() => {
+      if (isClosing) return;
+      setIsClosing(true);
+    }, [isClosing]);
 
     const trapFocus = React.useCallback((reverse = false) => {
       const container = boxRef.current;
@@ -432,7 +449,7 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
 
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
-        const el = boxRef.current!;
+        const box = boxRef.current!;
 
         if (presence) {
           setAnimationState("entering");
@@ -444,21 +461,21 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
 
         const onEnd = () => {
           setAnimationState("idle");
-          el.removeEventListener("animationend", onEnd);
+          box.removeEventListener("animationend", onEnd);
           resolve();
+          setIsClosing(false);
+          setCurrentKeyframeId(null);
         };
 
-        el.addEventListener("animationend", onEnd);
+        box.addEventListener("animationend", onEnd);
       });
     };
 
-    const shouldRender = useAnimatePresence(!!keyframe, handleAnimation, {
+    const isVisible = !!keyframe && !isClosing;
+
+    const shouldRender = useAnimatePresence(isVisible, handleAnimation, {
       initial: false,
     });
-
-    React.useEffect(() => {
-      if (shouldRender) focusFirstElement();
-    }, [shouldRender, focusFirstElement]);
 
     React.useEffect(() => {
       const handleKey = (e: KeyboardEvent) => {
@@ -472,14 +489,25 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
         document.removeEventListener("keydown", handleKey, { capture: true });
     }, [setCurrentKeyframeId]);
 
-    // React.useEffect(() => {
-    //   if (!shouldRender || !boxRef.current) return;
-    //   const el = boxRef.current;
-    //   const focusable = el.querySelector<HTMLElement>(
-    //     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    //   );
-    //   (focusable ?? el).focus();
-    // }, [shouldRender]);
+    React.useEffect(() => {
+      if (!shouldRender || !boxRef.current) return;
+      const el = boxRef.current;
+      const focusable = el.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      (focusable ?? el).focus();
+    }, [shouldRender]);
+
+    React.useLayoutEffect(() => {
+      if (!triggerRef?.current) return;
+      const trigger = triggerRef.current;
+      const rect = trigger.getBoundingClientRect();
+
+      positionRef.current = {
+        x: rect.left + trigger.offsetWidth / 2,
+        y: rect.bottom + 8,
+      };
+    }, []);
 
     const state = getState(animationState);
 
@@ -490,8 +518,9 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
         boxId,
         boxHeaderId,
         boxContentId,
+        handleClose,
       }),
-      [currentKeyframeId, boxId, boxHeaderId, boxContentId]
+      [currentKeyframeId, boxId, boxHeaderId, boxContentId, handleClose]
     );
 
     if (!shouldRender) return null;
@@ -508,12 +537,12 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
           data-state={state}
           tabIndex={-1}
           className={cn(
-            "fixed bg-surface-primary rounded-3xl overflow-hidden left-0 top-0 shadow-2xl border border-subtle w-[260px] z-50 will-change-transform",
+            "fixed bg-surface-primary left-0 top-0 rounded-3xl overflow-hidden shadow-2xl border border-subtle w-[260px] z-50 will-change-transform",
             "origin-top-left data-[state=open]:animate-box-enter data-[state=closed]:animate-box-exit",
             className
           )}
           style={{
-            transform: `translate3d(${positionRef.current.x}px, ${positionRef.current.y}px, 0)`,
+            transform: `translate3d(${positionRef.current.x}px, ${positionRef.current.y}px, 0) scale(1)`,
           }}
           {...props}
         >
@@ -566,7 +595,7 @@ const KeyframeBoxHeader = React.forwardRef<
         rafRef.current = requestAnimationFrame(() => {
           const x = e.clientX - offsetRef.current.x;
           const y = e.clientY - offsetRef.current.y;
-          box.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+          box.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
         });
       };
 
@@ -615,16 +644,17 @@ const KeyframeBoxClose = React.forwardRef<
   KeyframeBoxCloseProps
 >((props, forwardedRef) => {
   const { setCurrentKeyframeId } = useKeyframeContext();
+  const { handleClose } = useKeyframeBoxContext();
 
   return (
     <Button
       ref={forwardedRef}
-      data-close-button
       variant="ghost"
       size="icon"
-      onClick={() => setCurrentKeyframeId(null)}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={handleClose}
       aria-label="Close keyframe"
-      className="ml-auto"
+      className="ml-auto cursor-pointer active:cursor-pointer"
       {...props}
     >
       <X className="w-4 h-4" />

@@ -23,7 +23,7 @@ import type {
   VideoFormat,
 } from "@/types/app";
 import { cn } from "@/lib/utils";
-import ColorPalette from "@/components/color-palette";
+import ColorPalette, { Color } from "@/components/color-palette";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import InfoTooltip from "@/components/info-tooltip";
 
@@ -62,7 +62,7 @@ const AspectRatioSelector = ({
   const [convertAspectRatio, setConvertAspectRatio] =
     useState<AspectRatioValue>(settings.aspectRatio);
   const [cropMode, setCropMode] = useState(settings.cropMode);
-  const [padColor, setPadColor] = useState<string>(settings.padColor);
+  const [padColor, setPadColor] = useState<Color>(settings.padColor);
   const [format, setFormat] = useState<VideoFormat>(settings.format);
 
   const settingsRef = useLatestValue(settings);

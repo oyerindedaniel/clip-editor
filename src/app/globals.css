@@ -261,22 +261,22 @@
   @keyframes box-enter {
     from {
       opacity: 0;
-      transform: scale(0.95);
+      /* transform: scale(0.95); */
     }
     to {
       opacity: 1;
-      transform: scale(1);
+      /* transform: scale(1); */
     }
   }
 
   @keyframes box-exit {
     from {
       opacity: 1;
-      transform: scale(1);
+      /* transform: scale(1); */
     }
     to {
       opacity: 0;
-      transform: scale(0.95);
+      /* transform: scale(0.95); */
     }
   }
 
@@ -313,31 +313,16 @@ body {
   background-color: oklch(0.6 0.01 240 / 0.7);
 }
 
-/* Numeric input specific scrollbar styling (WebKit) */
-input[type="number"]::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-input[type="number"]::-webkit-scrollbar-track {
-  background-color: transparent;
-}
-
-input[type="number"]::-webkit-scrollbar-thumb {
-  background-color: var(--color-subtle);
-  border-radius: 9999px;
-}
-
-input[type="number"]::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(
-    in oklab,
-    var(--color-subtle),
-    var(--color-primary) 35%
-  );
-}
-
-/* Firefox scrollbar colors for number inputs */
+/* Hide number input arrows safely and cleanly */
 input[type="number"] {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-subtle) transparent;
+  appearance: textfield; /* Standard syntax */
+  -moz-appearance: textfield; /* Older Firefox */
+  -webkit-appearance: none; /* Older Chrome/Safari */
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none; /* Standard syntax */
+  -webkit-appearance: none; /* Older browsers */
+  margin: 0;
 }

@@ -7,9 +7,11 @@ import {
 import { cn } from "@/lib/utils";
 import { DEFAULT_COLORS } from "@/constants/app";
 
+export type Color = (typeof DEFAULT_COLORS)[number];
+
 interface ColorPaletteProps {
-  value?: string;
-  onChange?: (color: string) => void;
+  value?: Color;
+  onChange?: (color: Color) => void;
   colors?: typeof DEFAULT_COLORS;
   children: React.ReactNode;
 }
@@ -29,7 +31,7 @@ export function ColorPalette({
 }: ColorPaletteProps) {
   const [open, setOpen] = React.useState(false);
 
-  const handleSelect = (color: string) => {
+  const handleSelect = (color: Color) => {
     onChange?.(color);
     setOpen(false);
   };
@@ -46,8 +48,12 @@ export function ColorPalette({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-
+      <PopoverTrigger
+        asChild
+        className="bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
+      >
+        {children}
+      </PopoverTrigger>
       <PopoverContent
         className={cn(
           "w-auto p-3 !duration-(--total-duration)",

@@ -1,3 +1,5 @@
+import { DEFAULT_COLORS } from "@/constants/app";
+
 interface KeyframeTransform {
   x: number;
   y: number;
@@ -17,6 +19,7 @@ interface KeyframeData {
   time: number;
   transform: KeyframeTransform;
   easing: KeyframeEasing;
+  color?: (typeof DEFAULT_COLORS)[number];
 }
 
 const KEYFRAME_EASINGS = Object.freeze([

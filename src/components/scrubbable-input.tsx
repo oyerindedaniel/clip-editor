@@ -87,8 +87,8 @@ export const Content = React.forwardRef<
     <div
       ref={ref}
       className={cn(
-        "flex items-center gap-2 select-none touch-none overflow-hidden rounded-3xl",
-        "bg-surface-secondary border border-subtle",
+        "flex h-full gap-2 select-none touch-none overflow-hidden rounded-3xl",
+        "bg-surface-secondary border-2 border-subtle",
         "focus-within:border-primary focus-within:bg-surface-secondary/80",
         disabled && "opacity-50 pointer-events-none",
         className
@@ -134,6 +134,7 @@ export const DragHandle = React.forwardRef<
       let next = startValue.current + deltaValue;
       if (typeof min === "number") next = Math.max(min, next);
       if (typeof max === "number") next = Math.min(max, next);
+
       if (frame.current) cancelAnimationFrame(frame.current);
       frame.current = requestAnimationFrame(() => setValue(next));
     };
@@ -154,7 +155,7 @@ export const DragHandle = React.forwardRef<
       ref={composedRef}
       onPointerDown={handlePointerDown}
       className={cn(
-        "cursor-ew-resize p-1 rounded-md active:scale-95 transition-transform will-change-transform",
+        "cursor-ew-resize rounded-md active:scale-95 transition-transform will-change-transform",
         "text-foreground-muted hover:text-foreground-default",
         className
       )}
@@ -200,7 +201,7 @@ export const Icon = React.forwardRef<HTMLSpanElement, ScrubbableInputIconProps>(
     <span
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center uppercase h-full w-6 text-foreground-default/80 rounded-l-3xl",
+        "inline-flex items-center justify-center h-8 w-12 uppercase text-foreground-default/80 rounded-l-3xl",
         className
       )}
       {...props}
@@ -237,10 +238,11 @@ export const Field = React.forwardRef<
       value={value}
       onChange={handleChange}
       disabled={disabled}
+      autoComplete="off"
       className={cn(
         "rounded-none bg-transparent border-none shadow-none bg-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
         "text-foreground-default placeholder:text-foreground-muted",
-        "w-max text-left",
+        "w-max text-left text-sm",
         className
       )}
       {...props}
@@ -250,20 +252,20 @@ export const Field = React.forwardRef<
 Field.displayName = "ScrubbableInput.Field";
 
 export interface ScrubbableInputUnitProps
-  extends React.HTMLAttributes<HTMLDivElement> {}
+  extends React.HTMLAttributes<HTMLSpanElement> {}
 
-export const Unit = React.forwardRef<HTMLDivElement, ScrubbableInputUnitProps>(
+export const Unit = React.forwardRef<HTMLSpanElement, ScrubbableInputUnitProps>(
   ({ className, children, ...props }, ref) => (
-    <div
+    <span
       ref={ref}
       className={cn(
-        "text-foreground-default/80 text-xs font-medium select-none rounded-r-3xl inline-block h-full w-12",
+        "text-foreground-default/80 text-xs font-medium select-none rounded-r-3xl inline-flex items-center justify-center h-8 w-12",
         className
       )}
       {...props}
     >
       {children}
-    </div>
+    </span>
   )
 );
 Unit.displayName = "ScrubbableInput.Unit";

@@ -785,7 +785,6 @@ export const DualVideoPlayer: React.FC<DualVideoPlayerProps> = ({
   return (
     <div className="flex flex-col gap-4 items-center relative">
       <div
-        data-container-context="dual"
         ref={secondaryContainerRef}
         className="relative flex flex-col items-center aspect-[9/16] w-[260px] justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md group"
       >

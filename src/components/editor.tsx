@@ -42,16 +42,7 @@ import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "@/components/ui/button";
-import {
-  SlidersHorizontal,
-  Film,
-  X,
-  Square,
-  ArrowRight,
-  ChevronsRight,
-  ChevronsLeft,
-  ChevronsLeftRight,
-} from "lucide-react";
+import { SlidersHorizontal, Film, Square } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { KeyframeContext } from "@/contexts/keyframe-context";
 import { BoundaryBox } from "./boundary-box";
@@ -65,14 +56,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AspectRatio,
-  DEFAULT_VIDEO_HEIGHT,
-  DEFAULT_VIDEO_WIDTH,
-} from "@/utils/aspect-ratios";
+import { AspectRatio } from "@/utils/aspect-ratios";
 import { KEYFRAME_EASINGS } from "@/utils/keyframe";
 import { roundToDecimals } from "@/utils/app";
 import type { KeyframeEasing } from "@/utils/keyframe";
+import ColorPalette, { Color } from "./color-palette";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -87,6 +75,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const keyframeTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const {
     isOpen: isAspectRatioModalOpen,
@@ -649,6 +638,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               updateKeyframe,
               deleteKeyframe,
               getKeyframe,
+              updateColors,
             }) => (
               <>
                 <div className="w-full flex flex-col lg:flex-row items-center gap-4">
@@ -663,6 +653,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         disabled={!isValidBufferState || isExporting}
                       />
                       <Button
+                        ref={keyframeTriggerRef}
                         size="sm"
                         onClick={() => {
                           if (boundaryTransform) {
@@ -672,6 +663,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                 : 0,
                               transform: boundaryTransform,
                               easing: "ease-in-out",
+                              color: "#22c55e",
                             });
                           }
                         }}
@@ -685,17 +677,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
                     <BoundaryBox
                       screenSize="16:9"
-                      videoWidth={
-                        videoRef.current?.videoWidth || DEFAULT_VIDEO_WIDTH
-                      }
-                      videoHeight={
-                        videoRef.current?.videoHeight || DEFAULT_VIDEO_HEIGHT
-                      }
+                      videoWidth={videoRef.current?.videoWidth}
+                      videoHeight={videoRef.current?.videoHeight}
                       aspectRatio={boundaryAspectRatio as AspectRatio}
                       visible={boundaryVisible}
                       transform={boundaryTransform!}
                       onTransformChange={(transform) => {
-                        console.log("in here transform", transform);
+                        // console.log("in here transform", transform);
                         setBoundaryTransform(transform);
                         if (currentKeyframeId) {
                           updateKeyframe(currentKeyframeId, {
@@ -707,11 +695,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       {({
                         updatePosition,
                         updateScale,
-                        videoWidth,
-                        videoHeight,
+                        containerWidth,
+                        containerHeight,
                       }) => (
                         <>
-                          <BoundaryBox.Container className="relative flex-1 min-w-0 bg-surface-secondary shadow-md">
+                          <BoundaryBox.Container className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md">
                             <MediaPlayer.Root>
                               <MediaPlayer.Video
                                 src={primaryUrl}
@@ -756,7 +744,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             </BoundaryBox.Draggable>
                           </BoundaryBox.Container>
 
-                          <Keyframe.Box>
+                          <Keyframe.Box triggerRef={keyframeTriggerRef}>
                             <Keyframe.BoxHeader>
                               {currentKeyframeId &&
                                 getKeyframe(currentKeyframeId) &&
@@ -786,7 +774,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                         }}
                                         min={0}
                                         max={
-                                          videoWidth -
+                                          containerWidth -
                                           (getKeyframe(currentKeyframeId)
                                             ?.transform.width || 0)
                                         }
@@ -803,9 +791,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             </ScrubbableInput.Icon>
                                           </ScrubbableInput.DragHandle>
                                           <ScrubbableInput.Field id="keyframe-x" />
-                                          <ScrubbableInput.Unit>
-                                            px
-                                          </ScrubbableInput.Unit>
                                         </ScrubbableInput.Content>
                                       </ScrubbableInput.Root>
 
@@ -824,7 +809,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                         }}
                                         min={0}
                                         max={
-                                          videoHeight -
+                                          containerHeight -
                                           (getKeyframe(currentKeyframeId)
                                             ?.transform.height || 0)
                                         }
@@ -841,9 +826,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             </ScrubbableInput.Icon>
                                           </ScrubbableInput.DragHandle>
                                           <ScrubbableInput.Field id="keyframe-y" />
-                                          <ScrubbableInput.Unit>
-                                            px
-                                          </ScrubbableInput.Unit>
                                         </ScrubbableInput.Content>
                                       </ScrubbableInput.Root>
 
@@ -856,7 +838,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                         onValueChange={(scale) => {
                                           updateScale(scale);
                                         }}
-                                        min={0.1}
+                                        min={1}
                                         max={3}
                                         step={0.1}
                                         sensitivity={0.4}
@@ -871,11 +853,58 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             </ScrubbableInput.Icon>
                                           </ScrubbableInput.DragHandle>
                                           <ScrubbableInput.Field id="keyframe-scale" />
-                                          <ScrubbableInput.Unit>
-                                            x
-                                          </ScrubbableInput.Unit>
                                         </ScrubbableInput.Content>
                                       </ScrubbableInput.Root>
+
+                                      <div className="space-y-1">
+                                        <Label
+                                          htmlFor="keyframe-color"
+                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                        >
+                                          Color
+                                        </Label>
+                                        <ColorPalette
+                                          value={
+                                            currentKeyframeId
+                                              ? getKeyframe(currentKeyframeId)
+                                                  ?.color
+                                              : "#22c55e"
+                                          }
+                                          onChange={(color: Color) => {
+                                            if (currentKeyframeId) {
+                                              updateColors(
+                                                currentKeyframeId,
+                                                color
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs flex items-center gap-2"
+                                          >
+                                            <span
+                                              className="h-4 w-4 rounded border"
+                                              style={{
+                                                backgroundColor:
+                                                  currentKeyframeId
+                                                    ? getKeyframe(
+                                                        currentKeyframeId
+                                                      )?.color
+                                                    : "#22c55e",
+                                              }}
+                                            />
+                                            <span>
+                                              {currentKeyframeId
+                                                ? getKeyframe(currentKeyframeId)
+                                                    ?.color
+                                                : "#22c55e"}
+                                            </span>
+                                          </Button>
+                                        </ColorPalette>
+                                      </div>
 
                                       <div className="space-y-1">
                                         <Label
@@ -897,16 +926,15 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                         >
                                           <SelectTrigger
                                             id="keyframe-easing"
-                                            className="h-9 text-sm rounded-3xl bg-surface-secondary border-subtle focus:ring-0 focus:outline-none"
+                                            className=""
                                           >
                                             <SelectValue placeholder="Select easing" />
                                           </SelectTrigger>
-                                          <SelectContent className="text-sm rounded-3xl bg-surface-secondary border border-subtle p-1">
+                                          <SelectContent>
                                             {KEYFRAME_EASINGS.map((easing) => (
                                               <SelectItem
                                                 key={easing}
                                                 value={easing}
-                                                className="text-foreground-default text-[13px] rounded-2xl"
                                               >
                                                 {easing}
                                               </SelectItem>
