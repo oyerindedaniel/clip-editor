@@ -797,7 +797,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
             <HitArea variant="x" onMouseDown={onPlayheadMouseDown}>
-              <div className="relative h-full cursor-ew-resize">
+              <div className="relative h-full">
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
               </div>
@@ -838,13 +838,15 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             </div>
           ))}
 
-          <div className="absolute left-0 right-0 top-6 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
+          <div className="absolute inset-x-0 top-6 h-14">
+            <div className="absolute inset-0 rounded bg-surface-tertiary/60" />
             <div
+              aria-label="primary video"
+              tabIndex={0}
               ref={primaryBlockRef}
               className={cn(
-                "absolute top-0 h-14 rounded-md border border-default overflow-hidden",
-                "shadow-inner"
+                "absolute top-0 h-full rounded-md border border-default overflow-hidden",
+                "shadow-inner focus:outline-none focus-visible:border-2 focus-visible:border-primary"
               )}
               title="Primary video"
             >
@@ -855,14 +857,16 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             </div>
           </div>
 
-          <div className="absolute left-0 right-0 top-24 h-14">
-            <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-tertiary/60" />
+          <div className="absolute inset-x-0 top-24 h-14">
+            <div className="absolute inset-0 rounded bg-surface-tertiary/60" />
             <div
+              aria-label="secondary video"
+              tabIndex={0}
               ref={secondaryBlockRef}
               onMouseDown={onSecondaryMouseDown}
               className={cn(
-                "absolute top-0 h-14 rounded-md border border-default overflow-hidden",
-                "shadow-inner cursor-grab active:cursor-grabbing ring-0 focus:outline-none focus:ring-0"
+                "absolute top-0 h-full rounded-md border border-default overflow-hidden",
+                "shadow-inner cursor-grab active:cursor-grabbing focus:outline-none focus-visible:border-2 focus-visible:border-primary"
               )}
               title="Secondary video (drag to align)"
             >

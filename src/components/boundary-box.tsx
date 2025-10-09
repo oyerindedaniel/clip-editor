@@ -132,7 +132,7 @@ export function BoundaryBoxRoot({
     () =>
       throttle((t: Transform) => {
         stableSetTransform(t);
-      }, 100),
+      }, 500),
     [stableSetTransform]
   );
 
@@ -158,6 +158,7 @@ export function BoundaryBoxRoot({
     return () => observer.disconnect();
   }, []);
 
+  // Purpose: Receives position updates from the ScrubbableInput component
   const updatePosition = React.useCallback(
     (x: number, y: number) => {
       const overlay = overlayRef.current;
@@ -177,7 +178,7 @@ export function BoundaryBoxRoot({
 
       const scaleX = width / containerRect.width;
       const scaleY = height / containerRect.height;
-      const scale = Math.max(scaleX, scaleY);
+      const scale = 1 / Math.max(scaleX, scaleY);
 
       const normX = clampedX / containerRect.width;
       const normY = clampedY / containerRect.height;
@@ -195,6 +196,7 @@ export function BoundaryBoxRoot({
     [throttledUpdateTransform]
   );
 
+  // Purpose: Receives scale updates from the ScrubbableInput component
   const updateScale = React.useCallback(
     (scale: number) => {
       const overlay = overlayRef.current;
@@ -202,39 +204,35 @@ export function BoundaryBoxRoot({
       if (!overlay || !container) return;
 
       const clampedScale = Math.max(scale, 1);
-
       const containerRect = container.getBoundingClientRect();
       const overlayRect = overlay.getBoundingClientRect();
 
       const currentX = overlayRect.left - containerRect.left;
       const currentY = overlayRect.top - containerRect.top;
 
-      const containerAspect = containerRect.width / containerRect.height;
+      const overlayAspect = overlayRect.width / overlayRect.height;
 
+      // scale = 1 → max fit inside parent
+      // scale > 1 → smaller box (zoomed in)
+      // scale < 1 → larger box (zoomed out)
       const newHeight = containerRect.height / clampedScale;
-      const newWidth = newHeight * containerAspect;
+      const newWidth = newHeight * overlayAspect;
 
-      const fitScale = Math.min(
+      const maxFitScale = Math.min(
         containerRect.width / newWidth,
         containerRect.height / newHeight,
         1
       );
 
-      if (
-        fitScale < 1e-3 ||
-        (newWidth >= containerRect.width && newHeight >= containerRect.height)
-      ) {
-        return;
-      }
-
-      const finalWidth = newWidth * fitScale;
-      const finalHeight = newHeight * fitScale;
+      const finalWidth = newWidth * maxFitScale;
+      const finalHeight = newHeight * maxFitScale;
 
       overlay.style.width = `${finalWidth}px`;
       overlay.style.height = `${finalHeight}px`;
 
       const maxX = containerRect.width - finalWidth;
       const maxY = containerRect.height - finalHeight;
+
       const clampedX = Math.max(0, Math.min(currentX, maxX));
       const clampedY = Math.max(0, Math.min(currentY, maxY));
 
@@ -402,7 +400,7 @@ const BoundaryBoxOverlay = React.forwardRef<
 
       const scaleX = width / containerWidth;
       const scaleY = height / containerHeight;
-      const scale = Math.max(scaleX, scaleY);
+      const scale = 1 / Math.max(scaleX, scaleY);
 
       const normX = x / containerWidth;
       const normY = y / containerHeight;
@@ -532,7 +530,7 @@ const BoundaryBoxDraggable = React.forwardRef<HTMLDivElement, DraggableProps>(
 
           const scaleX = width / containerRect.width;
           const scaleY = height / containerRect.height;
-          const scale = Math.max(scaleX, scaleY);
+          const scale = 1 / Math.max(scaleX, scaleY);
 
           const normX = x / containerRect.width;
           const normY = y / containerRect.height;
@@ -709,7 +707,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
           const scaleX = width / containerRect.width;
           const scaleY = height / containerRect.height;
-          const scale = Math.max(scaleX, scaleY);
+          const scale = 1 / Math.max(scaleX, scaleY);
           const normX = x / containerRect.width;
           const normY = y / containerRect.height;
 
@@ -771,7 +769,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
           const scaleX = newWidth / containerRect.width;
           const scaleY = newHeight / containerRect.height;
-          const scale = Math.max(scaleX, scaleY);
+          const scale = 1 / Math.max(scaleX, scaleY);
 
           const normX = newX / containerRect.width;
           const normY = newY / containerRect.height;

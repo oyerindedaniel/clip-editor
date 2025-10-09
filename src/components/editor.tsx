@@ -699,7 +699,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         containerHeight,
                       }) => (
                         <>
-                          <BoundaryBox.Container className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md">
+                          <BoundaryBox.Container
+                            ref={containerRef}
+                            className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md"
+                          >
                             <MediaPlayer.Root>
                               <MediaPlayer.Video
                                 src={primaryUrl}
@@ -864,6 +867,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                           Color
                                         </Label>
                                         <ColorPalette
+                                          id="keyframe-color"
                                           value={
                                             currentKeyframeId
                                               ? getKeyframe(currentKeyframeId)

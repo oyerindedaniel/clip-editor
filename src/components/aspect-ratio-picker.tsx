@@ -9,12 +9,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { cn } from "@/lib/utils";
-import {
+import type {
   ScreenSize,
   AspectRatio169,
   AspectRatio916,
   AspectRatio,
-} from "@/components/boundary-box";
+} from "@/utils/aspect-ratios";
 
 type AspectRatioType = AspectRatio | null;
 
@@ -102,7 +102,11 @@ const AspectRatioSelector = ({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-fit" align="start" side="bottom">
+      <PopoverContent
+        className="w-fit bg-surface-primary"
+        align="start"
+        side="bottom"
+      >
         <div className="space-y-3">
           <div>
             <h3 className="text-sm font-medium text-foreground-default">
@@ -121,7 +125,7 @@ const AspectRatioSelector = ({
                 variant={
                   localAspectRatio === ratio.value ? "default" : "outline"
                 }
-                className="w-full text-left block text-xs overflow-hidden"
+                className="w-full text-left block text-xs overflow-hidden border-subtle"
               >
                 <span className="font-medium mr-2">{ratio.label}</span>
                 <Badge variant="secondary">{ratio.description}</Badge>

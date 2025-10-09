@@ -10,6 +10,7 @@ import { DEFAULT_COLORS } from "@/constants/app";
 export type Color = (typeof DEFAULT_COLORS)[number];
 
 interface ColorPaletteProps {
+  id: string;
   value?: Color;
   onChange?: (color: Color) => void;
   colors?: typeof DEFAULT_COLORS;
@@ -24,6 +25,7 @@ function getTotalDuration(count: number, duration: number, stagger: number) {
 }
 
 export function ColorPalette({
+  id,
   value,
   onChange,
   colors = DEFAULT_COLORS,
@@ -49,6 +51,7 @@ export function ColorPalette({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        id={id}
         asChild
         className="bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
       >
@@ -77,7 +80,8 @@ export function ColorPalette({
                 data-selected={isSelected ? "" : undefined}
                 onClick={() => handleSelect(color)}
                 className={cn(
-                  "h-7 w-7 rounded-full outline-none border-none relative",
+                  "relative h-7 w-7 rounded-full",
+                  "outline-none border-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary",
                   "bg-(--bg)",
                   "[[data-state=open]_&]:animate-fade-scale-in",
                   "[[data-state=closed]_&]:animate-fade-scale-out",

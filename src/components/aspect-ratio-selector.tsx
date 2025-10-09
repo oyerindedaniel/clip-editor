@@ -140,10 +140,10 @@ const AspectRatioSelector = ({
                       key={mode.value}
                       onClick={() => setCropMode(mode.value as CropMode)}
                       className={cn(
-                        "flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-colors space-y-1 border",
+                        "flex flex-col items-center rounded-3xl justify-center p-2 cursor-pointer transition-colors space-y-1 border",
                         cropMode === mode.value
                           ? "bg-primary/20 text-primary border-primary"
-                          : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
+                          : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
                       )}
                       variant="ghost"
                       size="sm"
@@ -162,9 +162,15 @@ const AspectRatioSelector = ({
 
             {convertAspectRatio !== "original" && cropMode === "letterbox" && (
               <div className="grid grid-cols-4 items-center gap-4">
-                <label className="text-right text-xs">Pad Color</label>
+                <label htmlFor="padColor" className="text-right text-xs">
+                  Pad Color
+                </label>
                 <div className="col-span-3">
-                  <ColorPalette value={padColor} onChange={setPadColor}>
+                  <ColorPalette
+                    id="padColor"
+                    value={padColor}
+                    onChange={setPadColor}
+                  >
                     <Button
                       type="button"
                       variant="outline"

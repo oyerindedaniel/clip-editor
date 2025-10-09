@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
@@ -19,6 +19,19 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
     new Set()
   );
   const processedThumbnailsRef = useRef<Set<string>>(new Set());
+  const dimensionRef = useRef<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      dimensionRef.current = { width, height };
+      console.log("containr now");
+    }
+  }, []);
 
   const generateThumbnail = useCallback(
     (videoUrl: string, canvas: HTMLCanvasElement, clipId: string) => {
@@ -32,29 +45,16 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
       video.src = videoUrl;
       video.preload = "metadata";
 
-      const container = canvas.parentElement;
-      if (!container) {
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
-        return;
-      }
+      console.log("in here now");
 
-      const { width, height } = container.getBoundingClientRect();
+      const { width, height } = dimensionRef.current;
+      if (!width || !height) return;
+
       canvas.width = width;
       canvas.height = height;
 
       const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
-        return;
-      }
+      if (!ctx) return;
 
       const cleanup = () => {
         video.removeEventListener("seeked", onSeeked);
@@ -67,7 +67,26 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
 
       const onSeeked = () => {
         try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const vidWidth = video.videoWidth;
+          const vidHeight = video.videoHeight;
+
+          const videoAspect = vidWidth / vidHeight;
+          const canvasAspect = width / height;
+
+          let drawWidth = width;
+          let drawHeight = height;
+          let offsetX = 0;
+          let offsetY = 0;
+
+          if (videoAspect > canvasAspect) {
+            drawWidth = height * videoAspect;
+            offsetX = (width - drawWidth) / 2;
+          } else {
+            drawHeight = width / videoAspect;
+            offsetY = (height - drawHeight) / 2;
+          }
+
+          ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
         } catch (error) {
           logger.warn(`Failed to draw thumbnail for ${clipId}:`, error);
         }
@@ -137,13 +156,16 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-        {initialClips.map((clip) => (
+        {initialClips.map((clip, index) => (
           <Link
             href={`/edit/${clip.metadata.clipId}`}
             key={clip.metadata.clipId}
           >
-            <div className="p-4 bg-surface-secondary rounded-lg aspect-[4/3] w-full">
-              <div className="bg-surface-secondary rounded-lg overflow-hidden border border-subtle hover:border-primary transition-colors cursor-pointer group">
+            <div
+              ref={index === 0 ? containerRef : undefined}
+              className="p-4 bg-surface-secondary rounded-3xl aspect-[4/3] w-full"
+            >
+              <div className="bg-surface-secondary rounded-2xl overflow-hidden border border-subtle hover:border-primary transition-colors cursor-pointer group">
                 <div className="bg-surface-tertiary relative overflow-hidden">
                   <canvas
                     ref={setCanvasRef(clip.metadata.clipId, clip.url)}

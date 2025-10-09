@@ -128,15 +128,16 @@ export const DragHandle = React.forwardRef<
     startValue.current = value;
 
     const handleMove = (moveEvent: PointerEvent) => {
-      const dx = moveEvent.clientX - startX.current;
-      const deltaValue =
-        dx * (step || DEFAULT_STEP) * (sensitivity || DEFAULT_SENSITIVITY);
-      let next = startValue.current + deltaValue;
-      if (typeof min === "number") next = Math.max(min, next);
-      if (typeof max === "number") next = Math.min(max, next);
-
       if (frame.current) cancelAnimationFrame(frame.current);
-      frame.current = requestAnimationFrame(() => setValue(next));
+      frame.current = requestAnimationFrame(() => {
+        const dx = moveEvent.clientX - startX.current;
+        const deltaValue =
+          dx * (step || DEFAULT_STEP) * (sensitivity || DEFAULT_SENSITIVITY);
+        let next = startValue.current + deltaValue;
+        if (typeof min === "number") next = Math.max(min, next);
+        if (typeof max === "number") next = Math.min(max, next);
+        setValue(next);
+      });
     };
 
     const handleUp = () => {

@@ -72,6 +72,21 @@ function throttle<T extends (...args: any[]) => void>(
   };
 }
 
+function throttleWithRaf<T extends (...args: any[]) => void>(fn: T): T {
+  let ticking = false;
+  let lastArgs: Parameters<T> | null = null;
+  return function (this: unknown, ...args: Parameters<T>) {
+    lastArgs = args;
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(() => {
+        if (lastArgs) fn(...lastArgs);
+        ticking = false;
+      });
+    }
+  } as T;
+}
+
 function formatDurationDisplay(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -107,6 +122,7 @@ function roundToDecimals(value: number, decimals: number = 3): number {
 export {
   debounce,
   throttle,
+  throttleWithRaf,
   formatDurationDisplay,
   formatTime,
   roundToDecimals,

@@ -1,7 +1,5 @@
 import type { AspectRatio } from "@/utils/aspect-ratios";
-import { KeyframeData } from "./keyframe";
-
-export type Variant = "letterbox" | "stretch" | "crop";
+import type { KeyframeData } from "@/utils/keyframe";
 
 export interface VideoPreviewBaseProps {
   baseAspect: AspectRatio;

@@ -76,7 +76,6 @@ const Timeline: React.FC<TimelineProps> = ({
   });
 
   const [showTooltip, setShowTooltip] = useState(false);
-  const [activeHandle, setActiveHandle] = useState<Dir | null>(null);
 
   const pxPerSecond = pxPerMs * 1000; // in px
   const maxContentWidth = duration * pxPerMs;
@@ -162,7 +161,6 @@ const Timeline: React.FC<TimelineProps> = ({
       e.currentTarget.setPointerCapture(e.pointerId);
       let isDragging = true;
       setShowTooltip(true);
-      setActiveHandle(handleType);
 
       startAutoScroll(scrollEl, (scrollDelta) => {
         const { canScrollLeft, canScrollRight } = getScrollState(scrollEl);
@@ -209,13 +207,13 @@ const Timeline: React.FC<TimelineProps> = ({
             getScrollState(scrollEl);
 
           const mouseX = ev.clientX - scrollRect.left;
-          const needsLeft = mouseX <= EDGE_THRESHOLD && canScrollLeft;
-          const needsRight =
+          const needsLeftScroll = mouseX <= EDGE_THRESHOLD && canScrollLeft;
+          const needsRightScroll =
             mouseX >= containerWidth - EDGE_THRESHOLD && canScrollRight;
 
-          if (needsLeft || needsRight) handleAutoScroll(ev);
+          if (needsLeftScroll || needsRightScroll) handleAutoScroll(ev);
 
-          if (!needsLeft && !needsRight) {
+          if (!needsLeftScroll && !needsRightScroll) {
             const mouseXAbs = ev.clientX - timelineRect.left;
             const newX = Math.max(0, Math.min(mouseXAbs, timelineRect.width));
             const newTime = pxToMs(newX, pxPerMs);
@@ -245,7 +243,6 @@ const Timeline: React.FC<TimelineProps> = ({
         isDragging = false;
         stopAutoScroll();
         setShowTooltip(false);
-        setActiveHandle(null);
 
         if (rafIdRef.current) {
           cancelAnimationFrame(rafIdRef.current);
@@ -305,7 +302,7 @@ const Timeline: React.FC<TimelineProps> = ({
             <div className="absolute inset-0 rounded bg-surface-tertiary" />
             <div
               ref={blockRef}
-              className="absolute inset-0 rounded-md border border-default overflow-hidden shadow-inner"
+              className="absolute h-full rounded-md border border-default overflow-hidden shadow-inner focus:outline-none focus-visible:border-2 focus-visible:border-primary"
             >
               <div
                 ref={stripRef}
@@ -318,17 +315,21 @@ const Timeline: React.FC<TimelineProps> = ({
             <Keyframe.Marker
               key={kf.id}
               keyframeId={kf.id}
-              timelineRef={timelineRef!}
+              scrollRef={scrollContainerRef!}
               pxPerMs={pxPerMs}
               edgeThreshold={EDGE_THRESHOLD}
+              trimData={{
+                trimStart: trimValuesRef.current.start,
+                trimEnd: trimValuesRef.current.end,
+                timelineOffset: 0,
+              }}
             />
           ))}
 
           <div
             ref={leftHandleRef}
             className={cn(
-              "absolute w-(--width) h-full cursor-ew-resize z-20 top-0 left-0",
-              activeHandle === "left" ? "scale-110" : "hover:scale-105"
+              "absolute w-(--width) h-full cursor-ew-resize z-20 top-0 left-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "left")}
             style={{ "--width": `${HANDLE_WIDTH}px` } as React.CSSProperties}
@@ -342,8 +343,7 @@ const Timeline: React.FC<TimelineProps> = ({
           <div
             ref={rightHandleRef}
             className={cn(
-              "absolute w-(--width) h-full cursor-ew-resize top-0 z-20 right-0",
-              activeHandle === "right" ? "scale-110" : "hover:scale-105"
+              "absolute w-(--width) h-full cursor-ew-resize top-0 z-20 right-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "right")}
             style={{ "--width": `${HANDLE_WIDTH}px` } as React.CSSProperties}

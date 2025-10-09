@@ -1,60 +1,240 @@
-import React, { useMemo, isValidElement } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import type {
-  VideoPreviewProps,
-  VideoPreviewStretchCropProps,
-} from "@/types/preview";
-import { useKeyframeAnimation } from "@/hooks/app/use-keyframe-animation";
-import { calculateAspectRatioScale } from "@/utils/video";
-import { ASPECT_RATIOS } from "@/utils/aspect-ratios";
+import { ASPECT_RATIOS, AspectRatio } from "@/utils/aspect-ratios";
+import type { KeyframeData } from "@/utils/keyframe";
+import { usePlaybackClock } from "@/hooks/app/use-playback-clock";
+import {
+  useInterpolatedTransform,
+  InterpolatedResult,
+} from "@/hooks/app/use-interpolated-transform";
+import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { getElementRef } from "@/lib/get-element-ref";
+import { CanvasVideoRenderer } from "./canvas-video-renderer";
+import logger from "@/utils/logger";
+import type { Variant } from "@/utils/scale-range";
+
+export type PreviewRenderContext = {
+  source: React.ReactElement<
+    React.VideoHTMLAttributes<HTMLVideoElement> & {
+      ref?: React.Ref<HTMLVideoElement>;
+    }
+  >;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  transform: InterpolatedResult;
+  time: number;
+  duration: number | null;
+  playing: boolean;
+  play: () => void;
+  pause: () => void;
+  toggle: () => void;
+  setTime: (t: number) => void;
+  variant: Variant;
+  baseAspect: AspectRatio;
+  targetAspect: AspectRatio;
+};
+
+export interface VideoPreviewProps {
+  source: React.ReactElement<
+    React.VideoHTMLAttributes<HTMLVideoElement> & {
+      ref?: React.Ref<HTMLVideoElement>;
+    }
+  >;
+  baseAspect: AspectRatio;
+  targetAspect: AspectRatio;
+  variant: Variant;
+  keyframes?: KeyframeData[];
+
+  time?: number | null;
+  onTimeChange?: (t: number) => void;
+
+  defaultPlaying: boolean;
+  playing?: boolean;
+  onPlayingChange?: (p: boolean) => void;
+
+  playbackRate?: number;
+  loop?: boolean;
+
+  children?: (context: PreviewRenderContext) => React.ReactNode;
+  className?: string;
+}
 
 export function VideoPreview(props: VideoPreviewProps) {
-  const { baseAspect, targetAspect, children, variant, className } = props;
+  const {
+    source,
+    baseAspect,
+    targetAspect,
+    variant,
+    keyframes,
+    time: externalTime = null,
+    onTimeChange,
+    defaultPlaying = false,
+    playing: externalPlaying = false,
+    onPlayingChange,
+    playbackRate = 1,
+    loop = false,
+    children,
+    className,
+  } = props;
 
-  if (!isValidElement(children) || children.type !== "video") return null;
+  if (
+    !React.isValidElement(source) ||
+    typeof source.type !== "string" ||
+    source.type !== "video"
+  ) {
+    logger.warn("VideoPreview: `source` must be a <video> React element.");
+    return null;
+  }
 
-  const { scale } = useMemo(
-    () => calculateAspectRatioScale(baseAspect, targetAspect),
-    [baseAspect, targetAspect]
+  const duration = useMemo<number | null>(() => {
+    if (!keyframes || keyframes.length === 0) return null;
+    return Math.max(...keyframes.map((k) => k.time));
+  }, [keyframes]);
+
+  const { time, setTime, playing, play, pause, toggle } = usePlaybackClock({
+    externalTime,
+    defaultTime: 0,
+    externalPlaying,
+    defaultPlaying,
+    playbackRate,
+    duration,
+    loop,
+    onTimeChange,
+    onPlayingChange,
+  });
+
+  const transform = useInterpolatedTransform(
+    keyframes,
+    time,
+    variant,
+    baseAspect,
+    targetAspect
   );
 
-  const animationName =
-    variant !== "letterbox"
-      ? useKeyframeAnimation(
-          (props as VideoPreviewStretchCropProps).keyframes,
-          variant
-        )
-      : undefined;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const clonedVideoElement = useMemo(() => {
+    const composedRef = useComposedRefs(videoRef, getElementRef(source));
+
+    return React.cloneElement(source, {
+      ref: composedRef,
+      muted: source.props.muted ?? true,
+      preload: source.props.preload ?? "auto",
+      playsInline: source.props.playsInline ?? true,
+    });
+  }, [source, videoRef]);
+
+  // ensure media element seeks to preview time (helps Canvas renderer to sample frames)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      // only seek when difference is significant to avoid thrash
+      const prev = v.currentTime || 0;
+      if (Math.abs(prev - time) > 0.05) {
+        if (v.readyState >= 2) {
+          v.currentTime = Math.max(0, Math.min(v.duration || Infinity, time));
+        } else {
+          const onLoaded = () => {
+            try {
+              v.currentTime = Math.max(
+                0,
+                Math.min(v.duration || Infinity, time)
+              );
+            } catch {
+              // ignore
+            }
+            v.removeEventListener("loadedmetadata", onLoaded);
+          };
+          v.addEventListener("loadedmetadata", onLoaded);
+        }
+      }
+    } catch {
+      // ignore seek errors (some origins/browsers disallow)
+    }
+  }, [time]);
+
+  // sync playback state to the underlying media element
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      video.playbackRate = playbackRate;
+      if (playing) {
+        void video.play().catch(() => {
+          /* autoplay blocked */
+        });
+      } else {
+        video.pause();
+      }
+    } catch {
+      // ignore
+    }
+  }, [playing, playbackRate]);
+
+  const context: PreviewRenderContext = useMemo(
+    () => ({
+      source,
+      videoRef,
+      transform,
+      time,
+      duration,
+      playing,
+      play,
+      pause,
+      toggle,
+      setTime,
+      variant,
+      baseAspect,
+      targetAspect,
+    }),
+    [
+      clonedVideoElement,
+      videoRef,
+      transform,
+      time,
+      duration,
+      playing,
+      play,
+      pause,
+      toggle,
+      setTime,
+      variant,
+      baseAspect,
+      targetAspect,
+    ]
+  );
+
+  const isChildRendererElement = React.isValidElement(children);
+  const isChildCanvasRenderer =
+    isChildRendererElement && children.type === CanvasVideoRenderer;
 
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center overflow-hidden rounded-2xl bg-black",
+        "relative overflow-hidden rounded-3xl shadow-md w-full",
         className
       )}
-      style={{ aspectRatio: `${ASPECT_RATIOS[targetAspect]}` }}
+      style={{ aspectRatio: ASPECT_RATIOS[targetAspect] }}
     >
-      {React.cloneElement(children, {
-        className: cn(
-          "object-cover transition-transform duration-300",
-          children.props.className
-        ),
-        style: {
-          ...(variant === "stretch"
-            ? { transform: `scale(${scale})` }
-            : variant === "crop"
-            ? { transform: `scale(${Math.max(1, scale)})` }
-            : { objectFit: "contain" as const }),
-          ...(animationName && variant !== "letterbox"
-            ? {
-                animation: `${animationName} ${(
-                  (props as VideoPreviewStretchCropProps).keyframes?.at(-1)
-                    ?.time || 0
-                ).toFixed(2)}s linear infinite`,
-              }
-            : {}),
-        } as React.CSSProperties,
-      })}
+      <div style={{ position: "absolute", inset: 0 }}>
+        {typeof children === "function"
+          ? (children as (c: PreviewRenderContext) => React.ReactNode)(context)
+          : null}
+      </div>
+
+      {isChildCanvasRenderer && React.isValidElement(children)
+        ? React.cloneElement(clonedVideoElement, {
+            style: {
+              position: "absolute",
+              width: 1,
+              height: 1,
+              opacity: 0,
+              pointerEvents: "none",
+            },
+          })
+        : null}
     </div>
   );
 }
+
+export default VideoPreview;

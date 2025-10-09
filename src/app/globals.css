@@ -282,6 +282,32 @@
 
   --animate-box-enter: box-enter 0.2s ease-out forwards;
   --animate-box-exit: box-exit 0.15s ease-in forwards;
+
+  @keyframes stack-in {
+    0% {
+      opacity: 0;
+      transform: translateY(10%) scale(1.03);
+      filter: blur(6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes stack-out {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-10%) scale(1.03);
+      filter: blur(6px);
+    }
+  }
 }
 
 html {

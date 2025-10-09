@@ -12,6 +12,9 @@ import { TOOLTIP_OFFSET_Y, TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import type { AnimationState } from "@/hooks/use-animate-presence";
 import type { Color } from "./color-palette";
+import { TrimData } from "@/types/app";
+import { getScrollState } from "@/utils/timeline-utils";
+import { HitArea } from "./hit-area";
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -153,21 +156,23 @@ KeyframeRoot.displayName = "Keyframe.Root";
 interface KeyframeMarkerProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframeId: string;
   color?: Color;
-  timelineRef: React.RefObject<HTMLDivElement | null>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   pxPerMs: number;
   edgeThreshold?: number;
+  trimData?: TrimData;
 }
 
 const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
   (
     {
       keyframeId,
-      color = "#22c55e",
+      color,
       className,
       style,
-      timelineRef,
+      scrollRef,
       pxPerMs,
       edgeThreshold = 50,
+      trimData,
       ...props
     },
     forwardedRef
@@ -181,13 +186,23 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const markerRef = React.useRef<HTMLDivElement>(null);
     const tooltipRef = React.useRef<HTMLDivElement>(null);
     const composedRef = useComposedRefs(forwardedRef, markerRef);
-    const scrollEl = timelineRef?.current;
+    const scrollEl = scrollRef?.current;
 
     const isDragging = React.useRef(false);
     const startX = React.useRef(0);
     const startTime = React.useRef(0);
     const rafId = React.useRef(0);
     const moved = React.useRef(false);
+
+    const lastTooltipState = React.useRef<{
+      x: number;
+      y: number;
+      text: string;
+    }>({
+      x: 0,
+      y: 0,
+      text: "",
+    });
 
     const [visible, setVisible] = React.useState(false);
 
@@ -199,120 +214,148 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       }
     );
 
-    const updateTooltipPosition = React.useCallback(
-      (clientX: number, displayTime: number) => {
+    const updateTooltip = React.useCallback(
+      (markerX: number, displayTime: number) => {
         const tooltip = tooltipRef.current;
-        const container = scrollEl;
-        if (!tooltip || !container) return;
+        const scrollContainer = scrollEl;
+        if (!tooltip || !scrollContainer) return;
 
-        const rect = container.getBoundingClientRect();
-        const relativeX = clientX - rect.left;
+        const rect = scrollContainer.getBoundingClientRect();
+
+        let relativeX = markerX;
+
         const clampedX = Math.min(
           rect.width - edgeThreshold,
           Math.max(edgeThreshold, relativeX)
         );
-        tooltip.style.transform = `translate3d(${rect.left + clampedX}px, ${
-          rect.top - TOOLTIP_OFFSET_Y
-        }px, 0)`;
-        tooltip.textContent = `${displayTime.toFixed(2)}s`;
+
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+
+        const x = scrollX + rect.left + clampedX;
+        const y = scrollY + rect.top - TOOLTIP_OFFSET_Y;
+        const text = `${displayTime.toFixed(2)}s`;
+
+        tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        tooltip.textContent = text;
+
+        lastTooltipState.current = { x, y, text };
       },
-      []
+      [scrollEl]
     );
 
     const handlePointerDown = React.useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         if (!keyframe || !scrollEl) return;
+
         const marker = markerRef.current;
         if (!marker) return;
 
         marker.setPointerCapture(e.pointerId);
+
         isDragging.current = true;
         moved.current = false;
         startX.current = e.clientX;
         startTime.current = keyframe.time;
-        setCurrentKeyframeId(keyframeId);
+
         setVisible(true);
 
-        updateTooltipPosition(e.clientX, keyframe.time / 1000);
+        updateTooltip(startTime.current * pxPerMs, keyframe.time / 1000);
+
         startAutoScroll(scrollEl, (scrollDelta) => {
           const el = markerRef.current;
           const container = scrollEl;
-          const currentKeyframe = keyframe;
+          if (!isDragging.current || !el || !container) return;
 
-          if (!isDragging.current || !el || !container || !currentKeyframe)
-            return;
+          const { canScrollLeft, canScrollRight } = getScrollState(container);
+          const { scrollLeft } = container;
 
-          const rect = container.getBoundingClientRect();
-          const scrollLeft = container.scrollLeft;
-          const maxScroll = container.scrollWidth - rect.width;
+          const isLeft = scrollDelta < 0;
+          const isRight = scrollDelta > 0;
 
-          if (
-            (scrollDelta < 0 && scrollLeft <= 0) ||
-            (scrollDelta > 0 && scrollLeft >= maxScroll)
-          ) {
-            return;
-          }
+          if ((isLeft && canScrollLeft) || (isRight && canScrollRight)) return;
 
           const newTime = Math.max(
             0,
             startTime.current + scrollDelta / pxPerMs
           );
-          const newLeftPx = newTime * pxPerMs;
 
-          if (newLeftPx < 0 || newLeftPx > container.scrollWidth) return;
+          let newLeftPx = newTime * pxPerMs;
+
+          newLeftPx = Math.max(0, Math.min(newLeftPx, container.scrollWidth));
 
           el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
 
-          const newTimeSec = newTime / 1000;
-          updateTooltipPosition(rect.left + newLeftPx - scrollLeft, newTimeSec);
-          updateKeyframe(keyframeId, { time: newTime });
+          updateTooltip(newLeftPx - scrollLeft, newTime / 1000);
         });
 
-        const onPointerMove = (ev: PointerEvent) => {
+        const onPointerMove = (moveEvent: PointerEvent) => {
           if (!isDragging.current) return;
+
           cancelAnimationFrame(rafId.current);
           rafId.current = requestAnimationFrame(() => {
-            const rect = scrollEl.getBoundingClientRect();
-            const mouseX = ev.clientX - rect.left;
-            const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
+            const container = scrollEl;
+            if (!container) return;
 
-            const needsLeft = mouseX <= edgeThreshold && scrollLeft > 0;
-            const needsRight =
-              mouseX >= clientWidth - edgeThreshold &&
-              scrollLeft + clientWidth < scrollWidth;
+            const rect = container.getBoundingClientRect();
+            const { scrollLeft } = container;
 
-            if (needsLeft || needsRight) handleAutoScroll(ev);
+            const { containerWidth, canScrollLeft, canScrollRight } =
+              getScrollState(container);
 
-            const deltaPx = ev.clientX - startX.current;
-            const newLeftPx =
-              startTime.current * pxPerMs + deltaPx + scrollLeft;
-            const el = markerRef.current;
-            if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
-            moved.current = true;
+            const mouseX = moveEvent.clientX - rect.left;
 
-            const newTimeSec = Math.max(
-              0,
-              (startTime.current + deltaPx / pxPerMs) / 1000
-            );
-            updateTooltipPosition(ev.clientX, newTimeSec);
+            const needsLeftScroll = mouseX <= edgeThreshold && canScrollLeft;
+            const needsRightScroll =
+              mouseX >= containerWidth - edgeThreshold && canScrollRight;
+
+            const shouldControlMarker = !needsLeftScroll && !needsRightScroll;
+
+            if (needsLeftScroll || needsRightScroll) {
+              handleAutoScroll(moveEvent);
+            }
+
+            if (shouldControlMarker) {
+              const deltaPx = moveEvent.clientX - startX.current;
+              let newLeftPx =
+                startTime.current * pxPerMs + deltaPx + scrollLeft;
+
+              const maxLeftPx = container.scrollWidth;
+              newLeftPx = Math.max(0, Math.min(newLeftPx, maxLeftPx));
+
+              const el = markerRef.current;
+              if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
+
+              moved.current = true;
+
+              const newTimeSec = Math.max(
+                0,
+                (startTime.current + deltaPx / pxPerMs) / 1000
+              );
+              updateTooltip(newLeftPx - scrollLeft, newTimeSec);
+            }
           });
         };
 
-        const onPointerUp = (ev: PointerEvent) => {
+        const onPointerUp = (upEvent: PointerEvent) => {
           if (!isDragging.current) return;
+
           isDragging.current = false;
           cancelAnimationFrame(rafId.current);
           stopAutoScroll();
           setVisible(false);
-          marker.releasePointerCapture(e.pointerId);
 
-          if (!moved.current) return;
-          const deltaPx = ev.clientX - startX.current;
-          const newTime = Math.max(0, startTime.current + deltaPx / pxPerMs);
-          updateKeyframe(keyframeId, { time: newTime });
+          const el = markerRef.current;
+          if (el) el.releasePointerCapture(upEvent.pointerId);
 
           window.removeEventListener("pointermove", onPointerMove);
           window.removeEventListener("pointerup", onPointerUp);
+
+          if (!moved.current) return;
+
+          const deltaPx = upEvent.clientX - startX.current;
+          const newTime = Math.max(0, startTime.current + deltaPx / pxPerMs);
+          updateKeyframe(keyframeId, { time: newTime });
         };
 
         window.addEventListener("pointermove", onPointerMove);
@@ -326,8 +369,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         startAutoScroll,
         stopAutoScroll,
         handleAutoScroll,
-        setCurrentKeyframeId,
-        updateTooltipPosition,
+        updateTooltip,
         updateKeyframe,
       ]
     );
@@ -364,20 +406,25 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           onClick={handleClick}
           {...props}
         >
-          <div
-            className="w-0.5 h-full transition-all group-hover:w-1 bg-(--color)"
-            style={{ "--color": resolvedColor } as React.CSSProperties}
-          />
-          <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-(--color) border border-surface-primary shadow-lg hover:scale-110 transition-transform"
-            style={{ "--color": resolvedColor } as React.CSSProperties}
-          />
+          <HitArea variant="x">
+            <div className="relative h-full">
+              <div
+                className="w-0.5 h-full transition-all group-hover:w-1 bg-(--color)"
+                style={{ "--color": resolvedColor } as React.CSSProperties}
+              />
+              <div
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-(--color) border border-surface-primary shadow-lg hover:scale-110 transition-transform"
+                style={{ "--color": resolvedColor } as React.CSSProperties}
+              />
+            </div>
+          </HitArea>
         </div>
 
         <TimelineTooltip
           ref={tooltipRef}
+          tooltipState={lastTooltipState.current}
           visible={visible}
-          containerRef={timelineRef}
+          container={scrollEl}
         />
       </>
     );
@@ -619,7 +666,7 @@ const KeyframeBoxHeader = React.forwardRef<
       ref={composedRefs}
       onPointerDown={handlePointerDown}
       className={cn(
-        "flex items-center justify-between px-4 py-2 w-full border-b border-subtle bg-surface-secondary rounded-t-3xl cursor-move",
+        "flex items-center justify-between pl-4 pr-2 py-2 w-full border-b border-subtle bg-surface-secondary rounded-t-3xl cursor-move",
         className
       )}
       {...props}
@@ -643,7 +690,6 @@ const KeyframeBoxClose = React.forwardRef<
   HTMLButtonElement,
   KeyframeBoxCloseProps
 >((props, forwardedRef) => {
-  const { setCurrentKeyframeId } = useKeyframeContext();
   const { handleClose } = useKeyframeBoxContext();
 
   return (
