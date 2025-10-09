@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import type { Variant } from "@/utils/scale-range";
+import { useLatestValue } from "@/hooks/use-latest-value";
 
 interface CanvasVideoRendererProps {
   videoElementRef: React.RefObject<HTMLVideoElement | null>;
@@ -20,11 +21,7 @@ export function CanvasVideoRenderer({
   className,
 }: CanvasVideoRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const transformRef = useRef<InterpolatedResult>(transformData);
-
-  useEffect(() => {
-    transformRef.current = transformData;
-  }, [transformData]);
+  const transformRef = useLatestValue<InterpolatedResult>(transformData);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -107,7 +104,7 @@ export function CanvasVideoRenderer({
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [videoElementRef, width, height, variant]);
+  }, [width, height, variant]);
 
   return <canvas ref={canvasRef} className={className} />;
 }
