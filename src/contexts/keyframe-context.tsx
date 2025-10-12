@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useMemo, useState, ReactNode } from "react";
-import type { AspectRatio, Transform } from "@/components/boundary-box";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 import { type StoreApi, useContextStore } from "react-shallow-store";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import type { Transform } from "@/utils/keyframe";
 
 type KeyframeContextValue = {
   boundaryAspectRatio: AspectRatio | null;

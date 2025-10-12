@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { KeyframeData } from "@/types/keyframe";
+import type { KeyframeData } from "@/utils/keyframe";
 
 export function useKeyframeAnimation(
   keyframes?: KeyframeData[],

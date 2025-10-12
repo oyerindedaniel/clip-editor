@@ -7,6 +7,7 @@ import logger from "@/utils/logger";
 interface AnimatePresenceOptions {
   initial?: boolean;
   timeout?: number; // Timeout for animation in ms
+  forceMount?: boolean;
 }
 
 export type AnimationState = "idle" | "entering" | "exiting";
@@ -16,7 +17,7 @@ export function useAnimatePresence(
   onAnimate: (presence: boolean) => Promise<void>,
   options: AnimatePresenceOptions = {}
 ): boolean {
-  const { initial = true, timeout = 10000 } = options;
+  const { initial = true, forceMount = false, timeout = 10000 } = options;
 
   const [internalPresence, setInternalPresence] =
     useState<boolean>(externalPresence);
@@ -53,7 +54,11 @@ export function useAnimatePresence(
         ]);
 
         if (currentAnimationIdRef.current === animationId) {
-          setInternalPresence(presence);
+          if (!forceMount) {
+            setInternalPresence(presence);
+          } else {
+            if (presence) setInternalPresence(true);
+          }
         }
       } catch (error) {
         // You may see this warning in edge cases—for example, when an animation is
@@ -62,7 +67,11 @@ export function useAnimatePresence(
         // once the window regains focus.
         logger.warn("Animation failed:", error);
         if (currentAnimationIdRef.current === animationId) {
-          setInternalPresence(presence);
+          if (!forceMount) {
+            setInternalPresence(presence);
+          } else {
+            if (presence) setInternalPresence(true);
+          }
         }
       } finally {
         clearAnimationTimeout();
@@ -89,10 +98,11 @@ export function useAnimatePresence(
   }, [externalPresence, initial, handleAnimation, clearAnimationTimeout]);
 
   return useMemo(() => {
+    if (forceMount) return true;
     return externalPresence
       ? internalPresence && externalPresence
       : internalPresence || externalPresence;
-  }, [externalPresence, internalPresence]);
+  }, [externalPresence, internalPresence, forceMount]);
 }
 
 export function getState(animationState?: string) {

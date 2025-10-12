@@ -4,6 +4,8 @@ import { useVideoTransformStyle } from "@/hooks/app/use-video-transform-style";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import { getElementRef } from "@/lib/get-element-ref";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
+import type { Variant } from "@/utils/scale-range";
+import { DOM_RENDERER_SYMBOL, TaggedRendererComponent } from "@/utils/renderer";
 
 interface DOMVideoRendererProps {
   videoElement: React.ReactElement<
@@ -13,17 +15,17 @@ interface DOMVideoRendererProps {
   >;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   transformData: InterpolatedResult;
-  variant: "crop" | "stretch" | "letterbox";
+  variant: Variant;
   className?: string;
 }
 
-export function DOMVideoRenderer({
+const DOMVideoRenderer: TaggedRendererComponent<DOMVideoRendererProps> = ({
   videoElement,
   videoRef,
   transformData,
   variant,
   className,
-}: DOMVideoRendererProps) {
+}) => {
   const style = useVideoTransformStyle(transformData, variant);
 
   const cloned = useMemo(() => {
@@ -56,4 +58,9 @@ export function DOMVideoRenderer({
       {cloned}
     </div>
   );
-}
+};
+
+DOMVideoRenderer.displayName = "DOMVideoRenderer";
+DOMVideoRenderer._rendererType = DOM_RENDERER_SYMBOL;
+
+export default DOMVideoRenderer;

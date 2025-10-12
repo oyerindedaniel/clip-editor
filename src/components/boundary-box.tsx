@@ -18,6 +18,7 @@ import {
   MIN_OVERLAY_WIDTH,
 } from "@/utils/aspect-ratios";
 import type { Transform } from "@/utils/keyframe";
+import { useElementSize } from "@/hooks/use-element-size";
 
 interface BoundaryBoxContextValue {
   screenSize: ScreenSize;
@@ -118,13 +119,9 @@ export function BoundaryBoxRoot({
     onChange: onVisibleChange,
   });
 
-  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const { ref: containerRef, sizeRef: containerSizeRef } =
+    useElementSize<HTMLDivElement>();
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
-
-  const containerSizeRef = React.useRef<{ width: number; height: number }>({
-    width: 0,
-    height: 0,
-  });
 
   const stableSetTransform = useStableHandler(setTransform);
 
@@ -135,28 +132,6 @@ export function BoundaryBoxRoot({
       }, 500),
     [stableSetTransform]
   );
-
-  React.useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-
-      const { width, height } = entry.contentRect;
-      const prev = containerSizeRef.current;
-
-      if (width !== prev.width || height !== prev.height) {
-        containerSizeRef.current.width = width;
-        containerSizeRef.current.height = height;
-      }
-    });
-
-    observer.observe(container);
-
-    return () => observer.disconnect();
-  }, []);
 
   // Purpose: Receives position updates from the ScrubbableInput component
   const updatePosition = React.useCallback(

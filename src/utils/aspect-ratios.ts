@@ -16,3 +16,11 @@ export const ASPECT_RATIOS: Record<AspectRatio, number> = {
   "3:4": 3 / 4,
   "21:9": 21 / 9,
 };
+
+export function calculateHeight(params: {
+  aspectRatio: AspectRatio;
+  width: number;
+}): number {
+  const ratio = ASPECT_RATIOS[params.aspectRatio];
+  return params.width / ratio;
+}

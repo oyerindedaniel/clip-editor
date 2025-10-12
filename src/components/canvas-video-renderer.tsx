@@ -1,27 +1,40 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import type { Variant } from "@/utils/scale-range";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import type { Color } from "./color-palette";
+import {
+  CANVAS_RENDERER_SYMBOL,
+  TaggedRendererComponent,
+} from "@/utils/renderer";
 
-interface CanvasVideoRendererProps {
-  videoElementRef: React.RefObject<HTMLVideoElement | null>;
+export interface CanvasVideoRendererProps {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   transformData: InterpolatedResult;
   width: number;
   height: number;
   variant: Variant;
   className?: string;
+  color?: Color;
+  shouldPaint?: boolean;
 }
 
-export function CanvasVideoRenderer({
-  videoElementRef,
+const CanvasVideoRenderer: TaggedRendererComponent<
+  CanvasVideoRendererProps
+> = ({
+  videoRef,
   transformData,
   width,
   height,
   variant,
+  color,
   className,
-}: CanvasVideoRendererProps) {
+  shouldPaint = true,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const transformRef = useLatestValue<InterpolatedResult>(transformData);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,31 +49,41 @@ export function CanvasVideoRenderer({
     canvas.style.height = `${height}px`;
     ctx.scale(dpr, dpr);
 
-    let rafId: number | null = null;
+    if (!shouldPaint) {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      return;
+    }
 
     const draw = () => {
-      const v = videoElementRef.current;
-      if (!v || v.readyState < 2) {
-        rafId = requestAnimationFrame(draw);
+      const video = videoRef.current;
+
+      if (!video || video.readyState < 2) {
+        console.log("--video", video, video?.readyState);
+        rafRef.current = requestAnimationFrame(draw);
         return;
       }
+
+      console.log("after");
 
       ctx.clearRect(0, 0, width, height);
       const t = transformRef.current;
 
+      // Stretch
       if (variant === "stretch") {
         ctx.save();
         const tx = (t.x - 0.5) * width;
         const ty = (t.y - 0.5) * height;
         ctx.translate(width / 2 + tx, height / 2 + ty);
         ctx.scale(t.scale, t.scale);
-        ctx.drawImage(v, -width / 2, -height / 2, width, height);
+        ctx.drawImage(video, -width / 2, -height / 2, width, height);
         ctx.restore();
-      } else if (variant === "crop") {
-        const vw = v.videoWidth || v.clientWidth || width;
-        const vh = v.videoHeight || v.clientHeight || height;
+      }
+      // Crop
+      else if (variant === "crop") {
+        const vw = video.videoWidth || video.clientWidth || width;
+        const vh = video.videoHeight || video.clientHeight || height;
         if (vw === 0 || vh === 0) {
-          rafId = requestAnimationFrame(draw);
+          rafRef.current = requestAnimationFrame(draw);
           return;
         }
 
@@ -74,10 +97,12 @@ export function CanvasVideoRenderer({
         const centerY = t.y * vh;
         const sx = Math.min(Math.max(centerX - srcW / 2, 0), vw - srcW);
         const sy = Math.min(Math.max(centerY - srcH / 2, 0), vh - srcH);
-        ctx.drawImage(v, sx, sy, srcW, srcH, 0, 0, width, height);
-      } else {
-        const vw = v.videoWidth || v.clientWidth || width;
-        const vh = v.videoHeight || v.clientHeight || height;
+        ctx.drawImage(video, sx, sy, srcW, srcH, 0, 0, width, height);
+      }
+      // Fit
+      else {
+        const vw = video.videoWidth || video.clientWidth || width;
+        const vh = video.videoHeight || video.clientHeight || height;
         const srcAR = vw / vh;
         let destW = width;
         let destH = height;
@@ -92,19 +117,25 @@ export function CanvasVideoRenderer({
           destW = destH * srcAR;
           dx = (width - destW) / 2;
         }
-        ctx.fillStyle = "black";
+        ctx.fillStyle = color ?? "black";
         ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(v, 0, 0, vw, vh, dx, dy, destW, destH);
+        ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
       }
 
-      rafId = requestAnimationFrame(draw);
+      rafRef.current = requestAnimationFrame(draw);
     };
 
-    rafId = requestAnimationFrame(draw);
+    rafRef.current = requestAnimationFrame(draw);
+
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [width, height, variant]);
+  }, [shouldPaint, width, height, variant, color, transformRef, videoRef]);
 
-  return <canvas ref={canvasRef} className={className} />;
-}
+  return <canvas ref={canvasRef} className={cn("bg-red-800", className)} />;
+};
+
+CanvasVideoRenderer.displayName = "CanvasVideoRenderer";
+CanvasVideoRenderer._rendererType = CANVAS_RENDERER_SYMBOL;
+
+export default CanvasVideoRenderer;

@@ -159,7 +159,6 @@ interface KeyframeMarkerProps extends React.HTMLAttributes<HTMLDivElement> {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   pxPerMs: number;
   edgeThreshold?: number;
-  trimData?: TrimData;
 }
 
 const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
@@ -172,7 +171,6 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       scrollRef,
       pxPerMs,
       edgeThreshold = 50,
-      trimData,
       ...props
     },
     forwardedRef
@@ -232,7 +230,8 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
 
-        const x = scrollX + rect.left + clampedX;
+        const tooltipWidth = tooltip.offsetWidth;
+        const x = scrollX + rect.left + clampedX - tooltipWidth / 2;
         const y = scrollY + rect.top - TOOLTIP_OFFSET_Y;
         const text = `${displayTime.toFixed(2)}s`;
 

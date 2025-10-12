@@ -42,7 +42,13 @@ import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
 import EditorPanel from "./editor-panel";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, Film, Square } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Film,
+  Square,
+  Monitor,
+  Smartphone,
+} from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { KeyframeContext } from "@/contexts/keyframe-context";
 import { BoundaryBox } from "./boundary-box";
@@ -61,6 +67,13 @@ import { KEYFRAME_EASINGS } from "@/utils/keyframe";
 import { roundToDecimals } from "@/utils/app";
 import type { KeyframeEasing } from "@/utils/keyframe";
 import ColorPalette, { Color } from "./color-palette";
+import { useElementSize } from "@/hooks/use-element-size";
+import VideoPreview from "./video-preview";
+import CanvasVideoRenderer from "./canvas-video-renderer";
+import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
+import { LoaderIcon } from "@/icons/loader";
+import { cn } from "@/lib/utils";
+import { calculateHeight } from "@/utils/aspect-ratios";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -88,6 +101,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     close: closeExportNamingModal,
     open: openExportNamingModal,
   } = useDisclosure();
+
+  const { ref: videoRenderRef, sizeRef: canvasSizeRef } =
+    useElementSize<HTMLDivElement>();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
@@ -133,6 +149,22 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     boundaryTransform: state.boundaryTransform,
     setBoundaryTransform: state.setBoundaryTransform,
   }));
+
+  const {
+    refs,
+    classNames,
+    styles,
+    animating: isAnimatingStack,
+    toggle: toggleStack,
+    present,
+    parentClassName,
+    active,
+  } = useStackedTransition({
+    defaultActive: "dual",
+    keys: ["dual", "renderer"] as const,
+    duration: 650,
+    forceMount: true,
+  });
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -967,12 +999,82 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     </BoundaryBox>
                   </div>
 
-                  <DualVideoPlayer
-                    isPrimaryVideoLoaded={isVideoLoaded}
-                    primaryClip={{ ...clipData, url: originalPrimaryUrl }}
-                    secondaryClip={secondaryClip}
-                    duration={duration}
-                  />
+                  <div className="flex flex-col gap-2">
+                    {keyframes && !!keyframes.length && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={toggleStack}
+                        disabled={isAnimatingStack}
+                        className="flex items-center gap-2 self-end"
+                      >
+                        {isAnimatingStack ? (
+                          <LoaderIcon size={14} />
+                        ) : active === "dual" ? (
+                          <Monitor size={14} />
+                        ) : (
+                          <Smartphone size={14} />
+                        )}
+                        <span className="text-xs">
+                          {active === "dual" ? "Canvas View" : "Dual View"}
+                        </span>
+                      </Button>
+                    )}
+
+                    <div
+                      ref={videoRenderRef}
+                      className={cn("aspect-[9/16] w-[260px]", parentClassName)}
+                    >
+                      {present.dual && (
+                        <DualVideoPlayer
+                          ref={
+                            keyframes?.length
+                              ? (refs.dual as React.Ref<HTMLDivElement>)
+                              : null
+                          }
+                          isPrimaryVideoLoaded={isVideoLoaded}
+                          primaryClip={{ ...clipData, url: originalPrimaryUrl }}
+                          secondaryClip={secondaryClip}
+                          duration={duration}
+                          className={classNames.dual}
+                          style={styles.dual}
+                        />
+                      )}
+
+                      {present.renderer && (
+                        <VideoPreview
+                          ref={
+                            keyframes?.length
+                              ? (refs.renderer as React.Ref<HTMLDivElement>)
+                              : null
+                          }
+                          defaultPlaying={false}
+                          playing={active === "renderer"}
+                          source={<video src={primaryUrl} />}
+                          baseAspect="16:9"
+                          targetAspect="9:16"
+                          variant="crop"
+                          keyframes={keyframes}
+                          className={classNames.renderer}
+                          style={styles.renderer}
+                        >
+                          {({ transform, variant, videoRef }) => (
+                            <CanvasVideoRenderer
+                              shouldPaint={active === "renderer"}
+                              videoRef={videoRef}
+                              transformData={transform}
+                              variant={variant}
+                              width={canvasSizeRef.current.width}
+                              height={calculateHeight({
+                                aspectRatio: "9:16",
+                                width: canvasSizeRef.current.width,
+                              })}
+                            />
+                          )}
+                        </VideoPreview>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex-1 min-h-0">

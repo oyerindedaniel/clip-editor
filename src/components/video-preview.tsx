@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from "react";
+import React, { useMemo, useRef, useEffect, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeData } from "@/utils/keyframe";
@@ -9,9 +9,14 @@ import {
 } from "@/hooks/app/use-interpolated-transform";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { getElementRef } from "@/lib/get-element-ref";
-import { CanvasVideoRenderer } from "./canvas-video-renderer";
+import CanvasVideoRenderer from "./canvas-video-renderer";
 import logger from "@/utils/logger";
 import type { Variant } from "@/utils/scale-range";
+import {
+  CANVAS_RENDERER_SYMBOL,
+  getRendererType,
+  isRendererOfType,
+} from "@/utils/renderer";
 
 export type PreviewRenderContext = {
   source: React.ReactElement<
@@ -56,185 +61,200 @@ export interface VideoPreviewProps {
 
   children?: (context: PreviewRenderContext) => React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export function VideoPreview(props: VideoPreviewProps) {
-  const {
-    source,
-    baseAspect,
-    targetAspect,
-    variant,
-    keyframes,
-    time: externalTime = null,
-    onTimeChange,
-    defaultPlaying = false,
-    playing: externalPlaying = false,
-    onPlayingChange,
-    playbackRate = 1,
-    loop = false,
-    children,
-    className,
-  } = props;
+export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
+  (props, forwardedRef) => {
+    const {
+      source,
+      baseAspect,
+      targetAspect,
+      variant,
+      keyframes,
+      time: externalTime = null,
+      onTimeChange,
+      defaultPlaying = false,
+      playing: externalPlaying = false,
+      onPlayingChange,
+      playbackRate = 1,
+      loop = false,
+      children,
+      className,
+      style,
+    } = props;
 
-  if (
-    !React.isValidElement(source) ||
-    typeof source.type !== "string" ||
-    source.type !== "video"
-  ) {
-    logger.warn("VideoPreview: `source` must be a <video> React element.");
-    return null;
-  }
+    if (
+      !React.isValidElement(source) ||
+      typeof source.type !== "string" ||
+      source.type !== "video"
+    ) {
+      logger.warn("VideoPreview: `source` must be a <video> React element.");
+      return null;
+    }
 
-  const duration = useMemo<number | null>(() => {
-    if (!keyframes || keyframes.length === 0) return null;
-    return Math.max(...keyframes.map((k) => k.time));
-  }, [keyframes]);
+    const duration = useMemo<number | null>(() => {
+      if (!keyframes || keyframes.length === 0) return null;
+      return Math.max(...keyframes.map((k) => k.time));
+    }, [keyframes]);
 
-  const { time, setTime, playing, play, pause, toggle } = usePlaybackClock({
-    externalTime,
-    defaultTime: 0,
-    externalPlaying,
-    defaultPlaying,
-    playbackRate,
-    duration,
-    loop,
-    onTimeChange,
-    onPlayingChange,
-  });
+    const { time, setTime, playing, play, pause, toggle } = usePlaybackClock({
+      externalTime,
+      defaultTime: 0,
+      externalPlaying,
+      defaultPlaying,
+      playbackRate,
+      duration,
+      loop,
+      onTimeChange,
+      onPlayingChange,
+    });
 
-  const transform = useInterpolatedTransform(
-    keyframes,
-    time,
-    variant,
-    baseAspect,
-    targetAspect
-  );
+    const transform = useInterpolatedTransform(
+      keyframes,
+      time,
+      variant,
+      baseAspect,
+      targetAspect
+    );
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const clonedVideoElement = useMemo(() => {
     const composedRef = useComposedRefs(videoRef, getElementRef(source));
 
-    return React.cloneElement(source, {
-      ref: composedRef,
-      muted: source.props.muted ?? true,
-      preload: source.props.preload ?? "auto",
-      playsInline: source.props.playsInline ?? true,
-    });
-  }, [source, videoRef]);
+    const clonedVideoElement = useMemo(() => {
+      return React.cloneElement(source, {
+        ref: composedRef,
+        muted: source.props.muted ?? true,
+        preload: source.props.preload ?? "auto",
+        playsInline: source.props.playsInline ?? true,
+      });
+    }, [source, videoRef]);
 
-  // ensure media element seeks to preview time (helps Canvas renderer to sample frames)
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      // only seek when difference is significant to avoid thrash
-      const prev = v.currentTime || 0;
-      if (Math.abs(prev - time) > 0.05) {
-        if (v.readyState >= 2) {
-          v.currentTime = Math.max(0, Math.min(v.duration || Infinity, time));
-        } else {
-          const onLoaded = () => {
-            try {
-              v.currentTime = Math.max(
-                0,
-                Math.min(v.duration || Infinity, time)
-              );
-            } catch {
-              // ignore
-            }
-            v.removeEventListener("loadedmetadata", onLoaded);
-          };
-          v.addEventListener("loadedmetadata", onLoaded);
+    // ensure media element seeks to preview time (helps Canvas renderer to sample frames)
+    useEffect(() => {
+      const v = videoRef.current;
+      if (!v) return;
+      try {
+        // only seek when difference is significant to avoid thrash
+        const prev = v.currentTime || 0;
+        if (Math.abs(prev - time) > 0.05) {
+          if (v.readyState >= 2) {
+            v.currentTime = Math.max(0, Math.min(v.duration || Infinity, time));
+          } else {
+            const onLoaded = () => {
+              try {
+                v.currentTime = Math.max(
+                  0,
+                  Math.min(v.duration || Infinity, time)
+                );
+              } catch {
+                // ignore
+              }
+              v.removeEventListener("loadedmetadata", onLoaded);
+            };
+            v.addEventListener("loadedmetadata", onLoaded);
+          }
         }
+      } catch {
+        // ignore seek errors (some origins/browsers disallow)
       }
-    } catch {
-      // ignore seek errors (some origins/browsers disallow)
-    }
-  }, [time]);
+    }, [time]);
 
-  // sync playback state to the underlying media element
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    try {
-      video.playbackRate = playbackRate;
-      if (playing) {
-        void video.play().catch(() => {
-          /* autoplay blocked */
-        });
-      } else {
-        video.pause();
+    // sync playback state to the underlying media element
+    useEffect(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      try {
+        video.playbackRate = playbackRate;
+        if (playing) {
+          void video.play().catch(() => {
+            /* autoplay blocked */
+          });
+        } else {
+          video.pause();
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-  }, [playing, playbackRate]);
+    }, [playing, playbackRate]);
 
-  const context: PreviewRenderContext = useMemo(
-    () => ({
-      source,
-      videoRef,
-      transform,
-      time,
-      duration,
-      playing,
-      play,
-      pause,
-      toggle,
-      setTime,
-      variant,
-      baseAspect,
-      targetAspect,
-    }),
-    [
-      clonedVideoElement,
-      videoRef,
-      transform,
-      time,
-      duration,
-      playing,
-      play,
-      pause,
-      toggle,
-      setTime,
-      variant,
-      baseAspect,
-      targetAspect,
-    ]
-  );
+    const context: PreviewRenderContext = useMemo(
+      () => ({
+        source,
+        videoRef,
+        transform,
+        time,
+        duration,
+        playing,
+        play,
+        pause,
+        toggle,
+        setTime,
+        variant,
+        baseAspect,
+        targetAspect,
+      }),
+      [
+        clonedVideoElement,
+        videoRef,
+        transform,
+        time,
+        duration,
+        playing,
+        play,
+        pause,
+        toggle,
+        setTime,
+        variant,
+        baseAspect,
+        targetAspect,
+      ]
+    );
 
-  const isChildRendererElement = React.isValidElement(children);
-  const isChildCanvasRenderer =
-    isChildRendererElement && children.type === CanvasVideoRenderer;
+    const renderedChild = useMemo(() => {
+      if (typeof children === "function") {
+        return children(context);
+      }
+      return children;
+    }, [children, context]);
 
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-3xl shadow-md w-full",
-        className
-      )}
-      style={{ aspectRatio: ASPECT_RATIOS[targetAspect] }}
-    >
-      <div style={{ position: "absolute", inset: 0 }}>
-        {typeof children === "function"
-          ? (children as (c: PreviewRenderContext) => React.ReactNode)(context)
+    const rendererType = getRendererType(renderedChild);
+    const isChildCanvasRenderer = rendererType === CANVAS_RENDERER_SYMBOL;
+
+    console.log({ isChildCanvasRenderer });
+
+    return (
+      <div
+        ref={forwardedRef}
+        className={cn(
+          "relative overflow-hidden rounded-lg shadow-md w-full aspect-(--aspect-ratio)",
+          className
+        )}
+        style={
+          {
+            "--aspect-ratio": targetAspect.replace(":", "/"),
+            ...style,
+          } as React.CSSProperties
+        }
+      >
+        <div className="absolute inset-0">{renderedChild}</div>
+
+        {/* Hidden video element kept mounted as a frame source for CanvasVideoRenderer to read and paint from */}
+        {isChildCanvasRenderer
+          ? React.cloneElement(clonedVideoElement, {
+              style: {
+                position: "absolute",
+                width: 1,
+                height: 1,
+                opacity: 0,
+                pointerEvents: "none",
+              },
+            })
           : null}
       </div>
-
-      {isChildCanvasRenderer && React.isValidElement(children)
-        ? React.cloneElement(clonedVideoElement, {
-            style: {
-              position: "absolute",
-              width: 1,
-              height: 1,
-              opacity: 0,
-              pointerEvents: "none",
-            },
-          })
-        : null}
-    </div>
-  );
-}
+    );
+  }
+);
 
 export default VideoPreview;
