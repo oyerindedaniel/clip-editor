@@ -273,37 +273,37 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  useEffect(() => {
-    const handleGlobalMouseDown = (ev: MouseEvent) => {
-      const target = ev.target as Node | null;
-      if (!target) return;
+  // useEffect(() => {
+  //   const handleGlobalMouseDown = (ev: MouseEvent) => {
+  //     const target = ev.target as Node | null;
+  //     if (!target) return;
 
-      if (
-        target instanceof HTMLElement &&
-        target.closest("[data-overlay-inspector]")
-      ) {
-        return;
-      }
+  //     if (
+  //       target instanceof HTMLElement &&
+  //       target.closest("[data-overlay-inspector]")
+  //     ) {
+  //       return;
+  //     }
 
-      if (target instanceof HTMLElement && target.closest("[data-portal]")) {
-        return;
-      }
+  //     if (target instanceof HTMLElement && target.closest("[data-portal]")) {
+  //       return;
+  //     }
 
-      for (const element of textOverlayRefs.current.values()) {
-        if (element && element.contains(target)) return;
-      }
-      for (const element of imageOverlayRefs.current.values()) {
-        if (element && element.contains(target)) return;
-      }
+  //     for (const element of textOverlayRefs.current.values()) {
+  //       if (element && element.contains(target)) return;
+  //     }
+  //     for (const element of imageOverlayRefs.current.values()) {
+  //       if (element && element.contains(target)) return;
+  //     }
 
-      setSelectedOverlay(null);
-    };
+  //     setSelectedOverlay(null);
+  //   };
 
-    document.addEventListener("mousedown", handleGlobalMouseDown, true);
-    return () => {
-      document.removeEventListener("mousedown", handleGlobalMouseDown, true);
-    };
-  }, []);
+  //   document.addEventListener("mousedown", handleGlobalMouseDown, true);
+  //   return () => {
+  //     document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+  //   };
+  // }, []);
 
   const addTextOverlay = useCallback(
     (currentTime: number = 0, duration?: number) => {

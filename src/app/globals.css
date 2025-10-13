@@ -160,7 +160,7 @@
     cubic-bezier(0.22, 1, 0.36, 1) forwards;
   --animate-panel-enter-left: panel-slide-in-left 0.3s
     cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  --animate-panel-exit-right: panel-slide-out-right 0.3s
+  --animate-panel-exit-right: panel-slide-out-right 3s
     cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
   --animate-panel-exit-left: panel-slide-out-left 0.3s
     cubic-bezier(0.6, -0.28, 0.74, 0.05) forwards;
@@ -361,4 +361,13 @@ input[type="number"]::-webkit-outer-spin-button {
   appearance: none; /* Standard syntax */
   -webkit-appearance: none; /* Older browsers */
   margin: 0;
+}
+
+/* Hide scrollbars utility */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
 }

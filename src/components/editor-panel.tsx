@@ -11,13 +11,16 @@ import React, {
 import { createPortal } from "react-dom";
 import { Slot } from "@radix-ui/react-slot";
 import { X } from "lucide-react";
-import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
+import {
+  getState,
+  useAnimatePresence,
+  type AnimationState,
+} from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { useClientOnly } from "@/hooks/use-client-only";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
-import type { AnimationState } from "@/hooks/use-animate-presence";
 
 type EditorSide = "left" | "right";
 
@@ -118,16 +121,20 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
           return;
         }
 
+        console.log("---presence", presence);
+
         setAnimationState("exiting");
 
         const node = contentRef.current;
         if (!node) {
+          console.log("---node", node);
           setAnimationState("idle");
           resolve();
           return;
         }
 
         const onAnimationEnd = () => {
+          console.log("---onAnimationEnd", presence);
           setAnimationState("idle");
           node.removeEventListener("animationend", onAnimationEnd);
           node.removeEventListener("transitionend", onAnimationEnd);
@@ -384,6 +391,8 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     if (!shouldRender && !forceMount) return null;
 
     const state = getState(animationState);
+
+    console.log("---state", state);
 
     return (
       <>

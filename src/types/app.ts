@@ -171,7 +171,7 @@ export interface DualVideoClip {
 export type TrimData = Pick<
   DualVideoClip,
   "timelineOffset" | "trimStart" | "trimEnd"
->;
+>; // in ms
 
 /**
  * Information required to export a clip.

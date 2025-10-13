@@ -19,6 +19,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { KeyframeContext } from "@/contexts/keyframe-context";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -48,6 +49,15 @@ export function EditorRightPanel({
     (state) => ({
       addTextOverlay: state.addTextOverlay,
       addImageOverlay: state.addImageOverlay,
+    })
+  );
+
+  const { keyframes, setCurrentKeyframeId, setKeyframes } = useShallowSelector(
+    KeyframeContext,
+    (state) => ({
+      keyframes: state.keyframes,
+      setCurrentKeyframeId: state.setCurrentKeyframeId,
+      setKeyframes: state.setKeyframes,
     })
   );
 
@@ -192,6 +202,68 @@ export function EditorRightPanel({
                   onDelete={onAudioTrackDelete}
                 />
               ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="keyframes">
+          <AccordionTrigger>
+            <div className="flex items-center gap-2">
+              <Type size={14} />
+              <span>Keyframes</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2">
+              {keyframes && keyframes.length ? (
+                <div className="flex flex-col gap-1">
+                  {keyframes
+                    .slice()
+                    .sort((a, b) => a.time - b.time)
+                    .map((kf) => (
+                      <div
+                        key={kf.id}
+                        className="group relative flex items-center gap-3 w-full text-left px-3 h-10 rounded-3xl border bg-surface-secondary hover:bg-surface-hover border-subtle"
+                      >
+                        <button
+                          onClick={() => setCurrentKeyframeId(kf.id)}
+                          className="flex items-center gap-3 flex-1 min-w-0"
+                        >
+                          <span
+                            className="h-3 w-3 rounded-full border bg-(--color)"
+                            style={
+                              {
+                                "--color": kf.color || "#22c55e",
+                              } as React.CSSProperties
+                            }
+                          />
+                          <span className="text-xs font-medium tracking-tight text-foreground-default">
+                            {kf.time.toFixed(2)}s
+                          </span>
+                          <span className="ml-auto text-[10px] text-foreground-muted">
+                            {kf.id.replace(/^kf-/, "#")}
+                          </span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKeyframes((prev) =>
+                              prev.filter((x) => x.id !== kf.id)
+                            );
+                          }}
+                          aria-label="Remove keyframe"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm rounded-full h-6 px-2 py-0 text-[10px] leading-none shadow-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-xs text-foreground-muted">
+                  No keyframes yet.
+                </div>
+              )}
             </div>
           </AccordionContent>
         </AccordionItem>

@@ -6,13 +6,10 @@ import { getElementRef } from "@/lib/get-element-ref";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import type { Variant } from "@/utils/scale-range";
 import { DOM_RENDERER_SYMBOL, TaggedRendererComponent } from "@/utils/renderer";
+import type { Video } from "./video-preview";
 
 interface DOMVideoRendererProps {
-  videoElement: React.ReactElement<
-    React.VideoHTMLAttributes<HTMLVideoElement> & {
-      ref?: React.Ref<HTMLVideoElement>;
-    }
-  >;
+  video: Video;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   transformData: InterpolatedResult;
   variant: Variant;
@@ -20,7 +17,7 @@ interface DOMVideoRendererProps {
 }
 
 const DOMVideoRenderer: TaggedRendererComponent<DOMVideoRendererProps> = ({
-  videoElement,
+  video,
   videoRef,
   transformData,
   variant,
@@ -29,23 +26,23 @@ const DOMVideoRenderer: TaggedRendererComponent<DOMVideoRendererProps> = ({
   const style = useVideoTransformStyle(transformData, variant);
 
   const cloned = useMemo(() => {
-    const composedRef = useComposedRefs(videoRef, getElementRef(videoElement));
+    const composedRef = useComposedRefs(videoRef, getElementRef(video));
 
-    return React.cloneElement(videoElement, {
+    return React.cloneElement(video, {
       ref: composedRef,
       className: cn(
         "absolute inset-0 w-full h-full object-cover",
-        videoElement.props.className
+        video.props.className
       ),
       style: {
-        ...videoElement.props.style,
+        ...video.props.style,
         ...style,
       },
       controls: false,
       muted: true,
       playsInline: true,
     });
-  }, [videoElement, videoRef, style]);
+  }, [video, style]);
 
   return (
     <div

@@ -41,16 +41,12 @@ function computeClipPathFromNormalized(
 ): string {
   // scaleX is crop zoom; scaleY adjusts to compensate for base->target aspect mismatch
   const scaleX = scale;
-  const scaleY = scale * (targetAR / baseAR);
-
+  const scaleY = scale * (baseAR / targetAR);
   const visibleW = 100 / scaleX;
   const visibleH = 100 / scaleY;
 
-  const centerX = clampPercentValue(xNorm * 100);
-  const centerY = clampPercentValue(yNorm * 100);
-
-  const left = clampPercentValue(centerX - visibleW / 2);
-  const top = clampPercentValue(centerY - visibleH / 2);
+  const left = clampPercentValue(xNorm * 100);
+  const top = clampPercentValue(yNorm * 100);
   const right = clampPercentValue(100 - (left + visibleW));
   const bottom = clampPercentValue(100 - (top + visibleH));
 
@@ -94,8 +90,8 @@ export function useInterpolatedTransform(
     // clamp before first or after last
     if (currentTime <= arr[0].time) {
       const k = arr[0];
-      const x = clamp01(k.transform.x);
-      const y = clamp01(k.transform.y);
+      const x = clamp01(k.transform.normX);
+      const y = clamp01(k.transform.normY);
       const { min: minScale1, max: maxScale1 } = getScaleRange(
         baseAR,
         targetAR,
@@ -117,8 +113,8 @@ export function useInterpolatedTransform(
 
     if (currentTime >= arr[arr.length - 1].time) {
       const k = arr[arr.length - 1];
-      const x = clamp01(k.transform.x);
-      const y = clamp01(k.transform.y);
+      const x = clamp01(k.transform.normX);
+      const y = clamp01(k.transform.normY);
       const { min: minScale2, max: maxScale2 } = getScaleRange(
         baseAR,
         targetAR,
@@ -141,6 +137,7 @@ export function useInterpolatedTransform(
     // find segment
     let from = arr[0];
     let to = arr[arr.length - 1];
+
     for (let i = 0; i < arr.length - 1; i++) {
       if (currentTime >= arr[i].time && currentTime <= arr[i + 1].time) {
         from = arr[i];
@@ -154,8 +151,8 @@ export function useInterpolatedTransform(
     const easingFn = getEasingFunction(from.easing);
     const t = easingFn(Math.min(Math.max(rawT, 0), 1));
 
-    const ix = clamp01(lerp(from.transform.x, to.transform.x, t));
-    const iy = clamp01(lerp(from.transform.y, to.transform.y, t));
+    const ix = clamp01(lerp(from.transform.normX, to.transform.normX, t));
+    const iy = clamp01(lerp(from.transform.normY, to.transform.normY, t));
     const iv = lerp(from.transform.scale, to.transform.scale, t);
 
     const { min: minScale, max: maxScale } = getScaleRange(

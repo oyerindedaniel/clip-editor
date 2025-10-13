@@ -1,67 +1,73 @@
 import React, { useMemo, useRef, useEffect, forwardRef } from "react";
-import { cn } from "@/lib/utils";
-import { ASPECT_RATIOS, AspectRatio } from "@/utils/aspect-ratios";
+
+import { AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeData } from "@/utils/keyframe";
-import { usePlaybackClock } from "@/hooks/app/use-playback-clock";
+import {
+  getPlayingState,
+  ReactiveVideoControls,
+  useReactiveVideoTime,
+  type PlayingStatus,
+} from "@/hooks/app/use-reactive-video-time";
 import {
   useInterpolatedTransform,
   InterpolatedResult,
 } from "@/hooks/app/use-interpolated-transform";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { getElementRef } from "@/lib/get-element-ref";
-import CanvasVideoRenderer from "./canvas-video-renderer";
 import logger from "@/utils/logger";
 import type { Variant } from "@/utils/scale-range";
-import {
-  CANVAS_RENDERER_SYMBOL,
-  getRendererType,
-  isRendererOfType,
-} from "@/utils/renderer";
+import { CANVAS_RENDERER_SYMBOL, getRendererType } from "@/utils/renderer";
+import { Volume } from "./volume";
+import { VideoSeekBar } from "./video-seek-bar";
+import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Repeat } from "lucide-react";
+import { VideoControls } from "./video-controls";
+import { cn } from "@/lib/utils";
+import { useLatestValue } from "@/hooks/use-latest-value";
+import { TrimData } from "@/types/app";
+
+export type Video = React.ReactElement<
+  React.VideoHTMLAttributes<HTMLVideoElement> & {
+    ref?: React.Ref<HTMLVideoElement>;
+  }
+>;
 
 export type PreviewRenderContext = {
-  source: React.ReactElement<
-    React.VideoHTMLAttributes<HTMLVideoElement> & {
-      ref?: React.Ref<HTMLVideoElement>;
-    }
-  >;
+  video: Video;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   transform: InterpolatedResult;
   time: number;
   duration: number | null;
-  playing: boolean;
-  play: () => void;
-  pause: () => void;
-  toggle: () => void;
-  setTime: (t: number) => void;
+  playing: PlayingStatus;
   variant: Variant;
   baseAspect: AspectRatio;
   targetAspect: AspectRatio;
-};
+} & ReactiveVideoControls;
 
 export interface VideoPreviewProps {
-  source: React.ReactElement<
-    React.VideoHTMLAttributes<HTMLVideoElement> & {
-      ref?: React.Ref<HTMLVideoElement>;
-    }
-  >;
+  source: Video;
   baseAspect: AspectRatio;
   targetAspect: AspectRatio;
   variant: Variant;
   keyframes?: KeyframeData[];
 
-  time?: number | null;
   onTimeChange?: (t: number) => void;
 
-  defaultPlaying: boolean;
   playing?: boolean;
-  onPlayingChange?: (p: boolean) => void;
+  onPlayingChange?: (p: PlayingStatus) => void;
 
   playbackRate?: number;
-  loop?: boolean;
+  repeat?: boolean;
 
   children?: (context: PreviewRenderContext) => React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+
+  keyframeBounds: {
+    start: number;
+    end: number;
+  };
 }
 
 export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
@@ -72,17 +78,25 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       targetAspect,
       variant,
       keyframes,
-      time: externalTime = null,
       onTimeChange,
-      defaultPlaying = false,
       playing: externalPlaying = false,
       onPlayingChange,
-      playbackRate = 1,
-      loop = false,
+      playbackRate: externalplaybackRate = 1,
+      repeat = false,
+      keyframeBounds,
       children,
       className,
       style,
     } = props;
+
+    const [volume, setVolume] = React.useState(1);
+    const [isRepeat, setIsRepeat] = React.useState(repeat);
+
+    const repeatRef = useLatestValue(isRepeat);
+    const playbackRateRef = useLatestValue(externalplaybackRate);
+
+    const startRef = useLatestValue(keyframeBounds.start);
+    const endRef = useLatestValue(keyframeBounds.end);
 
     if (
       !React.isValidElement(source) ||
@@ -93,19 +107,28 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       return null;
     }
 
-    const duration = useMemo<number | null>(() => {
-      if (!keyframes || keyframes.length === 0) return null;
-      return Math.max(...keyframes.map((k) => k.time));
-    }, [keyframes]);
+    const duration = keyframeBounds.end - keyframeBounds.start;
 
-    const { time, setTime, playing, play, pause, toggle } = usePlaybackClock({
-      externalTime,
-      defaultTime: 0,
-      externalPlaying,
-      defaultPlaying,
-      playbackRate,
-      duration,
-      loop,
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+
+    const composedRef = useComposedRefs(videoRef, getElementRef(source));
+
+    const rootVideo = useMemo(() => {
+      return React.cloneElement(source, {
+        ref: composedRef,
+        muted: source.props.muted ?? false,
+        preload: source.props.preload ?? "auto",
+        playsInline: source.props.playsInline ?? true,
+      });
+    }, [source]);
+
+    const { time, status, controls } = useReactiveVideoTime({
+      videoRef,
+      trimStartRef: startRef,
+      trimEndRef: endRef,
+      repeatRef,
+      playing: externalPlaying,
+      playbackRateRef,
       onTimeChange,
       onPlayingChange,
     });
@@ -118,94 +141,37 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       targetAspect
     );
 
-    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const trimData = useMemo<TrimData>(() => {
+      return {
+        trimStart: keyframeBounds.start * 1000,
+        trimEnd: keyframeBounds.end * 1000,
+        timelineOffset: 0,
+      };
+    }, [keyframeBounds.start, keyframeBounds.end]);
 
-    const composedRef = useComposedRefs(videoRef, getElementRef(source));
-
-    const clonedVideoElement = useMemo(() => {
-      return React.cloneElement(source, {
-        ref: composedRef,
-        muted: source.props.muted ?? true,
-        preload: source.props.preload ?? "auto",
-        playsInline: source.props.playsInline ?? true,
-      });
-    }, [source, videoRef]);
-
-    // ensure media element seeks to preview time (helps Canvas renderer to sample frames)
-    useEffect(() => {
-      const v = videoRef.current;
-      if (!v) return;
-      try {
-        // only seek when difference is significant to avoid thrash
-        const prev = v.currentTime || 0;
-        if (Math.abs(prev - time) > 0.05) {
-          if (v.readyState >= 2) {
-            v.currentTime = Math.max(0, Math.min(v.duration || Infinity, time));
-          } else {
-            const onLoaded = () => {
-              try {
-                v.currentTime = Math.max(
-                  0,
-                  Math.min(v.duration || Infinity, time)
-                );
-              } catch {
-                // ignore
-              }
-              v.removeEventListener("loadedmetadata", onLoaded);
-            };
-            v.addEventListener("loadedmetadata", onLoaded);
-          }
-        }
-      } catch {
-        // ignore seek errors (some origins/browsers disallow)
-      }
-    }, [time]);
-
-    // sync playback state to the underlying media element
-    useEffect(() => {
-      const video = videoRef.current;
-      if (!video) return;
-      try {
-        video.playbackRate = playbackRate;
-        if (playing) {
-          void video.play().catch(() => {
-            /* autoplay blocked */
-          });
-        } else {
-          video.pause();
-        }
-      } catch {
-        // ignore
-      }
-    }, [playing, playbackRate]);
+    const playState = getPlayingState(status);
 
     const context: PreviewRenderContext = useMemo(
       () => ({
-        source,
+        video: rootVideo,
         videoRef,
         transform,
         time,
         duration,
-        playing,
-        play,
-        pause,
-        toggle,
-        setTime,
+        playing: status,
+        ...controls,
         variant,
         baseAspect,
         targetAspect,
       }),
       [
-        clonedVideoElement,
+        rootVideo,
         videoRef,
         transform,
         time,
         duration,
-        playing,
-        play,
-        pause,
-        toggle,
-        setTime,
+        controls,
+        status,
         variant,
         baseAspect,
         targetAspect,
@@ -222,13 +188,11 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     const rendererType = getRendererType(renderedChild);
     const isChildCanvasRenderer = rendererType === CANVAS_RENDERER_SYMBOL;
 
-    console.log({ isChildCanvasRenderer });
-
     return (
       <div
         ref={forwardedRef}
         className={cn(
-          "relative overflow-hidden rounded-lg shadow-md w-full aspect-(--aspect-ratio)",
+          "relative overflow-hidden rounded-lg shadow-md w-full aspect-(--aspect-ratio) group",
           className
         )}
         style={
@@ -240,9 +204,73 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       >
         <div className="absolute inset-0">{renderedChild}</div>
 
+        <div className="absolute top-2 left-2 z-10">
+          <Volume.Root value={volume} onValueChange={setVolume}>
+            <Volume.Controls variant="pill">
+              <Volume.Button aria-label="Volume" />
+              <Volume.Slider>
+                <Volume.Slider.Track>
+                  <Volume.Slider.Range />
+                  <Volume.Slider.Thumb />
+                </Volume.Slider.Track>
+              </Volume.Slider>
+            </Volume.Controls>
+          </Volume.Root>
+        </div>
+
+        <div
+          className={cn(
+            "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 z-20"
+          )}
+        >
+          <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
+            <div className="px-4 py-3 space-y-3">
+              <VideoSeekBar
+                primaryVideoRef={videoRef}
+                primaryTrim={trimData}
+                secondaryTrim={null}
+                isPlaying={playState.isPlaying}
+                onSeek={controls.seek}
+                className="w-full"
+              />
+
+              <div className="flex items-center justify-center gap-2">
+                <VideoControls
+                  playing={playState.isPlaying}
+                  onToggle={controls.toggle}
+                />
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => setIsRepeat((r) => !r)}
+                      className={cn(
+                        "h-8 w-8 border-white/30 text-white transition-all duration-200 hover:scale-105 shadow-sm",
+                        isRepeat
+                          ? "bg-primary/90 hover:bg-primary text-foreground-on-accent border-primary/50"
+                          : "bg-white/10 hover:bg-white/20"
+                      )}
+                    >
+                      <Repeat className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="bg-surface-primary border-surface-tertiary text-foreground-default font-medium"
+                  >
+                    {isRepeat ? "Repeat On" : "Repeat Off"}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Hidden video element kept mounted as a frame source for CanvasVideoRenderer to read and paint from */}
         {isChildCanvasRenderer
-          ? React.cloneElement(clonedVideoElement, {
+          ? React.cloneElement(rootVideo, {
               style: {
                 position: "absolute",
                 width: 1,

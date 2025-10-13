@@ -10,8 +10,6 @@ import React, {
 import {
   Expand,
   Maximize,
-  Pause,
-  Play,
   SquareStack,
   Repeat,
   Loader2,
@@ -29,6 +27,7 @@ import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { VideoSeekBar } from "./video-seek-bar";
 import { Volume } from "./volume";
+import { VideoControls } from "./video-controls";
 
 interface DualVideoPlayerProps {
   isPrimaryVideoLoaded: boolean;
@@ -955,28 +954,10 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                 />
 
                 <div className="flex items-center justify-center gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => togglePlay()}
-                        className="h-8 w-8 bg-white/10 hover:bg-white/20 border-white/30 text-white hover:text-white transition-all duration-200 hover:scale-105 shadow-sm"
-                      >
-                        {isPlaying ? (
-                          <Pause className="w-4 h-4" />
-                        ) : (
-                          <Play className="w-4 h-4 ml-0.5" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="top"
-                      className="bg-surface-primary border-surface-tertiary text-foreground-default font-medium"
-                    >
-                      {isPlaying ? "Pause" : "Play"}
-                    </TooltipContent>
-                  </Tooltip>
+                  <VideoControls
+                    playing={isPlaying}
+                    onToggle={() => togglePlay()}
+                  />
 
                   <Tooltip>
                     <TooltipTrigger asChild>

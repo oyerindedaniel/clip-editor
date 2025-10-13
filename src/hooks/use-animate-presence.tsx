@@ -105,7 +105,7 @@ export function useAnimatePresence(
   }, [externalPresence, internalPresence, forceMount]);
 }
 
-export function getState(animationState?: string) {
+export function getState(animationState?: AnimationState) {
   switch (animationState) {
     case "entering":
       return "open";

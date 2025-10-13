@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import type { Variant } from "@/utils/scale-range";
@@ -9,6 +9,14 @@ import {
   TaggedRendererComponent,
 } from "@/utils/renderer";
 
+/**
+ * CanvasVideoRendererProps
+ *
+ * @property {boolean} [renderEnabled=true] -
+ * When false, the canvas renderer suspends all painting.
+ * When true, the canvas repaints continuously **if** the underlying video is playing,
+ * or repaints on-demand when external state changes (e.g. scrubbing, resize, filter updates).
+ */
 export interface CanvasVideoRendererProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   transformData: InterpolatedResult;
@@ -17,7 +25,7 @@ export interface CanvasVideoRendererProps {
   variant: Variant;
   className?: string;
   color?: Color;
-  shouldPaint?: boolean;
+  renderEnabled?: boolean;
 }
 
 const CanvasVideoRenderer: TaggedRendererComponent<
@@ -30,11 +38,105 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   variant,
   color,
   className,
-  shouldPaint = true,
+  renderEnabled = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const transformRef = useLatestValue<InterpolatedResult>(transformData);
-  const rafRef = useRef<number | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  const drawFrame = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    const video = videoRef.current;
+    if (!canvas || !ctx || !video) return;
+
+    if (video.readyState < 2) return;
+
+    const transform = transformRef.current;
+    const vw = video.videoWidth || 0;
+    const vh = video.videoHeight || 0;
+    if (vw <= 0 || vh <= 0) return;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Stretch: distorts video to fill canvas, applies uniform scale and position offset
+    if (variant === "stretch") {
+      ctx.save();
+
+      const tx = (transform.x - 0.5) * width;
+      const ty = (transform.y - 0.5) * height;
+
+      ctx.translate(width / 2 + tx, height / 2 + ty);
+      ctx.scale(transform.scale, transform.scale);
+
+      ctx.drawImage(video, -width / 2, -height / 2, width, height);
+      ctx.restore();
+      return;
+    }
+
+    // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
+    if (variant === "crop") {
+      const baseAR = transform.baseAR;
+      const targetAR = transform.targetAR;
+
+      let srcW: number, srcH: number;
+
+      if (baseAR > targetAR) {
+        srcH = vh / transform.scale;
+        srcW = srcH * targetAR;
+      } else {
+        srcW = vw / transform.scale;
+        srcH = srcW / targetAR;
+      }
+
+      if (srcW > vw) srcW = vw;
+      if (srcH > vh) srcH = vh;
+
+      const sx = transform.x * vw;
+      const sy = transform.y * vh;
+
+      const clampedSx = clampToRange(sx, 0, Math.max(0, vw - srcW));
+      const clampedSy = clampToRange(sy, 0, Math.max(0, vh - srcH));
+
+      ctx.drawImage(
+        video,
+        clampedSx,
+        clampedSy,
+        srcW,
+        srcH,
+        0,
+        0,
+        width,
+        height
+      );
+      return;
+    }
+
+    // Fit/letterbox (default): shows full video with black bars, no transforms applied
+    {
+      const srcAR = vw / vh;
+      let destW = width;
+      let destH = height;
+      let dx = 0;
+      let dy = 0;
+
+      if (srcAR > width / height) {
+        destW = width;
+        destH = destW / srcAR;
+        dy = (height - destH) / 2;
+      } else {
+        destH = height;
+        destW = destH * srcAR;
+        dx = (width - destW) / 2;
+      }
+
+      ctx.fillStyle = color ?? "black";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
+      return;
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -47,95 +149,55 @@ const CanvasVideoRenderer: TaggedRendererComponent<
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    if (!shouldPaint) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    if (!renderEnabled) {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
+      drawFrame();
       return;
     }
 
-    const draw = () => {
+    let mounted = true;
+
+    const loop = () => {
+      if (!mounted) return;
+      drawFrame();
+
       const video = videoRef.current;
-
-      if (!video || video.readyState < 2) {
-        console.log("--video", video, video?.readyState);
-        rafRef.current = requestAnimationFrame(draw);
-        return;
+      if (video && !video.ended) {
+        rafIdRef.current = requestAnimationFrame(loop);
       }
-
-      console.log("after");
-
-      ctx.clearRect(0, 0, width, height);
-      const t = transformRef.current;
-
-      // Stretch
-      if (variant === "stretch") {
-        ctx.save();
-        const tx = (t.x - 0.5) * width;
-        const ty = (t.y - 0.5) * height;
-        ctx.translate(width / 2 + tx, height / 2 + ty);
-        ctx.scale(t.scale, t.scale);
-        ctx.drawImage(video, -width / 2, -height / 2, width, height);
-        ctx.restore();
-      }
-      // Crop
-      else if (variant === "crop") {
-        const vw = video.videoWidth || video.clientWidth || width;
-        const vh = video.videoHeight || video.clientHeight || height;
-        if (vw === 0 || vh === 0) {
-          rafRef.current = requestAnimationFrame(draw);
-          return;
-        }
-
-        const baseAR = t.baseAR;
-        const targetAR = t.targetAR;
-        const scaleX = t.scale;
-        const scaleY = t.scale * (targetAR / baseAR);
-        const srcW = vw / scaleX;
-        const srcH = vh / scaleY;
-        const centerX = t.x * vw;
-        const centerY = t.y * vh;
-        const sx = Math.min(Math.max(centerX - srcW / 2, 0), vw - srcW);
-        const sy = Math.min(Math.max(centerY - srcH / 2, 0), vh - srcH);
-        ctx.drawImage(video, sx, sy, srcW, srcH, 0, 0, width, height);
-      }
-      // Fit
-      else {
-        const vw = video.videoWidth || video.clientWidth || width;
-        const vh = video.videoHeight || video.clientHeight || height;
-        const srcAR = vw / vh;
-        let destW = width;
-        let destH = height;
-        let dx = 0;
-        let dy = 0;
-        if (srcAR > width / height) {
-          destW = width;
-          destH = destW / srcAR;
-          dy = (height - destH) / 2;
-        } else {
-          destH = height;
-          destW = destH * srcAR;
-          dx = (width - destW) / 2;
-        }
-        ctx.fillStyle = color ?? "black";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
-      }
-
-      rafRef.current = requestAnimationFrame(draw);
     };
 
-    rafRef.current = requestAnimationFrame(draw);
+    const video = videoRef.current;
+    if (video && !video.ended) {
+      rafIdRef.current = requestAnimationFrame(loop);
+    } else {
+      drawFrame();
+    }
 
     return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      mounted = false;
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
     };
-  }, [shouldPaint, width, height, variant, color, transformRef, videoRef]);
+  }, [renderEnabled, width, height, variant, color]);
 
-  return <canvas ref={canvasRef} className={cn("bg-red-800", className)} />;
+  return <canvas ref={canvasRef} className={cn("", className)} />;
 };
 
 CanvasVideoRenderer.displayName = "CanvasVideoRenderer";
 CanvasVideoRenderer._rendererType = CANVAS_RENDERER_SYMBOL;
 
 export default CanvasVideoRenderer;
+
+function clampToRange(v: number, a: number, b: number) {
+  if (!Number.isFinite(v)) return a;
+  return Math.min(Math.max(v, a), b);
+}

@@ -74,6 +74,7 @@ import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
 import { LoaderIcon } from "@/icons/loader";
 import { cn } from "@/lib/utils";
 import { calculateHeight } from "@/utils/aspect-ratios";
+import KeyframeLists from "./keyframe-lists";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -141,6 +142,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setBoundaryVisible,
     boundaryTransform,
     setBoundaryTransform,
+    keyframes: controlledKeyframes,
+    setKeyframes: setControlledKeyframes,
+    currentKeyframeId: controlledCurrentKeyframeId,
+    setCurrentKeyframeId: setControlledCurrentKeyframeId,
   } = useShallowSelector(KeyframeContext, (state) => ({
     boundaryAspectRatio: state.boundaryAspectRatio,
     setBoundaryAspectRatio: state.setBoundaryAspectRatio,
@@ -148,6 +153,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setBoundaryVisible: state.setBoundaryVisible,
     boundaryTransform: state.boundaryTransform,
     setBoundaryTransform: state.setBoundaryTransform,
+    keyframes: state.keyframes,
+    setKeyframes: state.setKeyframes,
+    currentKeyframeId: state.currentKeyframeId,
+    setCurrentKeyframeId: state.setCurrentKeyframeId,
   }));
 
   const {
@@ -646,6 +655,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? primaryTrimData.trimEnd - primaryTrimData.trimStart
       : duration;
 
+  const source = useMemo(() => <video src={primaryUrl} />, [primaryUrl]);
+
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
@@ -662,20 +673,28 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
       <div className="flex-1 min-h-0">
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-          <Keyframe.Root maxTime={duration}>
+          <Keyframe.Root
+            maxTime={duration}
+            keyframes={controlledKeyframes}
+            onKeyframesChange={setControlledKeyframes}
+            currentKeyframeId={controlledCurrentKeyframeId}
+            onCurrentKeyframeIdChange={setControlledCurrentKeyframeId}
+          >
             {({
               keyframes,
               currentKeyframeId,
+              setCurrentKeyframeId,
               addKeyframe,
               updateKeyframe,
               deleteKeyframe,
               getKeyframe,
               updateColors,
+              keyframeBounds,
             }) => (
               <>
                 <div className="w-full flex flex-col lg:flex-row items-center gap-4">
                   <div>
-                    <div className="flex justify-start p-2">
+                    <div className="flex items-center gap-1 p-2">
                       <AspectRatioPicker
                         screenSize="16:9"
                         aspectRatio={boundaryAspectRatio}
@@ -684,27 +703,43 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         onVisibleChange={setBoundaryVisible}
                         disabled={!isValidBufferState || isExporting}
                       />
-                      <Button
-                        ref={keyframeTriggerRef}
-                        size="sm"
-                        onClick={() => {
-                          if (boundaryTransform) {
-                            addKeyframe({
-                              time: videoRef.current?.currentTime
-                                ? videoRef.current.currentTime * 1000
-                                : 0,
-                              transform: boundaryTransform,
-                              easing: "ease-in-out",
-                              color: "#22c55e",
-                            });
-                          }
-                        }}
-                        disabled={!boundaryTransform}
-                        className="ml-2"
-                      >
-                        <Film className="mr-2" size={14} />
-                        Add Keyframe
-                      </Button>
+
+                      <div className="flex items-center gap-px">
+                        <Button
+                          ref={keyframeTriggerRef}
+                          size="sm"
+                          onClick={() => {
+                            if (boundaryTransform) {
+                              addKeyframe({
+                                time: videoRef.current?.currentTime
+                                  ? videoRef.current.currentTime
+                                  : 0,
+                                transform: boundaryTransform,
+                                easing: "ease-in-out",
+                                color: "#22c55e",
+                              });
+                            }
+                          }}
+                          disabled={!boundaryTransform}
+                          className="ml-2"
+                        >
+                          <Film className="mr-2" size={14} />
+                          Add Keyframe
+                        </Button>
+                        {keyframes && keyframes.length > 0 && (
+                          <KeyframeLists
+                            keyframes={keyframes}
+                            currentKeyframeId={currentKeyframeId}
+                            onKeyframeSelect={(id) => {
+                              setCurrentKeyframeId(id);
+                            }}
+                            onKeyframeRemove={(id) => {
+                              deleteKeyframe(id);
+                            }}
+                            className="ml-2"
+                          />
+                        )}
+                      </div>
                     </div>
 
                     <BoundaryBox
@@ -1048,19 +1083,19 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                               ? (refs.renderer as React.Ref<HTMLDivElement>)
                               : null
                           }
-                          defaultPlaying={false}
                           playing={active === "renderer"}
-                          source={<video src={primaryUrl} />}
+                          source={source}
                           baseAspect="16:9"
                           targetAspect="9:16"
                           variant="crop"
                           keyframes={keyframes}
+                          keyframeBounds={keyframeBounds}
                           className={classNames.renderer}
                           style={styles.renderer}
                         >
                           {({ transform, variant, videoRef }) => (
                             <CanvasVideoRenderer
-                              shouldPaint={active === "renderer"}
+                              renderEnabled={active === "renderer"}
                               videoRef={videoRef}
                               transformData={transform}
                               variant={variant}

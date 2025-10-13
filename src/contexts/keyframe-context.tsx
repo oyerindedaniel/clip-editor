@@ -4,7 +4,7 @@ import { createContext, useMemo, useState, ReactNode } from "react";
 import type { AspectRatio } from "@/utils/aspect-ratios";
 import { type StoreApi, useContextStore } from "react-shallow-store";
 import { useLatestValue } from "@/hooks/use-latest-value";
-import type { Transform } from "@/utils/keyframe";
+import type { Transform, KeyframeData } from "@/utils/keyframe";
 
 type KeyframeContextValue = {
   boundaryAspectRatio: AspectRatio | null;
@@ -19,6 +19,11 @@ type KeyframeContextValue = {
   setBoundaryTransform: React.Dispatch<React.SetStateAction<Transform | null>>;
 
   boundaryTransformRef: React.RefObject<Transform | null>;
+
+  keyframes: KeyframeData[];
+  setKeyframes: React.Dispatch<React.SetStateAction<KeyframeData[]>>;
+  currentKeyframeId: string | null;
+  setCurrentKeyframeId: React.Dispatch<React.SetStateAction<string | null>>;
 };
 
 export const KeyframeContext =
@@ -34,6 +39,11 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
 
   const boundaryTransformRef = useLatestValue(boundaryTransform);
 
+  const [keyframes, setKeyframes] = useState<KeyframeData[]>([]);
+  const [currentKeyframeId, setCurrentKeyframeId] = useState<string | null>(
+    null
+  );
+
   const value = useMemo(
     () => ({
       boundaryAspectRatio,
@@ -43,6 +53,10 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
       boundaryTransform,
       setBoundaryTransform,
       boundaryTransformRef,
+      keyframes,
+      setKeyframes,
+      currentKeyframeId,
+      setCurrentKeyframeId,
     }),
     [
       boundaryAspectRatio,
@@ -52,6 +66,10 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
       boundaryTransform,
       setBoundaryTransform,
       boundaryTransformRef,
+      keyframes,
+      setKeyframes,
+      currentKeyframeId,
+      setCurrentKeyframeId,
     ]
   );
 
