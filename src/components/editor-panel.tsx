@@ -22,7 +22,7 @@ import { useControllableState } from "@/hooks/use-controllable-state";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
-type EditorSide = "left" | "right";
+export type EditorSide = "left" | "right";
 
 interface EditorPanelContextType {
   open: boolean;
@@ -116,6 +116,7 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
         if (presence) {
+          // console.log("---entering");
           setAnimationState("entering");
           resolve();
           return;
@@ -127,14 +128,14 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
 
         const node = contentRef.current;
         if (!node) {
-          console.log("---node", node);
+          // console.log("---node", node);
           setAnimationState("idle");
           resolve();
           return;
         }
 
         const onAnimationEnd = () => {
-          console.log("---onAnimationEnd", presence);
+          // console.log("---onAnimationEnd", presence);
           setAnimationState("idle");
           node.removeEventListener("animationend", onAnimationEnd);
           node.removeEventListener("transitionend", onAnimationEnd);
@@ -392,7 +393,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
     const state = getState(animationState);
 
-    console.log("---state", state);
+    console.log("---state", state, animationState);
 
     return (
       <>

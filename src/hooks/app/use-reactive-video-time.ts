@@ -2,7 +2,7 @@ import { useRef, useSyncExternalStore, useCallback, useMemo } from "react";
 
 export type PlayingStatus = "idle" | "playing" | "paused" | "ended";
 
-interface UseReactiveVideoTimeOptions {
+export interface UseReactiveVideoTimeOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   trimStartRef: React.RefObject<number>;
   trimEndRef: React.RefObject<number>;

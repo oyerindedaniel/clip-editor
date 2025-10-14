@@ -163,6 +163,13 @@ export default function DualVideoControls({
         };
 
         tempVideo.addEventListener("loadedmetadata", () => {
+          const aspect = tempVideo.videoWidth / tempVideo.videoHeight;
+          if (Math.abs(aspect - 16 / 9) > 0.01) {
+            toast.warning("Secondary video must have an aspect ratio of 16:9");
+            URL.revokeObjectURL(tempUrl);
+            return;
+          }
+
           const durationMs = tempVideo.duration * 1000;
           setSecondaryClip({
             ...newSecondaryClip,
@@ -177,7 +184,6 @@ export default function DualVideoControls({
               height: tempVideo.videoHeight,
             },
             aspectRatio: DEFAULT_ASPECT_RATIO,
-            // aspectRatio: `${tempVideo.videoWidth}:${tempVideo.videoHeight}`,
             cropMode: DEFAULT_CROP_MODE as CropMode,
             format: file.type.split("/")[1] as VideoFormat,
             padColor: DEFAULT_COLOR,
@@ -558,7 +564,7 @@ export default function DualVideoControls({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                {/* <div className="flex flex-col gap-2">
                   <label className="text-xs text-foreground-subtle">
                     Output Orientation
                   </label>
@@ -576,7 +582,7 @@ export default function DualVideoControls({
                       <SelectItem value="vertical">Vertical (9:16)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div> */}
               </div>
             </motion.div>
           )}

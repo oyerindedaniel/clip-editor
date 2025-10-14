@@ -129,7 +129,7 @@ export function BoundaryBoxRoot({
     () =>
       throttle((t: Transform) => {
         stableSetTransform(t);
-      }, 500),
+      }, 200), // throttle to run 5 times per second
     [stableSetTransform]
   );
 

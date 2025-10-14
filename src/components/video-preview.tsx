@@ -1,5 +1,4 @@
 import React, { useMemo, useRef, useEffect, forwardRef } from "react";
-
 import { AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeData } from "@/utils/keyframe";
 import {
@@ -230,7 +229,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
                 primaryTrim={trimData}
                 secondaryTrim={null}
                 isPlaying={playState.isPlaying}
-                onSeek={controls.seek}
+                onSeek={(timeMs) => controls.seek(timeMs / 1000)}
                 className="w-full"
               />
 

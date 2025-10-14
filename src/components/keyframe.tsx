@@ -74,8 +74,6 @@ function KeyframeRoot({
     onChange: onCurrentKeyframeIdChange,
   });
 
-  console.log({ keyframes });
-
   const keyframeBounds = React.useMemo(() => {
     if (keyframes.length === 0) return { start: 0, end: 0 };
     const sorted = [...keyframes].sort((a, b) => a.time - b.time);
@@ -520,6 +518,8 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
           resolve();
           return;
         }
+
+        if (!box) return;
 
         setAnimationState("exiting");
 

@@ -58,13 +58,15 @@ export const KeyframeLists: React.FC<KeyframeListsProps> = ({
                 <div
                   key={kf.id}
                   className={cn(
-                    "group relative flex items-center gap-3 w-full text-left px-3 h-10 rounded-3xl border",
-                    "bg-surface-secondary hover:bg-surface-hover border-subtle"
+                    "group relative w-full h-8 rounded-3xl border",
+                    "bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
+                    currentKeyframeId === kf.id &&
+                      "ring-1 ring-primary/40 border-primary/50"
                   )}
                 >
                   <button
                     onClick={() => onKeyframeSelect(kf.id)}
-                    className="flex items-center gap-3 flex-1 min-w-0"
+                    className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
                   >
                     <span
                       className="h-3 w-3 rounded-full border bg-(--color)"
@@ -90,11 +92,11 @@ export const KeyframeLists: React.FC<KeyframeListsProps> = ({
                       }}
                       aria-label="Remove keyframe"
                       className={cn(
-                        "absolute right-2 top-1/2 -translate-y-1/2",
+                        "absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer",
                         "opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0",
                         "transition-all duration-200 ease-out",
                         "bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm",
-                        "rounded-full h-6 px-2 py-0 text-[10px] leading-none shadow-sm"
+                        "rounded-full h-5 px-2 py-0 text-[10px] leading-none shadow-sm"
                       )}
                     >
                       Remove

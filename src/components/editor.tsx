@@ -40,7 +40,7 @@ import EditorHeader from "./editor-header";
 import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
-import EditorPanel from "./editor-panel";
+import EditorPanel, { type EditorSide } from "./editor-panel";
 import { Button } from "@/components/ui/button";
 import {
   SlidersHorizontal,
@@ -48,6 +48,8 @@ import {
   Square,
   Monitor,
   Smartphone,
+  PanelLeft,
+  PanelRight,
 } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { KeyframeContext } from "@/contexts/keyframe-context";
@@ -62,6 +64,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AspectRatio } from "@/utils/aspect-ratios";
 import { KEYFRAME_EASINGS } from "@/utils/keyframe";
 import { roundToDecimals } from "@/utils/app";
@@ -87,6 +94,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
+  const [panelSide, setPanelSide] = useState<EditorSide>("right");
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const keyframeTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -194,6 +202,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     return originalBufferExists && hasAnyProcessedBuffer;
   }, [processedBuffers]);
+
+  const togglePanelSide = useCallback(() => {
+    setPanelSide((prev) => (prev === "right" ? "left" : "right"));
+  }, []);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -672,7 +684,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       />
 
       <div className="flex-1 min-h-0">
-        <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+        <div className="h-full flex flex-col p-4 space-y-4 max-w-6xl mx-auto">
           <Keyframe.Root
             maxTime={duration}
             keyframes={controlledKeyframes}
@@ -750,7 +762,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       visible={boundaryVisible}
                       transform={boundaryTransform!}
                       onTransformChange={(transform) => {
-                        // console.log("in here transform", transform);
                         setBoundaryTransform(transform);
                         if (currentKeyframeId) {
                           updateKeyframe(currentKeyframeId, {
@@ -818,9 +829,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             <Keyframe.BoxHeader>
                               {currentKeyframeId &&
                                 getKeyframe(currentKeyframeId) &&
-                                `Keyframe @ ${(
-                                  getKeyframe(currentKeyframeId)!.time / 1000
-                                ).toFixed(1)}s`}
+                                `Keyframe @ ${getKeyframe(
+                                  currentKeyframeId
+                                )!.time.toFixed(1)}s`}
 
                               <Keyframe.BoxClose />
                             </Keyframe.BoxHeader>
@@ -849,7 +860,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             ?.transform.width || 0)
                                         }
                                         step={10}
-                                        sensitivity={0.5}
+                                        sensitivity={0.1}
                                       >
                                         <ScrubbableInput.Label htmlFor="keyframe-x">
                                           X Position
@@ -884,7 +895,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             ?.transform.height || 0)
                                         }
                                         step={10}
-                                        sensitivity={0.5}
+                                        sensitivity={0.1}
                                       >
                                         <ScrubbableInput.Label htmlFor="keyframe-y">
                                           Y Position
@@ -1086,7 +1097,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           playing={active === "renderer"}
                           source={source}
                           baseAspect="16:9"
-                          targetAspect="9:16"
+                          targetAspect={boundaryAspectRatio ?? "9:16"}
                           variant="crop"
                           keyframes={keyframes}
                           keyframeBounds={keyframeBounds}
@@ -1101,7 +1112,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                               variant={variant}
                               width={canvasSizeRef.current.width}
                               height={calculateHeight({
-                                aspectRatio: "9:16",
+                                aspectRatio: boundaryAspectRatio ?? "9:16",
                                 width: canvasSizeRef.current.width,
                               })}
                             />
@@ -1169,17 +1180,38 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       <EditorPanel.Root
         open={toolPanelOpen}
         onOpenChange={setToolPanelOpen}
-        side="right"
+        side={panelSide}
         disablePortal={false}
         triggerRef={triggerRef}
       >
         <EditorPanel.Portal>
           <EditorPanel.Content className="pb-[49px] w-[280px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
-              <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
+              <kbd className="px-2 py-0.1 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
                 Shift+T
               </kbd>
-              <EditorPanel.CloseButton />
+              <div className="ml-auto flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      aria-label="Toggle panel side"
+                      onClick={togglePanelSide}
+                    >
+                      {panelSide === "right" ? (
+                        <PanelRight size={14} />
+                      ) : (
+                        <PanelLeft size={14} />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {panelSide === "right" ? "Dock to left" : "Dock to right"}
+                  </TooltipContent>
+                </Tooltip>
+                <EditorPanel.CloseButton />
+              </div>
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">
               <EditorRightPanel

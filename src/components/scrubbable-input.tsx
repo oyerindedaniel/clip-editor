@@ -222,13 +222,51 @@ export const Field = React.forwardRef<
 >(({ className, ...props }, ref) => {
   const { value, setValue, disabled } = useScrubbableInputContext();
   const composedRef = useComposedRefs(ref);
+  const [displayValue, setDisplayValue] = React.useState(String(value));
+  const isCleared = React.useRef(false);
+
+  // Needed to sync drag handle updates
+  React.useEffect(() => {
+    setDisplayValue(String(value));
+  }, [value]);
 
   const handleChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const parsed = parseFloat(e.target.value);
-      if (!isNaN(parsed)) setValue(parsed);
+      const inputValue = e.target.value;
+      setDisplayValue(inputValue);
+
+      if (inputValue === "" || inputValue === "-") {
+        setValue(0);
+        isCleared.current = true;
+        return;
+      }
+
+      const parsed = parseFloat(inputValue);
+      if (!isNaN(parsed)) {
+        setValue(parsed);
+        isCleared.current = false;
+      }
     },
     [setValue]
+  );
+
+  const handleFocus = React.useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      if (value === 0 && isCleared.current) {
+        setDisplayValue("");
+      }
+      props.onFocus?.(e);
+    },
+    [value, props]
+  );
+
+  const handleBlur = React.useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      isCleared.current = false;
+      setDisplayValue(String(value));
+      props.onBlur?.(e);
+    },
+    [value, props]
   );
 
   return (
@@ -236,8 +274,10 @@ export const Field = React.forwardRef<
       ref={composedRef}
       type="number"
       inputMode="numeric"
-      value={value}
+      value={displayValue}
       onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       disabled={disabled}
       autoComplete="off"
       className={cn(

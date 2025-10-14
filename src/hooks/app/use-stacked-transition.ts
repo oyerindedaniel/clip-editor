@@ -113,8 +113,8 @@ export function useStackedTransition<const K extends string>(
         internalActive === null
           ? ""
           : isActive
-          ? "animate-[stack-in_var(--stack-duration)_cubic-bezier(0.4,0,0.2,1)_forwards]"
-          : "animate-[stack-out_var(--stack-duration)_cubic-bezier(0.4,0,0.2,1)_forwards]";
+          ? "animate-[stack-in_var(--stack-duration)_cubic-bezier(0.4,0,0.2,1)_forwards] pointer-events-auto"
+          : "animate-[stack-out_var(--stack-duration)_cubic-bezier(0.4,0,0.2,1)_forwards] pointer-events-none";
       map[key] = `${shared} ${layer} ${transition}`;
     });
     return map;
