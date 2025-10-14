@@ -4,7 +4,9 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Download, Settings, Crosshair } from "lucide-react";
+import { Download, Crosshair } from "lucide-react";
+import AspectRatioSelector from "./aspect-ratio-selector";
+import { Settings } from "@/types/app";
 
 interface EditorHeaderProps {
   isVideoLoaded: boolean;
@@ -13,6 +15,9 @@ interface EditorHeaderProps {
   onToggleTrace: () => void;
   onOpenAdjust: () => void;
   onOpenExport: () => void;
+  settings: Settings;
+  onSettingsApplied: (settings: Settings) => void;
+  isBufferDownloaded: boolean;
 }
 
 export const EditorHeader: React.FC<EditorHeaderProps> = ({
@@ -22,6 +27,9 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   onToggleTrace,
   onOpenAdjust,
   onOpenExport,
+  settings,
+  onSettingsApplied,
+  isBufferDownloaded,
 }) => {
   return (
     <div className="sticky top-0 z-50 w-full bg-surface-primary">
@@ -47,20 +55,16 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               disabled={!isVideoLoaded}
               onClick={onToggleTrace}
             >
-              <Crosshair size={16} className="mr-1" />
+              <Crosshair size={14} className="mr-1" />
               Trace
             </Button>
 
-            <Button
-              className="text-xs"
-              variant="outline"
-              size="sm"
-              disabled={!isVideoLoaded}
-              onClick={onOpenAdjust}
-            >
-              <Settings size={16} className="mr-1" />
-              Settings
-            </Button>
+            <AspectRatioSelector
+              settings={settings}
+              onSettingsApplied={onSettingsApplied}
+              isBufferDownloaded={isBufferDownloaded}
+              isExporting={isExporting}
+            />
           </div>
 
           <Button
@@ -69,7 +73,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
             size="sm"
             className="text-xs bg-primary text-foreground-on-accent hover:bg-primary-hover"
           >
-            <Download size={16} className="mr-2" />
+            <Download size={14} className="mr-2" />
             Export
           </Button>
         </div>

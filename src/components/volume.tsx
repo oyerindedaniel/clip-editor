@@ -6,10 +6,12 @@ import { VolumeX, Volume1, Volume2 } from "lucide-react";
 import { Button, type buttonVariants } from "@/components/ui/button";
 import type { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { useAnimatePresence } from "@/hooks/use-animate-presence";
+import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { HitArea } from "./hit-area";
+import type { AnimationState } from "@/hooks/use-animate-presence";
+import { useElementReadyForMeasurement } from "@/hooks/use-element-ready-for-measurement";
 
 interface VolumeContextValue {
   volume: number;
@@ -151,8 +153,6 @@ const VolumeLabel = React.forwardRef<HTMLLabelElement, VolumeLabelProps>(
 );
 VolumeLabel.displayName = "VolumeLabel";
 
-type AnimationState = "idle" | "entering" | "exiting";
-
 type State = "open" | "closed" | undefined;
 
 type VolumeControlsVariant = "pill" | "soft" | "default";
@@ -192,6 +192,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
     const controlsRef = React.useRef<HTMLDivElement>(null);
     const composedRefs = useComposedRefs(forwardedRef, controlsRef);
 
+    const isVisible = useElementReadyForMeasurement(controlsRef);
+
     const startRef = React.useRef<number>(0);
     const endRef = React.useRef<number>(0);
     const forceOpenRef = React.useRef(variant !== "default");
@@ -208,7 +210,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
     }, [orientation, isMeasured, variant]);
 
     React.useLayoutEffect(() => {
-      if (variant === "default") return;
+      if (variant === "default" || !isVisible) return;
+
       const slider = sliderRef.current;
       const controls = controlsRef.current;
       if (!slider || !controls) return;
@@ -217,7 +220,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
       controls.style.animation = "none";
       void controls.offsetWidth;
 
-      endRef.current =
+      const measuredEnd =
         orientation === "horizontal"
           ? controls.offsetWidth
           : controls.offsetHeight;
@@ -225,9 +228,12 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
       slider.style.animation = "";
       controls.style.animation = "";
 
-      forceOpenRef.current = false;
-      setIsMeasured(true);
-    }, [orientation, variant]);
+      if (measuredEnd > 0) {
+        endRef.current = measuredEnd;
+        forceOpenRef.current = false;
+        setIsMeasured(true);
+      }
+    }, [orientation, variant, isVisible]);
 
     const [animationState, setAnimationState] =
       React.useState<AnimationState>("idle");
@@ -259,12 +265,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
       initial: false,
     });
 
-    const state =
-      animationState === "entering"
-        ? "open"
-        : animationState === "exiting"
-        ? "closed"
-        : undefined;
+    const state = getState(animationState);
 
     return (
       <ControlsContext.Provider
@@ -294,8 +295,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
                 "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
               variant !== "default" &&
                 (orientation === "horizontal"
-                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
-                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]"),
+                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_200ms_linear_forwards]"
+                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_200ms_linear_forwards]"),
               className
             )}
             style={{

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Video, Crop, Maximize2 } from "lucide-react";
+import { Video, Crop, Maximize2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -9,32 +9,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { FORMAT_OPTIONS } from "@/constants/app";
 import type {
   CropMode,
   ExportSettings,
-  Settings,
+  Settings as SettingsType,
   VideoFormat,
 } from "@/types/app";
 import { cn } from "@/lib/utils";
-import ColorPalette from "@/components/color-palette";
+import ColorPalette, { Color } from "@/components/color-palette";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import InfoTooltip from "@/components/info-tooltip";
 
-interface AspectRatioSelectorProps {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  settings: Settings;
-  onSettingsApplied: (settings: Settings) => void;
+interface AspectRatioSelectorProps extends React.PropsWithChildren {
+  settings: SettingsType;
+  onSettingsApplied: (settings: SettingsType) => void;
   isBufferDownloaded: boolean;
   isExporting: boolean;
 }
@@ -50,41 +45,27 @@ const aspectRatios = [
 ] as const;
 
 const cropModes = [
-  {
-    value: "letterbox",
-    label: "Letterbox",
-    icon: <Maximize2 size={16} />,
-  },
-  {
-    value: "crop",
-    label: "Crop",
-    icon: <Crop size={16} />,
-  },
-  {
-    value: "stretch",
-    label: "Stretch",
-    icon: <Video size={16} />,
-  },
+  { value: "letterbox", label: "Letterbox", icon: <Maximize2 size={14} /> },
+  { value: "crop", label: "Crop", icon: <Crop size={14} /> },
+  { value: "stretch", label: "Stretch", icon: <Video size={14} /> },
 ];
 
 export type AspectRatioValue = (typeof aspectRatios)[number]["value"];
 
 const AspectRatioSelector = ({
-  isOpen,
-  onOpenChange,
   settings,
   onSettingsApplied,
   isBufferDownloaded,
   isExporting,
 }: AspectRatioSelectorProps) => {
+  const [isOpen, setIsOpen] = useState(false);
   const [convertAspectRatio, setConvertAspectRatio] =
     useState<AspectRatioValue>(settings.aspectRatio);
   const [cropMode, setCropMode] = useState(settings.cropMode);
-  const [padColor, setPadColor] = useState<string>(settings.padColor);
+  const [padColor, setPadColor] = useState<Color>(settings.padColor);
   const [format, setFormat] = useState<VideoFormat>(settings.format);
 
   const settingsRef = useLatestValue(settings);
-
   useEffect(() => {
     return () => {
       // Delay state reset slightly on unmount to prevent UI flash
@@ -98,132 +79,148 @@ const AspectRatioSelector = ({
   }, [isOpen]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent data-dialog-aspect-ratio className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Adjust Aspect Ratio</DialogTitle>
-          <DialogDescription>
-            Configure aspect ratio and crop mode
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="aspectRatio" className="text-right text-xs">
-              Aspect Ratio
-            </label>
-            <Select
-              value={convertAspectRatio}
-              onValueChange={(val) =>
-                setConvertAspectRatio(val as AspectRatioValue)
-              }
-            >
-              <SelectTrigger
-                id="aspectRatio"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
-              >
-                <SelectValue placeholder="Select an aspect ratio" />
-              </SelectTrigger>
-              <SelectContent>
-                {aspectRatios.map((ratio) => (
-                  <SelectItem key={ratio.value} value={ratio.value}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>{ratio.label}</span>
-                      <Badge variant="secondary" className="ml-2">
-                        {ratio.description}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" className="text-xs" variant="outline">
+          <Settings size={14} className="mr-1" />
+          Settings
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-fit" align="start" side="bottom">
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium text-foreground-default">
+              Adjust Aspect Ratio
+            </h3>
+            <p className="text-xs text-foreground-subtle">
+              Configure aspect ratio and crop mode
+            </p>
           </div>
 
-          {convertAspectRatio !== "original" && (
+          <div className="grid gap-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="cropMode" className="text-right text-xs">
-                Crop Mode
+              <label htmlFor="aspectRatio" className="text-right text-xs">
+                Aspect Ratio
               </label>
-              <div className="col-span-3 grid grid-cols-3 gap-2">
-                {cropModes.map((mode) => (
-                  <Button
-                    key={mode.value}
-                    onClick={() => setCropMode(mode.value as CropMode)}
-                    className={cn(
-                      "flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-colors space-y-1 border",
-                      cropMode === mode.value
-                        ? "bg-primary/20 text-primary border-primary"
-                        : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
-                    )}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    <div className="flex items-center space-x-1.5">
-                      {mode.icon}
-                      <span className="text-xs font-medium">{mode.label}</span>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {convertAspectRatio !== "original" && cropMode === "letterbox" && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label className="text-right text-xs">Pad Color</label>
-              <div className="col-span-3">
-                <ColorPalette value={padColor} onChange={setPadColor}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs flex items-center gap-2"
-                  >
-                    <span
-                      className="h-4 w-4 rounded border"
-                      style={{ backgroundColor: padColor }}
-                    />
-                    <span>{padColor}</span>
-                  </Button>
-                </ColorPalette>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="format" className="text-right text-xs">
-              Format
-            </label>
-            <Select
-              value={format}
-              onValueChange={(value) =>
-                setFormat(value as ExportSettings["format"])
-              }
-            >
-              <SelectTrigger
-                id="format"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+              <Select
+                value={convertAspectRatio}
+                onValueChange={(val) =>
+                  setConvertAspectRatio(val as AspectRatioValue)
+                }
               >
-                <SelectValue placeholder="Select format" />
-              </SelectTrigger>
-              <SelectContent>
-                {FORMAT_OPTIONS.map((f) => (
-                  <SelectItem key={f.value} value={f.value}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>{f.label}</span>
-                      <Badge variant="secondary" className="ml-2">
-                        {f.description}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+                <SelectTrigger
+                  id="aspectRatio"
+                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                >
+                  <SelectValue placeholder="Select an aspect ratio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {aspectRatios.map((ratio) => (
+                    <SelectItem key={ratio.value} value={ratio.value}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{ratio.label}</span>
+                        <Badge variant="secondary" className="ml-2">
+                          {ratio.description}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <DialogFooter>
-          <div className="flex items-center gap-2 w-full">
+            {convertAspectRatio !== "original" && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="cropMode" className="text-right text-xs">
+                  Crop Mode
+                </label>
+                <div className="col-span-3 grid grid-cols-3 gap-2">
+                  {cropModes.map((mode) => (
+                    <Button
+                      key={mode.value}
+                      onClick={() => setCropMode(mode.value as CropMode)}
+                      className={cn(
+                        "flex flex-col items-center rounded-3xl justify-center p-2 cursor-pointer transition-colors space-y-1 border",
+                        cropMode === mode.value
+                          ? "bg-primary/20 text-primary border-primary"
+                          : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
+                      )}
+                      variant="ghost"
+                      size="sm"
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        {mode.icon}
+                        <span className="text-xs font-medium">
+                          {mode.label}
+                        </span>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {convertAspectRatio !== "original" && cropMode === "letterbox" && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="padColor" className="text-right text-xs">
+                  Pad Color
+                </label>
+                <div className="col-span-3">
+                  <ColorPalette
+                    id="padColor"
+                    value={padColor}
+                    onChange={setPadColor}
+                  >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs flex items-center gap-2"
+                    >
+                      <span
+                        className="h-4 w-4 rounded border"
+                        style={{ backgroundColor: padColor }}
+                      />
+                      <span>{padColor}</span>
+                    </Button>
+                  </ColorPalette>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="format" className="text-right text-xs">
+                Format
+              </label>
+              <Select
+                value={format}
+                onValueChange={(value) =>
+                  setFormat(value as ExportSettings["format"])
+                }
+              >
+                <SelectTrigger
+                  id="format"
+                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                >
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORMAT_OPTIONS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{f.label}</span>
+                        <Badge variant="secondary" className="ml-2">
+                          {f.description}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full pt-2">
             <Button
               onClick={() => {
                 onSettingsApplied({
@@ -232,7 +229,7 @@ const AspectRatioSelector = ({
                   padColor,
                   format,
                 });
-                onOpenChange(false);
+                setIsOpen(false);
               }}
               className="flex-1"
               variant="default"
@@ -250,9 +247,9 @@ const AspectRatioSelector = ({
               disabled={isBufferDownloaded}
             />
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 

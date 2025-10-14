@@ -11,16 +11,18 @@ import React, {
 import { createPortal } from "react-dom";
 import { Slot } from "@radix-ui/react-slot";
 import { X } from "lucide-react";
-import { useAnimatePresence } from "@/hooks/use-animate-presence";
+import {
+  getState,
+  useAnimatePresence,
+  type AnimationState,
+} from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { useClientOnly } from "@/hooks/use-client-only";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
-type EditorSide = "left" | "right";
-
-type AnimationState = "entering" | "exiting" | "idle";
+export type EditorSide = "left" | "right";
 
 interface EditorPanelContextType {
   open: boolean;
@@ -114,21 +116,26 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
         if (presence) {
+          // console.log("---entering");
           setAnimationState("entering");
           resolve();
           return;
         }
 
+        console.log("---presence", presence);
+
         setAnimationState("exiting");
 
         const node = contentRef.current;
         if (!node) {
+          // console.log("---node", node);
           setAnimationState("idle");
           resolve();
           return;
         }
 
         const onAnimationEnd = () => {
+          // console.log("---onAnimationEnd", presence);
           setAnimationState("idle");
           node.removeEventListener("animationend", onAnimationEnd);
           node.removeEventListener("transitionend", onAnimationEnd);
@@ -384,12 +391,9 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
 
     if (!shouldRender && !forceMount) return null;
 
-    const state =
-      animationState === "entering"
-        ? "open"
-        : animationState === "exiting"
-        ? "closed"
-        : undefined;
+    const state = getState(animationState);
+
+    console.log("---state", state, animationState);
 
     return (
       <>

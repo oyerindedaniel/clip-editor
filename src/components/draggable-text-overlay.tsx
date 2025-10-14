@@ -45,8 +45,8 @@ export const DraggableTextOverlay = ({
       ref={elementRef}
       data-selected={isSelected ? "" : undefined}
       className={cn(
-        "absolute top-0 left-0 select-none cursor-move pointer-events-auto will-change-transform",
-        isSelected && "ring-2 ring-primary/50 z-10"
+        "absolute top-0 left-0 select-none cursor-move pointer-events-auto will-change-transform z-12",
+        isSelected && "ring-2 ring-primary/50 z-15"
       )}
       style={
         {
@@ -89,7 +89,7 @@ export const DraggableTextOverlay = ({
           deleteTextOverlay(overlay.id);
         }}
         className="
-    absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-10
+    absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-12
     opacity-0 blur-[1px] scale-100 transition-all duration-300 ease-in-out
     hover:scale-105
     [[data-selected]_&]:opacity-100

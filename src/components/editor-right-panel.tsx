@@ -19,6 +19,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { KeyframeContext } from "@/contexts/keyframe-context";
+import { cn } from "@/lib/utils";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -50,6 +52,14 @@ export function EditorRightPanel({
       addImageOverlay: state.addImageOverlay,
     })
   );
+
+  const { keyframes, currentKeyframeId, setCurrentKeyframeId, setKeyframes } =
+    useShallowSelector(KeyframeContext, (state) => ({
+      keyframes: state.keyframes,
+      currentKeyframeId: state.currentKeyframeId,
+      setCurrentKeyframeId: state.setCurrentKeyframeId,
+      setKeyframes: state.setKeyframes,
+    }));
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -98,7 +108,7 @@ export function EditorRightPanel({
         <AccordionItem value="clips">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Scissors size={16} />
+              <Scissors size={14} />
               <span>Clips</span>
             </div>
           </AccordionTrigger>
@@ -125,7 +135,7 @@ export function EditorRightPanel({
         <AccordionItem value="text">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Type size={16} />
+              <Type size={14} />
               <span>Text</span>
             </div>
           </AccordionTrigger>
@@ -149,7 +159,7 @@ export function EditorRightPanel({
         <AccordionItem value="image">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <ImageIcon size={16} />
+              <ImageIcon size={14} />
               <span>Image</span>
             </div>
           </AccordionTrigger>
@@ -169,7 +179,7 @@ export function EditorRightPanel({
         <AccordionItem value="audio">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Music size={16} />
+              <Music size={14} />
               <span>Audio</span>
             </div>
           </AccordionTrigger>
@@ -196,10 +206,79 @@ export function EditorRightPanel({
           </AccordionContent>
         </AccordionItem>
 
+        <AccordionItem value="keyframes">
+          <AccordionTrigger>
+            <div className="flex items-center gap-2">
+              <Type size={14} />
+              <span>Keyframes</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2">
+              {keyframes && keyframes.length ? (
+                <div className="flex flex-col gap-1">
+                  {keyframes
+                    .slice()
+                    .sort((a, b) => a.time - b.time)
+                    .map((kf) => (
+                      <div
+                        key={kf.id}
+                        className={cn(
+                          "group relative w-full h-10 rounded-3xl border bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
+                          currentKeyframeId === kf.id &&
+                            "ring-1 ring-primary/40 border-primary/50"
+                        )}
+                      >
+                        <button
+                          onClick={() => setCurrentKeyframeId(kf.id)}
+                          className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
+                        >
+                          <span
+                            className="h-3 w-3 rounded-full border bg-(--color)"
+                            style={
+                              {
+                                "--color": kf.color || "#22c55e",
+                              } as React.CSSProperties
+                            }
+                          />
+                          <span className="text-xs font-medium tracking-tight text-foreground-default">
+                            {kf.time.toFixed(2)}s
+                          </span>
+                          <span className="ml-auto text-[10px] text-foreground-muted">
+                            {kf.id.replace(/^kf-/, "#")}
+                          </span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKeyframes((prev) =>
+                              prev.filter((x) => x.id !== kf.id)
+                            );
+                            if (currentKeyframeId === kf.id) {
+                              setCurrentKeyframeId(null);
+                            }
+                          }}
+                          aria-label="Remove keyframe"
+                          className="absolute right-2 cursor-pointer top-1/2 -translate-y-1/2 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm rounded-full h-6 px-2 py-0 text-[10px] leading-none shadow-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-xs text-foreground-muted">
+                  No keyframes yet.
+                </div>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="dual">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
-              <Video size={16} />
+              <Video size={14} />
               <span>Dual Video</span>
             </div>
           </AccordionTrigger>
@@ -223,12 +302,16 @@ export function EditorRightPanel({
       onAudioTrackUpdate,
       audioTracks,
       handleImageFileSelect,
+      keyframes,
+      currentKeyframeId,
+      setCurrentKeyframeId,
+      setKeyframes,
     ]
   );
 
   return (
     <div className="w-full h-full bg-surface-primary flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4 h-full">
+      <div className="flex-1 overflow-y-auto p-4 h-full no-scrollbar">
         {renderAccordion()}
       </div>
     </div>

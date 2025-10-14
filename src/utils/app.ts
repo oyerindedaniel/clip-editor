@@ -23,7 +23,7 @@ export type ThrottleOptions = {
   trailing?: boolean;
 };
 
-export function throttle<T extends (...args: any[]) => void>(
+function throttle<T extends (...args: any[]) => void>(
   func: T,
   wait: number,
   options: ThrottleOptions = {}
@@ -72,6 +72,21 @@ export function throttle<T extends (...args: any[]) => void>(
   };
 }
 
+function throttleWithRaf<T extends (...args: any[]) => void>(fn: T): T {
+  let ticking = false;
+  let lastArgs: Parameters<T> | null = null;
+  return function (this: unknown, ...args: Parameters<T>) {
+    lastArgs = args;
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(() => {
+        if (lastArgs) fn(...lastArgs);
+        ticking = false;
+      });
+    }
+  } as T;
+}
+
 function formatDurationDisplay(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -82,7 +97,7 @@ function formatDurationDisplay(ms: number): string {
     .padStart(2, "0")}.${milliseconds.toString().padStart(2, "0")}`;
 }
 
-const formatTime = (milliseconds: number) => {
+function formatTime(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -94,7 +109,21 @@ const formatTime = (milliseconds: number) => {
       .toString()
       .padStart(2, "0")}`;
   }
-  return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
-};
 
-export { debounce, formatDurationDisplay, formatTime };
+  return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+function roundToDecimals(value: number, decimals: number = 3): number {
+  if (!Number.isFinite(value)) return 0;
+  const power = Math.pow(10, decimals);
+  return Math.round(value * power) / power;
+}
+
+export {
+  debounce,
+  throttle,
+  throttleWithRaf,
+  formatDurationDisplay,
+  formatTime,
+  roundToDecimals,
+};

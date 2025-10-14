@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-
 import type {
   AudioTrack,
   ExportSettings,
@@ -26,7 +25,7 @@ import {
   getBufferKey,
   getOriginalBufferKey,
 } from "@/utils/video";
-import AspectRatioSelector from "./aspect-ratio-selector";
+import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
@@ -41,10 +40,48 @@ import EditorHeader from "./editor-header";
 import useVideoThumbnails from "@/hooks/app/use-video-thumbnails";
 import { PersistentOverlays } from "./persistent-overlays";
 import { useShallowSelector } from "react-shallow-store";
-import EditorPanel from "./editor-panel";
-import { Button } from "./ui/button";
-import { SlidersHorizontal } from "lucide-react";
+import EditorPanel, { type EditorSide } from "./editor-panel";
+import { Button } from "@/components/ui/button";
+import {
+  SlidersHorizontal,
+  Film,
+  Square,
+  Monitor,
+  Smartphone,
+  PanelLeft,
+  PanelRight,
+} from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
+import { KeyframeContext } from "@/contexts/keyframe-context";
+import { BoundaryBox } from "./boundary-box";
+import { Keyframe } from "./keyframe";
+import { ScrubbableInput } from "./scrubbable-input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AspectRatio } from "@/utils/aspect-ratios";
+import { KEYFRAME_EASINGS } from "@/utils/keyframe";
+import { roundToDecimals } from "@/utils/app";
+import type { KeyframeEasing } from "@/utils/keyframe";
+import ColorPalette, { Color } from "./color-palette";
+import { useElementSize } from "@/hooks/use-element-size";
+import VideoPreview from "./video-preview";
+import CanvasVideoRenderer from "./canvas-video-renderer";
+import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
+import { LoaderIcon } from "@/icons/loader";
+import { cn } from "@/lib/utils";
+import { calculateHeight } from "@/utils/aspect-ratios";
+import KeyframeLists from "./keyframe-lists";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -57,8 +94,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
+  const [panelSide, setPanelSide] = useState<EditorSide>("right");
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const keyframeTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const {
     isOpen: isAspectRatioModalOpen,
@@ -71,6 +110,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     close: closeExportNamingModal,
     open: openExportNamingModal,
   } = useDisclosure();
+
+  const { ref: videoRenderRef, sizeRef: canvasSizeRef } =
+    useElementSize<HTMLDivElement>();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioFileRef = useRef<HTMLInputElement | null>(null);
@@ -85,13 +127,61 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       setVideoRef: state.setVideoRef,
     }));
 
-  const { secondaryClip, dualVideoSettingsRef } = useShallowSelector(
-    ClipContext,
-    (state) => ({
-      secondaryClip: state.secondaryClip,
-      dualVideoSettingsRef: state.dualVideoSettingsRef,
-    })
-  );
+  const {
+    primaryTrimRef,
+    secondaryTrimRef,
+    setPrimaryTrim,
+    setSecondaryTrim,
+    secondaryClip,
+    dualVideoSettingsRef,
+  } = useShallowSelector(ClipContext, (state) => ({
+    primaryTrimRef: state.primaryTrimRef,
+    secondaryTrimRef: state.secondaryTrimRef,
+    setPrimaryTrim: state.setPrimaryTrim,
+    setSecondaryTrim: state.setSecondaryTrim,
+    secondaryClip: state.secondaryClip,
+    dualVideoSettingsRef: state.dualVideoSettingsRef,
+  }));
+
+  const {
+    boundaryAspectRatio,
+    setBoundaryAspectRatio,
+    boundaryVisible,
+    setBoundaryVisible,
+    boundaryTransform,
+    setBoundaryTransform,
+    keyframes: controlledKeyframes,
+    setKeyframes: setControlledKeyframes,
+    currentKeyframeId: controlledCurrentKeyframeId,
+    setCurrentKeyframeId: setControlledCurrentKeyframeId,
+  } = useShallowSelector(KeyframeContext, (state) => ({
+    boundaryAspectRatio: state.boundaryAspectRatio,
+    setBoundaryAspectRatio: state.setBoundaryAspectRatio,
+    boundaryVisible: state.boundaryVisible,
+    setBoundaryVisible: state.setBoundaryVisible,
+    boundaryTransform: state.boundaryTransform,
+    setBoundaryTransform: state.setBoundaryTransform,
+    keyframes: state.keyframes,
+    setKeyframes: state.setKeyframes,
+    currentKeyframeId: state.currentKeyframeId,
+    setCurrentKeyframeId: state.setCurrentKeyframeId,
+  }));
+
+  const {
+    refs,
+    classNames,
+    styles,
+    animating: isAnimatingStack,
+    toggle: toggleStack,
+    present,
+    parentClassName,
+    active,
+  } = useStackedTransition({
+    defaultActive: "dual",
+    keys: ["dual", "renderer"] as const,
+    duration: 650,
+    forceMount: true,
+  });
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -104,14 +194,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
 
-  const { primaryTrimRef, secondaryTrimRef, setPrimaryTrim, setSecondaryTrim } =
-    useShallowSelector(ClipContext, (state) => ({
-      primaryTrimRef: state.primaryTrimRef,
-      secondaryTrimRef: state.secondaryTrimRef,
-      setPrimaryTrim: state.setPrimaryTrim,
-      setSecondaryTrim: state.setSecondaryTrim,
-    }));
-
   const isValidBufferState = useMemo(() => {
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
 
@@ -120,6 +202,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     return originalBufferExists && hasAnyProcessedBuffer;
   }, [processedBuffers]);
+
+  const togglePanelSide = useCallback(() => {
+    setPanelSide((prev) => (prev === "right" ? "left" : "right"));
+  }, []);
 
   const toggleTrace = useCallback(() => {
     setShowTrace((v) => {
@@ -200,7 +286,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     if (!video || !container || !trace) return;
 
-    video.style.width = `${container.clientWidth}px`;
+    // video.style.width = `${container.clientWidth}px`;
 
     const { x, y, width, height } = getVideoBoundingBox(video);
 
@@ -332,11 +418,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           updated.set(bufferKey, { buffer, url: clipData.url });
           return updated;
         });
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
+      } catch (error) {
+        if ((normalizeError(error).name = "AbortError")) {
           return;
         }
-        const errorMsg = normalizeError(err).message;
+        const errorMsg = normalizeError(error).message;
         toast.error(`Failed to load clip: ${errorMsg}`);
       }
     };
@@ -581,6 +667,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? primaryTrimData.trimEnd - primaryTrimData.trimStart
       : duration;
 
+  const source = useMemo(() => <video src={primaryUrl} />, [primaryUrl]);
+
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
@@ -588,112 +676,498 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         isExporting={isExporting}
         showTrace={showTrace}
         onToggleTrace={toggleTrace}
-        onOpenAdjust={openAspectRatioModal}
         onOpenExport={openExportNamingModal}
-      />
-
-      <div className="flex-1 min-h-0">
-        <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
-          <div className="w-full flex flex-col lg:flex-row items-center gap-4">
-            {/* 16:9 primary player (original) */}
-            <div
-              data-container-context="primary"
-              ref={containerRef}
-              className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md"
-            >
-              <MediaPlayer.Root>
-                <MediaPlayer.Video
-                  src={primaryUrl}
-                  ref={(el) => {
-                    videoRef.current = el;
-                    setVideoRef(el);
-                  }}
-                  playsInline
-                  className="w-full aspect-video"
-                  poster={"/thumbnails/video-thumb-2.webp"}
-                  // onTimeUpdate={handleTimeUpdate}
-                />
-                <MediaPlayer.Loading />
-                <MediaPlayer.Error />
-                <MediaPlayer.VolumeIndicator />
-                <MediaPlayer.Controls>
-                  <MediaPlayer.ControlsOverlay />
-                  <MediaPlayer.Play />
-                  <MediaPlayer.SeekBackward />
-                  <MediaPlayer.SeekForward />
-                  <MediaPlayer.Volume />
-                  <MediaPlayer.Seek />
-                  <MediaPlayer.Time />
-                  <MediaPlayer.PlaybackSpeed />
-                  <MediaPlayer.Loop />
-                  <MediaPlayer.Captions />
-                  <MediaPlayer.PiP />
-                  <MediaPlayer.Fullscreen />
-                  <MediaPlayer.Download />
-                </MediaPlayer.Controls>
-              </MediaPlayer.Root>
-
-              <div ref={traceRef} />
-
-              <PersistentOverlays duration={duration} />
-            </div>
-
-            <DualVideoPlayer
-              isPrimaryVideoLoaded={isVideoLoaded}
-              primaryClip={{ ...clipData, url: originalPrimaryUrl }}
-              secondaryClip={secondaryClip}
-              duration={duration}
-            />
-          </div>
-
-          <div className="flex-1 min-h-0">
-            {secondaryClip ? (
-              <DualVideoTracks
-                primaryDurationMs={primaryDurationMs}
-                secondaryDurationMs={secondaryClip.metadata.clipDurationMs}
-                initialOffsetMs={0}
-                primaryPreviewFrames={primaryFrames}
-                secondaryPreviewFrames={secondaryFrames}
-                // onOffsetChange={(liveOffsetMs) => {
-                //   setSecondaryTrim((prev) => ({
-                //     ...prev,
-                //     timelineOffset: liveOffsetMs,
-                //   }));
-                // }}
-                onCommitOffset={(offsetMs) => {
-                  setSecondaryTrim((prev) => ({
-                    ...prev,
-                    timelineOffset: offsetMs,
-                  }));
-                }}
-                onCutSecondaryAt={(trimData) => {
-                  setSecondaryTrim((prev) => ({
-                    ...prev,
-                    ...trimData,
-                  }));
-                }}
-              />
-            ) : isVideoLoaded ? (
-              <Timeline
-                duration={duration}
-                onTrim={handleTrim}
-                frames={primaryFrames}
-              />
-            ) : (
-              <TimelineSkeleton />
-            )}
-          </div>
-        </div>
-      </div>
-
-      <AspectRatioSelector
-        isOpen={isAspectRatioModalOpen}
-        onOpenChange={closeAspectRatioModal}
+        onOpenAdjust={openAspectRatioModal}
         settings={settings}
         onSettingsApplied={handleSettingsApplied}
         isBufferDownloaded={isValidBufferState}
-        isExporting={isExporting}
       />
+
+      <div className="flex-1 min-h-0">
+        <div className="h-full flex flex-col p-4 space-y-4 max-w-6xl mx-auto">
+          <Keyframe.Root
+            maxTime={duration}
+            keyframes={controlledKeyframes}
+            onKeyframesChange={setControlledKeyframes}
+            currentKeyframeId={controlledCurrentKeyframeId}
+            onCurrentKeyframeIdChange={setControlledCurrentKeyframeId}
+          >
+            {({
+              keyframes,
+              currentKeyframeId,
+              setCurrentKeyframeId,
+              addKeyframe,
+              updateKeyframe,
+              deleteKeyframe,
+              getKeyframe,
+              updateColors,
+              keyframeBounds,
+            }) => (
+              <>
+                <div className="w-full flex flex-col lg:flex-row items-center gap-4">
+                  <div>
+                    <div className="flex items-center gap-1 p-2">
+                      <AspectRatioPicker
+                        screenSize="16:9"
+                        aspectRatio={boundaryAspectRatio}
+                        onAspectRatioChange={setBoundaryAspectRatio}
+                        visible={boundaryVisible}
+                        onVisibleChange={setBoundaryVisible}
+                        disabled={!isValidBufferState || isExporting}
+                      />
+
+                      <div className="flex items-center gap-px">
+                        <Button
+                          ref={keyframeTriggerRef}
+                          size="sm"
+                          onClick={() => {
+                            if (boundaryTransform) {
+                              addKeyframe({
+                                time: videoRef.current?.currentTime
+                                  ? videoRef.current.currentTime
+                                  : 0,
+                                transform: boundaryTransform,
+                                easing: "ease-in-out",
+                                color: "#22c55e",
+                              });
+                            }
+                          }}
+                          disabled={!boundaryTransform}
+                          className="ml-2"
+                        >
+                          <Film className="mr-2" size={14} />
+                          Add Keyframe
+                        </Button>
+                        {keyframes && keyframes.length > 0 && (
+                          <KeyframeLists
+                            keyframes={keyframes}
+                            currentKeyframeId={currentKeyframeId}
+                            onKeyframeSelect={(id) => {
+                              setCurrentKeyframeId(id);
+                            }}
+                            onKeyframeRemove={(id) => {
+                              deleteKeyframe(id);
+                            }}
+                            className="ml-2"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <BoundaryBox
+                      screenSize="16:9"
+                      videoWidth={videoRef.current?.videoWidth}
+                      videoHeight={videoRef.current?.videoHeight}
+                      aspectRatio={boundaryAspectRatio as AspectRatio}
+                      visible={boundaryVisible}
+                      transform={boundaryTransform!}
+                      onTransformChange={(transform) => {
+                        setBoundaryTransform(transform);
+                        if (currentKeyframeId) {
+                          updateKeyframe(currentKeyframeId, {
+                            transform,
+                          });
+                        }
+                      }}
+                    >
+                      {({
+                        updatePosition,
+                        updateScale,
+                        containerWidth,
+                        containerHeight,
+                      }) => (
+                        <>
+                          <BoundaryBox.Container
+                            ref={containerRef}
+                            className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md"
+                          >
+                            <MediaPlayer.Root>
+                              <MediaPlayer.Video
+                                src={primaryUrl}
+                                ref={(el) => {
+                                  videoRef.current = el;
+                                  setVideoRef(el);
+                                }}
+                                playsInline
+                                className="w-full aspect-video"
+                                poster={"/thumbnails/video-thumb-2.webp"}
+                              />
+                              <MediaPlayer.Loading />
+                              <MediaPlayer.Error />
+                              <MediaPlayer.VolumeIndicator />
+                              <MediaPlayer.Controls>
+                                <MediaPlayer.ControlsOverlay />
+                                <MediaPlayer.Play />
+                                <MediaPlayer.SeekBackward />
+                                <MediaPlayer.SeekForward />
+                                <MediaPlayer.Volume />
+                                <MediaPlayer.Seek />
+                                <MediaPlayer.Time />
+                                <MediaPlayer.PlaybackSpeed />
+                                <MediaPlayer.Loop />
+                                <MediaPlayer.Captions />
+                                <MediaPlayer.PiP />
+                                <MediaPlayer.Fullscreen />
+                                <MediaPlayer.Download />
+                              </MediaPlayer.Controls>
+                            </MediaPlayer.Root>
+
+                            <div ref={traceRef} />
+                            <PersistentOverlays duration={duration} />
+
+                            <BoundaryBox.Draggable>
+                              <BoundaryBox.Overlay>
+                                <BoundaryBox.Resizable side="top-left" />
+                                <BoundaryBox.Resizable side="top-right" />
+                                <BoundaryBox.Resizable side="bottom-left" />
+                                <BoundaryBox.Resizable side="bottom-right" />
+                              </BoundaryBox.Overlay>
+                            </BoundaryBox.Draggable>
+                          </BoundaryBox.Container>
+
+                          <Keyframe.Box triggerRef={keyframeTriggerRef}>
+                            <Keyframe.BoxHeader>
+                              {currentKeyframeId &&
+                                getKeyframe(currentKeyframeId) &&
+                                `Keyframe @ ${getKeyframe(
+                                  currentKeyframeId
+                                )!.time.toFixed(1)}s`}
+
+                              <Keyframe.BoxClose />
+                            </Keyframe.BoxHeader>
+                            <Keyframe.BoxContent>
+                              {currentKeyframeId &&
+                                getKeyframe(currentKeyframeId) && (
+                                  <>
+                                    <div className="space-y-3">
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.x,
+                                          3
+                                        )}
+                                        onValueChange={(x) => {
+                                          updatePosition(
+                                            x,
+                                            getKeyframe(currentKeyframeId)!
+                                              .transform.y
+                                          );
+                                        }}
+                                        min={0}
+                                        max={
+                                          containerWidth -
+                                          (getKeyframe(currentKeyframeId)
+                                            ?.transform.width || 0)
+                                        }
+                                        step={10}
+                                        sensitivity={0.1}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-x">
+                                          X Position
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              X
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-x" />
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.y,
+                                          3
+                                        )}
+                                        onValueChange={(y) => {
+                                          updatePosition(
+                                            getKeyframe(currentKeyframeId)!
+                                              .transform.x,
+                                            y
+                                          );
+                                        }}
+                                        min={0}
+                                        max={
+                                          containerHeight -
+                                          (getKeyframe(currentKeyframeId)
+                                            ?.transform.height || 0)
+                                        }
+                                        step={10}
+                                        sensitivity={0.1}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-y">
+                                          Y Position
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              Y
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-y" />
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <ScrubbableInput.Root
+                                        value={roundToDecimals(
+                                          getKeyframe(currentKeyframeId)!
+                                            .transform.scale,
+                                          3
+                                        )}
+                                        onValueChange={(scale) => {
+                                          updateScale(scale);
+                                        }}
+                                        min={1}
+                                        max={3}
+                                        step={0.1}
+                                        sensitivity={0.4}
+                                      >
+                                        <ScrubbableInput.Label htmlFor="keyframe-scale">
+                                          Scale
+                                        </ScrubbableInput.Label>
+                                        <ScrubbableInput.Content>
+                                          <ScrubbableInput.DragHandle>
+                                            <ScrubbableInput.Icon>
+                                              <Square className="w-4 h-4" />
+                                            </ScrubbableInput.Icon>
+                                          </ScrubbableInput.DragHandle>
+                                          <ScrubbableInput.Field id="keyframe-scale" />
+                                        </ScrubbableInput.Content>
+                                      </ScrubbableInput.Root>
+
+                                      <div className="space-y-1">
+                                        <Label
+                                          htmlFor="keyframe-color"
+                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                        >
+                                          Color
+                                        </Label>
+                                        <ColorPalette
+                                          id="keyframe-color"
+                                          value={
+                                            currentKeyframeId
+                                              ? getKeyframe(currentKeyframeId)
+                                                  ?.color
+                                              : "#22c55e"
+                                          }
+                                          onChange={(color: Color) => {
+                                            if (currentKeyframeId) {
+                                              updateColors(
+                                                currentKeyframeId,
+                                                color
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs flex items-center gap-2"
+                                          >
+                                            <span
+                                              className="h-4 w-4 rounded border"
+                                              style={{
+                                                backgroundColor:
+                                                  currentKeyframeId
+                                                    ? getKeyframe(
+                                                        currentKeyframeId
+                                                      )?.color
+                                                    : "#22c55e",
+                                              }}
+                                            />
+                                            <span>
+                                              {currentKeyframeId
+                                                ? getKeyframe(currentKeyframeId)
+                                                    ?.color
+                                                : "#22c55e"}
+                                            </span>
+                                          </Button>
+                                        </ColorPalette>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <Label
+                                          htmlFor="keyframe-easing"
+                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                        >
+                                          Easing
+                                        </Label>
+                                        <Select
+                                          value={
+                                            getKeyframe(currentKeyframeId)!
+                                              .easing
+                                          }
+                                          onValueChange={(value) =>
+                                            updateKeyframe(currentKeyframeId, {
+                                              easing: value as KeyframeEasing,
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger
+                                            id="keyframe-easing"
+                                            className=""
+                                          >
+                                            <SelectValue placeholder="Select easing" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {KEYFRAME_EASINGS.map((easing) => (
+                                              <SelectItem
+                                                key={easing}
+                                                value={easing}
+                                              >
+                                                {easing}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() =>
+                                          deleteKeyframe(currentKeyframeId)
+                                        }
+                                        className="w-full mt-2"
+                                      >
+                                        Delete Keyframe
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                            </Keyframe.BoxContent>
+                          </Keyframe.Box>
+                        </>
+                      )}
+                    </BoundaryBox>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {keyframes && !!keyframes.length && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={toggleStack}
+                        disabled={isAnimatingStack}
+                        className="flex items-center gap-2 self-end"
+                      >
+                        {isAnimatingStack ? (
+                          <LoaderIcon size={14} />
+                        ) : active === "dual" ? (
+                          <Monitor size={14} />
+                        ) : (
+                          <Smartphone size={14} />
+                        )}
+                        <span className="text-xs">
+                          {active === "dual" ? "Canvas View" : "Dual View"}
+                        </span>
+                      </Button>
+                    )}
+
+                    <div
+                      ref={videoRenderRef}
+                      className={cn("aspect-[9/16] w-[260px]", parentClassName)}
+                    >
+                      {present.dual && (
+                        <DualVideoPlayer
+                          ref={
+                            keyframes?.length
+                              ? (refs.dual as React.Ref<HTMLDivElement>)
+                              : null
+                          }
+                          isPrimaryVideoLoaded={isVideoLoaded}
+                          primaryClip={{ ...clipData, url: originalPrimaryUrl }}
+                          secondaryClip={secondaryClip}
+                          duration={duration}
+                          className={classNames.dual}
+                          style={styles.dual}
+                        />
+                      )}
+
+                      {present.renderer && (
+                        <VideoPreview
+                          ref={
+                            keyframes?.length
+                              ? (refs.renderer as React.Ref<HTMLDivElement>)
+                              : null
+                          }
+                          playing={active === "renderer"}
+                          source={source}
+                          baseAspect="16:9"
+                          targetAspect={boundaryAspectRatio ?? "9:16"}
+                          variant="crop"
+                          keyframes={keyframes}
+                          keyframeBounds={keyframeBounds}
+                          className={classNames.renderer}
+                          style={styles.renderer}
+                        >
+                          {({ transform, variant, videoRef }) => (
+                            <CanvasVideoRenderer
+                              renderEnabled={active === "renderer"}
+                              videoRef={videoRef}
+                              transformData={transform}
+                              variant={variant}
+                              width={canvasSizeRef.current.width}
+                              height={calculateHeight({
+                                aspectRatio: boundaryAspectRatio ?? "9:16",
+                                width: canvasSizeRef.current.width,
+                              })}
+                            />
+                          )}
+                        </VideoPreview>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0">
+                  {secondaryClip ? (
+                    <DualVideoTracks
+                      primaryDurationMs={primaryDurationMs}
+                      secondaryDurationMs={
+                        secondaryClip.metadata.clipDurationMs
+                      }
+                      initialOffsetMs={0}
+                      primaryPreviewFrames={primaryFrames}
+                      secondaryPreviewFrames={secondaryFrames}
+                      // onOffsetChange={(liveOffsetMs) => {
+                      //   setSecondaryTrim((prev) => ({
+                      //     ...prev,
+                      //     timelineOffset: liveOffsetMs,
+                      //   }));
+                      // }}
+                      onCommitOffset={(offsetMs) => {
+                        setSecondaryTrim((prev) => ({
+                          ...prev,
+                          timelineOffset: offsetMs,
+                        }));
+                      }}
+                      onCutSecondaryAt={(trimData) => {
+                        setSecondaryTrim((prev) => ({
+                          ...prev,
+                          ...trimData,
+                        }));
+                      }}
+                    />
+                  ) : isVideoLoaded ? (
+                    <Timeline
+                      duration={duration}
+                      onTrim={handleTrim}
+                      frames={primaryFrames}
+                      keyframes={keyframes}
+                    />
+                  ) : (
+                    <TimelineSkeleton />
+                  )}
+                </div>
+              </>
+            )}
+          </Keyframe.Root>
+        </div>
+      </div>
 
       <ExportNamingDialog
         isOpen={isExportNamingModalOpen}
@@ -706,17 +1180,38 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       <EditorPanel.Root
         open={toolPanelOpen}
         onOpenChange={setToolPanelOpen}
-        side="right"
+        side={panelSide}
         disablePortal={false}
         triggerRef={triggerRef}
       >
         <EditorPanel.Portal>
           <EditorPanel.Content className="pb-[49px] w-[280px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
-              <kbd className="px-2 py-0.5 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
+              <kbd className="px-2 py-0.1 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
                 Shift+T
               </kbd>
-              <EditorPanel.CloseButton />
+              <div className="ml-auto flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      aria-label="Toggle panel side"
+                      onClick={togglePanelSide}
+                    >
+                      {panelSide === "right" ? (
+                        <PanelRight size={14} />
+                      ) : (
+                        <PanelLeft size={14} />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {panelSide === "right" ? "Dock to left" : "Dock to right"}
+                  </TooltipContent>
+                </Tooltip>
+                <EditorPanel.CloseButton />
+              </div>
             </EditorPanel.Header>
             <EditorPanel.Body className="p-0 h-full">
               <EditorRightPanel

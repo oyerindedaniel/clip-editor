@@ -47,7 +47,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
           )}
         >
           <div className="flex items-center gap-3 p-2">
-            <div className="h-8 w-8 rounded-xl overflow-hidden bg-surface-tertiary flex items-center justify-center">
+            <div className="h-8 w-8 rounded-full overflow-hidden bg-surface-tertiary flex items-center justify-center">
               <img
                 src={objectUrl.current}
                 alt={overlay.file.name}

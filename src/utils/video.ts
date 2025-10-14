@@ -5,6 +5,7 @@ import type {
   Overlay,
   Settings,
 } from "@/types/app";
+import { ASPECT_RATIOS, AspectRatio } from "./aspect-ratios";
 
 /**
  * Calculate the visible bounding box of a video element inside its container.
@@ -151,15 +152,50 @@ function getVisibleOverlays(overlays: Overlay[], currentTimeMs: number) {
   );
 }
 
-const getBufferKey = (settings: Settings) => {
-  return `${settings.aspectRatio || "original"}-${
-    settings.cropMode || "none"
-  }-${settings.padColor || "white"}-${settings.format || "mp4"}`;
-};
+function getBufferKey(settings: Settings) {
+  const aspectRatio = settings.aspectRatio || "original";
+  const cropMode = settings.cropMode || "none";
+  const padColor = settings.padColor || "white";
+  const format = settings.format || "mp4";
 
-const getOriginalBufferKey = () => {
+  return `${aspectRatio}-${cropMode}-${padColor}-${format}`;
+}
+
+function getOriginalBufferKey(): string {
   return getBufferKey(DEFAULT_CLIP_METADATA);
-};
+}
+
+function calculateAspectRatioScale(base: AspectRatio, target: AspectRatio) {
+  const baseRatio = ASPECT_RATIOS[base];
+  const targetRatio = ASPECT_RATIOS[target];
+
+  const scale = targetRatio / baseRatio;
+  const baseOrientation =
+    baseRatio > 1 ? "landscape" : baseRatio < 1 ? "portrait" : "square";
+  const targetOrientation =
+    targetRatio > 1 ? "landscape" : targetRatio < 1 ? "portrait" : "square";
+
+  let mode: "letterbox" | "crop" | "stretch";
+  if (baseRatio === targetRatio) {
+    mode = "stretch";
+  } else if (
+    (baseRatio > targetRatio && baseOrientation === "landscape") ||
+    (baseRatio < targetRatio && baseOrientation === "portrait")
+  ) {
+    mode = "crop";
+  } else {
+    mode = "letterbox";
+  }
+
+  return {
+    baseRatio,
+    targetRatio,
+    baseOrientation,
+    targetOrientation,
+    scale,
+    mode,
+  };
+}
 
 export {
   getVideoBoundingBox,
@@ -171,4 +207,5 @@ export {
   msToSeconds,
   getBufferKey,
   getOriginalBufferKey,
+  calculateAspectRatioScale,
 };

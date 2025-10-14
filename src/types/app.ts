@@ -1,4 +1,5 @@
 import { AspectRatioValue } from "@/components/aspect-ratio-selector";
+import type { Color } from "@/components/color-palette";
 
 /**
  * Represents a marked clip segment in the recording.
@@ -99,7 +100,7 @@ export type VideoFormat = "mp4" | "webm" | "mov";
 export type Settings = {
   aspectRatio: AspectRatioValue;
   cropMode: CropMode;
-  padColor: string;
+  padColor: Color;
   format: VideoFormat;
 };
 
@@ -170,7 +171,7 @@ export interface DualVideoClip {
 export type TrimData = Pick<
   DualVideoClip,
   "timelineOffset" | "trimStart" | "trimEnd"
->;
+>; // in ms
 
 /**
  * Information required to export a clip.

@@ -62,19 +62,19 @@ const layoutOptions = [
     value: "vertical-letterbox" as DualVideoLayout,
     label: "Vertical Letterbox",
     description: "Stacks videos with black bars",
-    icon: <Maximize2 size={16} />,
+    icon: <Maximize2 size={14} />,
   },
   {
     value: "vertical-crop" as DualVideoLayout,
     label: "Vertical Crop",
     description: "Stacks videos filling container",
-    icon: <Crop size={16} />,
+    icon: <Crop size={14} />,
   },
   {
     value: "pip" as DualVideoLayout,
     label: "Picture-in-Picture",
     description: "Secondary overlays primary",
-    icon: <PictureInPicture size={16} />,
+    icon: <PictureInPicture size={14} />,
   },
 ];
 
@@ -89,17 +89,17 @@ const audioModeOptions = [
   {
     value: "primary" as AudioMixMode,
     label: "Primary Audio Only",
-    icon: <Volume2 size={16} />,
+    icon: <Volume2 size={14} />,
   },
   {
     value: "secondary" as AudioMixMode,
     label: "Secondary Audio Only",
-    icon: <Volume1 size={16} />,
+    icon: <Volume1 size={14} />,
   },
   {
     value: "mixed" as AudioMixMode,
     label: "Mixed Audio",
-    icon: <VolumeX size={16} />,
+    icon: <VolumeX size={14} />,
   },
 ];
 
@@ -163,6 +163,13 @@ export default function DualVideoControls({
         };
 
         tempVideo.addEventListener("loadedmetadata", () => {
+          const aspect = tempVideo.videoWidth / tempVideo.videoHeight;
+          if (Math.abs(aspect - 16 / 9) > 0.01) {
+            toast.warning("Secondary video must have an aspect ratio of 16:9");
+            URL.revokeObjectURL(tempUrl);
+            return;
+          }
+
           const durationMs = tempVideo.duration * 1000;
           setSecondaryClip({
             ...newSecondaryClip,
@@ -177,7 +184,6 @@ export default function DualVideoControls({
               height: tempVideo.videoHeight,
             },
             aspectRatio: DEFAULT_ASPECT_RATIO,
-            // aspectRatio: `${tempVideo.videoWidth}:${tempVideo.videoHeight}`,
             cropMode: DEFAULT_CROP_MODE as CropMode,
             format: file.type.split("/")[1] as VideoFormat,
             padColor: DEFAULT_COLOR,
@@ -558,7 +564,7 @@ export default function DualVideoControls({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                {/* <div className="flex flex-col gap-2">
                   <label className="text-xs text-foreground-subtle">
                     Output Orientation
                   </label>
@@ -576,7 +582,7 @@ export default function DualVideoControls({
                       <SelectItem value="vertical">Vertical (9:16)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div> */}
               </div>
             </motion.div>
           )}

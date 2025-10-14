@@ -68,9 +68,9 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
       ref={elementRef}
       data-selected={isSelected ? "" : undefined}
       className={cn(
-        "absolute top-0 left-0 cursor-move select-none pointer-events-auto origin-center will-change-transform",
+        "absolute top-0 left-0 cursor-move select-none pointer-events-auto origin-center will-change-transform z-12",
         "w-(--width) h-(--height) opacity-(--opacity)",
-        isSelected && "ring-2 ring-primary/50 z-10"
+        isSelected && "ring-2 ring-primary/50 z-15"
       )}
       style={
         {
@@ -128,7 +128,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
           deleteImageOverlay(overlay.id);
         }}
         className="
-          absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-10
+          absolute -top-8 -right-2 h-6 px-2 gap-1 text-xs z-12
           opacity-0 blur-[1px] transition-all duration-300 ease-in-out hover:scale-105 [[data-selected]_&]:opacity-100
           [[data-selected]_&]:blur-none
         "

@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
@@ -8,6 +14,7 @@ import type { S3ClipData as ClipData } from "@/types/app";
 import Link from "next/link";
 import { LoaderIcon } from "@/icons/loader";
 import logger from "@/utils/logger";
+import { useLatestValue } from "@/hooks/use-latest-value";
 
 interface ClipGridProps {
   initialClips: ClipData[];
@@ -16,107 +23,156 @@ interface ClipGridProps {
 export default function ClipGrid({ initialClips }: ClipGridProps) {
   const router = useRouter();
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(
-    new Set()
+    () => new Set(initialClips.map((c) => c.metadata.clipId))
   );
   const processedThumbnailsRef = useRef<Set<string>>(new Set());
+  const dimensionRef = useRef<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(false);
+  const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
+  const initialClipsRef = useLatestValue(initialClips);
+
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        dimensionRef.current = { width: rect.width, height: rect.height };
+        setReady(true);
+      }
+    }
+  }, []);
 
   const generateThumbnail = useCallback(
     (videoUrl: string, canvas: HTMLCanvasElement, clipId: string) => {
       if (processedThumbnailsRef.current.has(clipId)) return;
 
+      const { width, height } = dimensionRef.current;
+      if (!width || !height) {
+        logger.warn("Tried to generate thumbnail before ready:", clipId);
+        return;
+      }
+
       processedThumbnailsRef.current.add(clipId);
-      setLoadingThumbnails((prev) => new Set(prev).add(clipId));
 
       const video = document.createElement("video");
       video.crossOrigin = "anonymous";
       video.src = videoUrl;
-      video.preload = "metadata";
+      video.preload = "auto";
+      video.muted = true;
 
-      const container = canvas.parentElement;
-      if (!container) {
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
-        return;
-      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-      const { width, height } = container.getBoundingClientRect();
       canvas.width = width;
       canvas.height = height;
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
-        return;
-      }
+      let timeoutId: NodeJS.Timeout | null = null;
+      let isCleaningUp = false;
 
       const cleanup = () => {
-        video.removeEventListener("seeked", onSeeked);
-        video.removeEventListener("loadeddata", onLoadedData);
+        if (isCleaningUp) return;
+        isCleaningUp = true;
+
+        if (timeoutId) clearTimeout(timeoutId);
+        video.removeEventListener("seeked", drawFrame);
         video.removeEventListener("error", onError);
+        video.removeEventListener("loadeddata", onLoadedData);
+
         video.pause();
-        video.src = "";
+        video.removeAttribute("src");
         video.load();
+        video.remove();
+
+        setLoadingThumbnails((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(clipId);
+          return newSet;
+        });
       };
 
-      const onSeeked = () => {
+      const drawFrame = () => {
         try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        } catch (error) {
-          logger.warn(`Failed to draw thumbnail for ${clipId}:`, error);
-        }
+          const vw = video.videoWidth;
+          const vh = video.videoHeight;
+          if (!vw || !vh) throw new Error("Invalid video dimensions");
 
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
-        cleanup();
+          const videoAspect = vw / vh;
+          const canvasAspect = width / height;
+
+          let dw = width;
+          let dh = height;
+          let dx = 0;
+          let dy = 0;
+
+          if (videoAspect > canvasAspect) {
+            dw = height * videoAspect;
+            dx = (width - dw) / 2;
+          } else {
+            dh = width / videoAspect;
+            dy = (height - dh) / 2;
+          }
+
+          ctx.drawImage(video, dx, dy, dw, dh);
+        } catch (err) {
+          logger.warn("Draw failed", clipId, err);
+        } finally {
+          cleanup();
+        }
       };
 
-      const onError = () => {
-        logger.warn(`Failed to load video for thumbnail: ${clipId}`);
-        processedThumbnailsRef.current.delete(clipId);
-        setLoadingThumbnails((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(clipId);
-          return newSet;
-        });
+      const onError = (e: unknown) => {
+        if (!isCleaningUp) {
+          logger.warn("Video error", clipId, e);
+        }
         cleanup();
       };
 
       const onLoadedData = () => {
-        video.currentTime = Math.min(1, video.duration * 0.1);
+        if (video.readyState >= 2) {
+          video.currentTime = Math.min(video.duration * 0.1, 1);
+        }
       };
 
       video.addEventListener("loadeddata", onLoadedData);
-      video.addEventListener("seeked", onSeeked);
+      video.addEventListener("seeked", drawFrame);
       video.addEventListener("error", onError);
-
       video.load();
+
+      return cleanup;
     },
     []
   );
 
-  const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  useEffect(() => {
+    if (!ready) return;
+    const cleanups: (() => void)[] = [];
 
-  const setCanvasRef = useCallback(
-    (clipId: string, videoUrl: string) => {
-      return (el: HTMLCanvasElement | null) => {
-        if (el && !canvasRefs.current.has(clipId)) {
-          canvasRefs.current.set(clipId, el);
-          generateThumbnail(videoUrl, el, clipId);
-        }
-      };
-    },
-    [generateThumbnail]
-  );
+    for (const [clipId, canvas] of canvasRefs.current.entries()) {
+      const clip = initialClipsRef.current.find(
+        (c) => c.metadata.clipId === clipId
+      );
+      if (clip && canvas) {
+        const cleanup = generateThumbnail(clip.url, canvas, clipId);
+        if (cleanup) cleanups.push(cleanup);
+      }
+    }
+
+    return () => {
+      cleanups.forEach((fn) => fn());
+    };
+  }, [ready, generateThumbnail]);
+
+  const setCanvasRef = useCallback((clipId: string, videoUrl: string) => {
+    return (el: HTMLCanvasElement | null) => {
+      if (el && !canvasRefs.current.has(clipId)) {
+        canvasRefs.current.set(clipId, el);
+      }
+    };
+  }, []);
 
   if (initialClips.length === 0) {
     return (
@@ -136,28 +192,34 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {initialClips.map((clip) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+        {initialClips.map((clip, index) => (
           <Link
             href={`/edit/${clip.metadata.clipId}`}
             key={clip.metadata.clipId}
           >
-            <div className="p-4 bg-surface-secondary rounded-lg">
-              <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
-                <div className="aspect-video bg-gray-800 relative overflow-hidden">
+            <div
+              ref={index === 0 ? containerRef : undefined}
+              className="p-4 bg-surface-secondary rounded-3xl aspect-[4/3] w-full group"
+            >
+              <div className="bg-surface-secondary rounded-2xl overflow-hidden border border-subtle hover:border-primary transition-colors cursor-pointer group">
+                <div className="bg-surface-tertiary relative overflow-hidden">
                   <canvas
                     ref={setCanvasRef(clip.metadata.clipId, clip.url)}
-                    className="w-full h-full object-cover"
+                    className="aspect-[4/3] w-full object-cover group-hover:scale-110 duration-250"
                   />
                   {loadingThumbnails.has(clip.metadata.clipId) && (
-                    <div className="absolute inset-0 bg-gray-800/80 flex items-center justify-center">
-                      <LoaderIcon className="text-white" size={32} />
+                    <div className="absolute inset-0 bg-surface-primary/80 flex items-center justify-center">
+                      <LoaderIcon
+                        className="text-foreground-default"
+                        size={32}
+                      />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-surface-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="flex space-x-2">
                       <Button
-                        size="sm"
+                        size="icon"
                         variant="default"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -171,7 +233,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
                 </div>
               </div>
 
-              <div className="p-4">
+              <div className="pt-4">
                 <h3 className="font-semibold text-foreground-default truncate text-lg font-sans tracking-wide">
                   {clip.metadata.clipId}
                 </h3>
