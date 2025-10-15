@@ -25,8 +25,12 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
           className="flex w-full items-center gap-2 rounded-lg bg-surface-secondary px-2 py-1 text-xs"
         >
           <span
-            className="inline-block h-4 w-4 rounded-sm"
-            style={{ backgroundColor: color }}
+            className="inline-block h-4 w-4 rounded-sm bg-(--bg)"
+            style={
+              {
+                "--bg": color,
+              } as React.CSSProperties
+            }
           />
           <HexColorInput
             color={color}

@@ -1,4 +1,4 @@
-export type Variant = "crop" | "stretch" | "letterbox";
+import type { CropMode } from "@/types/app";
 
 /**
  * Returns a safe [min, max] range for scale.
@@ -8,7 +8,7 @@ export type Variant = "crop" | "stretch" | "letterbox";
 export function getScaleRange(
   baseAR: number,
   targetAR: number,
-  variant: Variant
+  variant: CropMode
 ): { min: number; max: number } {
   if (variant === "letterbox") {
     return { min: 1, max: 1 };

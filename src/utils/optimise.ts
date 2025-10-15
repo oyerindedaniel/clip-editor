@@ -1,4 +1,4 @@
-import { Transform } from "@/components/boundary-box";
+import { Transform } from "./keyframe";
 
 function shallowEqual<T>(a: T, b: T): boolean {
   if (Object.is(a, b)) return true;

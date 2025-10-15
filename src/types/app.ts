@@ -88,13 +88,14 @@ export interface AudioTrack {
   id: string;
   name: string;
   file: File | null;
+  url?: string;
   volume: number;
   startTime: number;
   endTime: number;
   visible: boolean;
 }
 
-export type CropMode = "letterbox" | "crop" | "stretch" | "none";
+export type CropMode = "letterbox" | "crop";
 export type VideoFormat = "mp4" | "webm" | "mov";
 
 export type Settings = {
@@ -135,7 +136,6 @@ export interface ClipMetadata extends Settings {
 }
 
 export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
-export type DualVideoOrientation = "vertical";
 export type PiPPosition =
   | "top-left"
   | "top-right"
@@ -145,7 +145,6 @@ export type AudioMixMode = "primary" | "secondary" | "mixed";
 
 export interface DualVideoSettings {
   layout: DualVideoLayout;
-  outputOrientation: DualVideoOrientation;
   primaryAudio: AudioMixMode;
   normalizeAudio: boolean;
   primaryVolume: number;

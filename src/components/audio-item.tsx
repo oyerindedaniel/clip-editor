@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Trash2, Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AudioTrack } from "@/types/app";
+import { useShallowSelector } from "react-shallow-store";
+import { AudioContext } from "@/contexts/audio-context";
 import {
   Popover,
   PopoverContent,
@@ -118,4 +120,33 @@ const AudioItem: React.FC<AudioItemProps> = ({
   );
 };
 
-export default AudioItem;
+interface AudioItemContainerProps {
+  duration: number;
+}
+
+const AudioItemContainer: React.FC<AudioItemContainerProps> = ({
+  duration,
+}) => {
+  const { audioTracks, updateAudioTrack, deleteAudioTrack } =
+    useShallowSelector(AudioContext, (state) => ({
+      audioTracks: state.audioTracks,
+      updateAudioTrack: state.updateAudioTrack,
+      deleteAudioTrack: state.deleteAudioTrack,
+    }));
+
+  return (
+    <div className="flex flex-col gap-2">
+      {audioTracks.map((track) => (
+        <AudioItem
+          key={track.id}
+          track={track}
+          duration={duration}
+          onUpdate={updateAudioTrack}
+          onDelete={deleteAudioTrack}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default memo(AudioItemContainer);

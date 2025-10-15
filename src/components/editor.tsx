@@ -11,13 +11,8 @@ import type {
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
-import {
-  processClip,
-  processClipForExport,
-  onFFmpegProgress,
-} from "@/utils/ffmpeg";
+import { processClipForExport, onFFmpegProgress } from "@/utils/ffmpeg";
 import logger from "@/utils/logger";
-import * as MediaPlayer from "@/components/ui/media-player";
 import {
   getVideoBoundingBox,
   getTargetVideoDimensions,
@@ -50,6 +45,8 @@ import {
   Smartphone,
   PanelLeft,
   PanelRight,
+  Video,
+  Clapperboard,
 } from "lucide-react";
 import { ClipContext } from "@/contexts/clip-context";
 import { KeyframeContext } from "@/contexts/keyframe-context";
@@ -74,6 +71,7 @@ import { KEYFRAME_EASINGS } from "@/utils/keyframe";
 import { roundToDecimals } from "@/utils/app";
 import type { KeyframeEasing } from "@/utils/keyframe";
 import ColorPalette, { Color } from "./color-palette";
+import type { CropMode } from "@/types/app";
 import { useElementSize } from "@/hooks/use-element-size";
 import VideoPreview from "./video-preview";
 import CanvasVideoRenderer from "./canvas-video-renderer";
@@ -82,6 +80,13 @@ import { LoaderIcon } from "@/icons/loader";
 import { cn } from "@/lib/utils";
 import { calculateHeight } from "@/utils/aspect-ratios";
 import KeyframeLists from "./keyframe-lists";
+import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
+import { AudioContext } from "@/contexts/audio-context";
+import { useVideos } from "@/hooks/app/use-videos";
+import { Playback } from "./video-controls";
+import { VideoSeekBar } from "./video-seek-bar";
+import { getPlayingState } from "@/hooks/app/use-video-controls-core";
+import { Volume } from "./volume";
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -89,21 +94,21 @@ interface ClipEditorProps {
 
 const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
-  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
   const [panelSide, setPanelSide] = useState<EditorSide>("right");
 
+  const [cropMode, setCropMode] = useState<CropMode>(
+    DEFAULT_CLIP_METADATA.cropMode
+  );
+  const [padColor, setPadColor] = useState<Color>(
+    DEFAULT_CLIP_METADATA.padColor
+  );
+
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const keyframeTriggerRef = useRef<HTMLButtonElement | null>(null);
-
-  const {
-    isOpen: isAspectRatioModalOpen,
-    close: closeAspectRatioModal,
-    open: openAspectRatioModal,
-  } = useDisclosure();
 
   const {
     isOpen: isExportNamingModalOpen,
@@ -114,8 +119,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const { ref: videoRenderRef, sizeRef: canvasSizeRef } =
     useElementSize<HTMLDivElement>();
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioFileRef = useRef<HTMLInputElement | null>(null);
+  const wasPlayingRef = useRef<{ primary: boolean; secondary: boolean }>({
+    primary: false,
+    secondary: false,
+  });
+
   const primaryClipMetaDataRef = useRef<ClipMetadata>(DEFAULT_CLIP_METADATA);
   const traceRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +149,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setSecondaryTrim: state.setSecondaryTrim,
     secondaryClip: state.secondaryClip,
     dualVideoSettingsRef: state.dualVideoSettingsRef,
+  }));
+
+  const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
+    audioTracksRef: state.audioTracksRef,
   }));
 
   const {
@@ -183,6 +195,66 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     forceMount: true,
   });
 
+  const {
+    refs: playerRefs,
+    classNames: playerClassNames,
+    styles: playerStyles,
+    animating: isAnimatingPlayerStack,
+    toggle: togglePlayerStack,
+    present: playerPresent,
+    parentClassName: playerParentClassName,
+    active: playerActive,
+  } = useStackedTransition({
+    defaultActive: "primary",
+    keys: ["primary", "secondary"] as const,
+    duration: 650,
+    forceMount: true,
+  });
+
+  const playerActiveRef = useLatestValue(playerActive);
+
+  const {
+    getVideoRef,
+    primaryVideoRef,
+    secondaryVideoRef,
+    repeatPrimaryRef,
+    repeatSecondaryRef,
+    ratePrimaryRef,
+    rateSecondaryRef,
+    setRepeatPrimary,
+    setRepeatSecondary,
+    setRatePrimary,
+    setRateSecondary,
+    ratePrimary,
+    rateSecondary,
+    repeatPrimary,
+    repeatSecondary,
+  } = useVideos();
+
+  const video = getVideoRef(playerActiveRef.current).current;
+
+  const { status: primaryStatus, controls: primaryControls } =
+    useConstrainedVideo({
+      videoRef: primaryVideoRef,
+      trimStartRef: useLatestValue(primaryTrimRef.current.trimStart ?? 0),
+      trimEndRef: useLatestValue(primaryTrimRef.current.trimEnd ?? 0),
+      repeatRef: repeatPrimaryRef,
+      playbackRateRef: ratePrimaryRef,
+    });
+
+  const primaryPlayState = getPlayingState(primaryStatus);
+
+  const { status: secondaryStatus, controls: secondaryControls } =
+    useConstrainedVideo({
+      videoRef: secondaryVideoRef,
+      trimStartRef: useLatestValue(secondaryTrimRef.current.trimStart ?? 0),
+      trimEndRef: useLatestValue(secondaryTrimRef.current.trimEnd ?? 0),
+      repeatRef: repeatSecondaryRef,
+      playbackRateRef: rateSecondaryRef,
+    });
+
+  const secondaryPlayState = getPlayingState(secondaryStatus);
+
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
 
@@ -192,7 +264,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const processedBuffersRef = useLatestValue(processedBuffers);
 
-  const [primaryUrl, setPrimaryUrl] = useState<string>(clipData.url);
+  const [primaryUrl, _] = useState<string>(clipData.url);
 
   const isValidBufferState = useMemo(() => {
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
@@ -202,6 +274,33 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
     return originalBufferExists && hasAnyProcessedBuffer;
   }, [processedBuffers]);
+
+  const toggleActivePlayer = useCallback(() => {
+    const primary =
+      !!primaryVideoRef.current && !primaryVideoRef.current.paused;
+    const secondary =
+      !!secondaryVideoRef.current && !secondaryVideoRef.current.paused;
+    wasPlayingRef.current = { primary, secondary };
+
+    togglePlayerStack();
+
+    //  restore playback for new active if it was playing before
+    queueMicrotask(() => {
+      const activeIsSecondary = playerActive === "primary"; // will become secondary
+      if (activeIsSecondary) {
+        if (primary && primaryVideoRef.current) primaryVideoRef.current.pause();
+        if (wasPlayingRef.current.secondary && secondaryVideoRef.current) {
+          secondaryVideoRef.current.play().catch(() => {});
+        }
+      } else {
+        if (secondary && secondaryVideoRef.current)
+          secondaryVideoRef.current.pause();
+        if (wasPlayingRef.current.primary && primaryVideoRef.current) {
+          primaryVideoRef.current.play().catch(() => {});
+        }
+      }
+    });
+  }, [togglePlayerStack, playerActive]);
 
   const togglePanelSide = useCallback(() => {
     setPanelSide((prev) => (prev === "right" ? "left" : "right"));
@@ -231,16 +330,18 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       const render = (percent: number) =>
         toast.custom(
           () => (
-            <div className="w-72 rounded-md bg-primary shadow-md p-3 text-foreground">
+            <div className="w-80 rounded-lg bg-primary shadow-xl p-3 text-foreground-on-accent">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium">{label}</span>
-                <span className="text-[10px] tabular-nums text-foreground/70">
+                <span className="text-xs font-medium tracking-tight">
+                  {label}
+                </span>
+                <span className="text-[10px] tabular-nums text-foreground-on-accent/80">
                   {percent}%
                 </span>
               </div>
-              <div className="w-full h-2 rounded bg-foreground/10 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-foreground-on-accent/20 overflow-hidden">
                 <div
-                  className="h-full bg-foreground/70 transition-all duration-150"
+                  className="h-full bg-foreground-on-accent transition-all duration-150"
                   style={{ width: `${percent}%` }}
                 />
               </div>
@@ -280,7 +381,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, [processedBuffers, clipData.url]);
 
   const adjustOverlayBounds = useCallback(() => {
-    const video = videoRef.current;
     const container = containerRef.current;
     const trace = traceRef.current;
 
@@ -301,78 +401,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     trace.style.pointerEvents = "none";
     trace.style.zIndex = "15";
   }, [showTraceRef]);
-
-  const loadClipVideo = useCallback(
-    async (settings: SettingsType): Promise<string | null> => {
-      const video = videoRef.current;
-      if (!video) return null;
-
-      const bufferKey = getBufferKey(settings);
-      const originalBufferData = processedBuffers.get(getOriginalBufferKey());
-
-      if (!originalBufferData) {
-        toast.error("Original clip not available");
-        return null;
-      }
-
-      const existingBufferData = processedBuffers.get(bufferKey);
-      if (existingBufferData) {
-        primaryClipMetaDataRef.current = {
-          ...primaryClipMetaDataRef.current,
-          ...settings,
-        };
-
-        const blob = new Blob([existingBufferData.buffer], {
-          type: "video/mp4",
-        });
-        const objectUrl = URL.createObjectURL(blob);
-        video.src = objectUrl;
-        return objectUrl;
-      }
-
-      const { aspectRatio, cropMode, padColor, format } = settings;
-
-      try {
-        const processedBlob = await withProgressToast<Blob>(
-          "Processing clip",
-          () =>
-            processClip(
-              originalBufferData.buffer,
-              { aspectRatio, cropMode, padColor, format },
-              primaryClipMetaDataRef.current.dimensions
-            ),
-          `process-${clipData.metadata.clipId}-${bufferKey}`
-        );
-
-        if (!processedBlob || processedBlob.size === 0) {
-          toast.error("No valid clip data found");
-          return null;
-        }
-
-        const processedBuffer = await processedBlob.arrayBuffer();
-
-        setProcessedBuffers((prev) => {
-          const updated = new Map(prev);
-          updated.set(bufferKey, { buffer: processedBuffer, url: objectUrl });
-          return updated;
-        });
-
-        primaryClipMetaDataRef.current = {
-          ...primaryClipMetaDataRef.current,
-          ...settings,
-        };
-
-        const objectUrl = URL.createObjectURL(processedBlob);
-        video.src = objectUrl;
-        return objectUrl;
-      } catch (err) {
-        const errorMsg = normalizeError(err).message;
-        toast.error(`Failed to load clip: ${errorMsg}`);
-        return null;
-      }
-    },
-    [processedBuffers, clipData.metadata.clipId, withProgressToast]
-  );
 
   const primaryFrames = useVideoThumbnails(primaryUrl, 24, isVideoLoaded);
   const secondaryFrames = useVideoThumbnails(
@@ -455,7 +483,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, []);
 
   useEffect(() => {
-    const video = videoRef.current;
     if (!video) return;
 
     const handleLoadedMetadata = () => {
@@ -503,24 +530,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     };
   }, [adjustOverlayBounds]);
 
-  const addAudioTrack = () => {
-    if (audioFileRef.current) {
-      audioFileRef.current.click();
-    }
-  };
-
-  const updateAudioTrack = (id: string, updates: Partial<AudioTrack>) => {
-    setAudioTracks(
-      audioTracks.map((track) =>
-        track.id === id ? { ...track, ...updates } : track
-      )
-    );
-  };
-
-  const deleteAudioTrack = (id: string) => {
-    setAudioTracks(audioTracks.filter((track) => track.id !== id));
-  };
-
   const handleExport = async (
     outputName: string,
     {
@@ -546,7 +555,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       | "audioCompressed"
     >
   ) => {
-    const video = videoRef.current;
+    // TODO: review video this definety wrong
 
     const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
     const bufferData = processedBuffers.get(bufferKey);
@@ -577,7 +586,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         imageOverlays: imageOverlaysRef.current.filter(
           (overlay) => overlay.visible
         ),
-        audioTracks: audioTracks.filter((track) => track.visible),
+        audioTracks: audioTracksRef.current.filter((track) => track.visible),
         exportSettings: {
           preset,
           crf,
@@ -638,12 +647,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     }
   };
 
-  const handleSettingsApplied = async (settings: SettingsType) => {
-    closeAspectRatioModal();
-    const videoUrl = await loadClipVideo(settings);
-    if (videoUrl) setPrimaryUrl(videoUrl);
-  };
-
   const handleTrim = (startTime: number, endTime: number) => {
     setPrimaryTrim((prev) => ({
       ...prev,
@@ -657,7 +660,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const settings = useMemo(() => {
     const { dimensions, ...settings } = primaryClipMetaDataRef.current;
     return settings as SettingsType;
-  }, [isAspectRatioModalOpen]);
+  }, []);
 
   const primaryTrimData = primaryTrimRef.current;
 
@@ -677,9 +680,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         showTrace={showTrace}
         onToggleTrace={toggleTrace}
         onOpenExport={openExportNamingModal}
-        onOpenAdjust={openAspectRatioModal}
         settings={settings}
-        onSettingsApplied={handleSettingsApplied}
         isBufferDownloaded={isValidBufferState}
       />
 
@@ -701,63 +702,97 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
               deleteKeyframe,
               getKeyframe,
               updateColors,
-              keyframeBounds,
+              getKeyframeBounds,
             }) => (
               <>
                 <div className="w-full flex flex-col lg:flex-row items-center gap-4">
-                  <div>
-                    <div className="flex items-center gap-1 p-2">
-                      <AspectRatioPicker
-                        screenSize="16:9"
-                        aspectRatio={boundaryAspectRatio}
-                        onAspectRatioChange={setBoundaryAspectRatio}
-                        visible={boundaryVisible}
-                        onVisibleChange={setBoundaryVisible}
-                        disabled={!isValidBufferState || isExporting}
-                      />
+                  <div className="flex-1 w-full">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 p-2">
+                        <AspectRatioPicker
+                          screenSize="16:9"
+                          aspectRatio={boundaryAspectRatio}
+                          onAspectRatioChange={setBoundaryAspectRatio}
+                          visible={boundaryVisible}
+                          onVisibleChange={setBoundaryVisible}
+                          disabled={!isValidBufferState || isExporting}
+                          cropMode={cropMode}
+                          onCropModeChange={setCropMode}
+                          padColor={padColor}
+                          onPadColorChange={(c) => setPadColor(c)}
+                        />
 
-                      <div className="flex items-center gap-px">
-                        <Button
-                          ref={keyframeTriggerRef}
-                          size="sm"
-                          onClick={() => {
-                            if (boundaryTransform) {
-                              addKeyframe({
-                                time: videoRef.current?.currentTime
-                                  ? videoRef.current.currentTime
-                                  : 0,
-                                transform: boundaryTransform,
-                                easing: "ease-in-out",
-                                color: "#22c55e",
-                              });
-                            }
-                          }}
-                          disabled={!boundaryTransform}
-                          className="ml-2"
-                        >
-                          <Film className="mr-2" size={14} />
-                          Add Keyframe
-                        </Button>
-                        {keyframes && keyframes.length > 0 && (
-                          <KeyframeLists
-                            keyframes={keyframes}
-                            currentKeyframeId={currentKeyframeId}
-                            onKeyframeSelect={(id) => {
-                              setCurrentKeyframeId(id);
+                        <div className="flex items-center gap-px">
+                          <Button
+                            ref={keyframeTriggerRef}
+                            size="sm"
+                            onClick={() => {
+                              if (boundaryTransform) {
+                                addKeyframe({
+                                  time: video?.currentTime
+                                    ? video.currentTime
+                                    : 0,
+                                  transform: boundaryTransform,
+                                  easing: "ease-in-out",
+                                  color: "#22c55e",
+                                  target:
+                                    playerActive === "secondary"
+                                      ? "secondary"
+                                      : "primary",
+                                });
+                              }
                             }}
-                            onKeyframeRemove={(id) => {
-                              deleteKeyframe(id);
-                            }}
+                            disabled={!boundaryTransform}
                             className="ml-2"
-                          />
+                          >
+                            <Film className="mr-2" size={14} />
+                            Add Keyframe
+                          </Button>
+                          {keyframes && keyframes.length > 0 && (
+                            <KeyframeLists
+                              keyframes={keyframes}
+                              currentKeyframeId={currentKeyframeId}
+                              onKeyframeSelect={(id) => {
+                                setCurrentKeyframeId(id);
+                              }}
+                              onKeyframeRemove={(id) => {
+                                deleteKeyframe(id);
+                              }}
+                              className="ml-2"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        {secondaryClip && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={toggleActivePlayer}
+                            disabled={isAnimatingPlayerStack}
+                            className="flex items-center gap-2"
+                          >
+                            {isAnimatingPlayerStack ? (
+                              <LoaderIcon size={14} />
+                            ) : playerActive === "primary" ? (
+                              <Video size={14} />
+                            ) : (
+                              <Clapperboard size={14} />
+                            )}
+                            <span className="text-xs">
+                              {playerActive === "primary"
+                                ? "Secondary Clip"
+                                : "Primary Clip"}
+                            </span>
+                          </Button>
                         )}
                       </div>
                     </div>
 
                     <BoundaryBox
                       screenSize="16:9"
-                      videoWidth={videoRef.current?.videoWidth}
-                      videoHeight={videoRef.current?.videoHeight}
+                      videoWidth={video?.videoWidth}
+                      videoHeight={video?.videoHeight}
                       aspectRatio={boundaryAspectRatio as AspectRatio}
                       visible={boundaryVisible}
                       transform={boundaryTransform!}
@@ -781,36 +816,159 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             ref={containerRef}
                             className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md"
                           >
-                            <MediaPlayer.Root>
-                              <MediaPlayer.Video
-                                src={primaryUrl}
-                                ref={(el) => {
-                                  videoRef.current = el;
-                                  setVideoRef(el);
-                                }}
-                                playsInline
-                                className="w-full aspect-video"
-                                poster={"/thumbnails/video-thumb-2.webp"}
-                              />
-                              <MediaPlayer.Loading />
-                              <MediaPlayer.Error />
-                              <MediaPlayer.VolumeIndicator />
-                              <MediaPlayer.Controls>
-                                <MediaPlayer.ControlsOverlay />
-                                <MediaPlayer.Play />
-                                <MediaPlayer.SeekBackward />
-                                <MediaPlayer.SeekForward />
-                                <MediaPlayer.Volume />
-                                <MediaPlayer.Seek />
-                                <MediaPlayer.Time />
-                                <MediaPlayer.PlaybackSpeed />
-                                <MediaPlayer.Loop />
-                                <MediaPlayer.Captions />
-                                <MediaPlayer.PiP />
-                                <MediaPlayer.Fullscreen />
-                                <MediaPlayer.Download />
-                              </MediaPlayer.Controls>
-                            </MediaPlayer.Root>
+                            <div
+                              className={cn(
+                                "relative w-full aspect-video",
+                                playerParentClassName
+                              )}
+                            >
+                              {playerPresent.primary && (
+                                <div
+                                  ref={
+                                    playerRefs.primary as React.Ref<HTMLDivElement>
+                                  }
+                                  className={playerClassNames.primary}
+                                  style={playerStyles.primary}
+                                >
+                                  <div className="relative w-full aspect-video">
+                                    <video
+                                      src={primaryUrl}
+                                      ref={(el) => {
+                                        primaryVideoRef.current = el;
+                                        if (playerActive === "primary") {
+                                          setVideoRef(el);
+                                        }
+                                      }}
+                                      controls={false}
+                                      playsInline
+                                      muted={false}
+                                      className="w-full h-full object-contain rounded-lg"
+                                      poster={"/thumbnails/video-thumb-2.webp"}
+                                    />
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%] w-full bg-red-700">
+                                      <Playback.Root>
+                                        <Playback.Controls className="mx-auto">
+                                          <Playback.PlayToggle
+                                            playing={primaryPlayState.isPlaying}
+                                            onPlayingChange={() =>
+                                              primaryControls.toggle()
+                                            }
+                                          />
+                                          <Playback.LoopToggle
+                                            loop={repeatPrimary}
+                                            onLoopChange={setRepeatPrimary}
+                                          />
+                                          <Playback.RateControl
+                                            rate={ratePrimary}
+                                            onRateChange={setRatePrimary}
+                                            orientation="vertical"
+                                          />
+                                          <Playback.Volume>
+                                            <Volume.Root
+                                              orientation="horizontal"
+                                              // value={settings.primaryVolume}
+                                              // onValueChange={(v) =>
+                                              //   updateSetting(
+                                              //     "primaryVolume",
+                                              //     v
+                                              //   )
+                                              // }
+                                            >
+                                              <Volume.Controls
+                                                variant="pill"
+                                                className="p-0 glass"
+                                              >
+                                                <Volume.Button
+                                                  size="icon"
+                                                  variant="glass"
+                                                  aria-label="Primary volume"
+                                                />
+                                                <Volume.Slider>
+                                                  <Volume.Slider.Track>
+                                                    <Volume.Slider.Range />
+                                                    <Volume.Slider.Thumb />
+                                                  </Volume.Slider.Track>
+                                                </Volume.Slider>
+                                              </Volume.Controls>
+                                            </Volume.Root>
+                                          </Playback.Volume>
+                                        </Playback.Controls>
+                                      </Playback.Root>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {playerPresent.secondary && secondaryClip && (
+                                <div
+                                  ref={
+                                    playerRefs.secondary as React.Ref<HTMLDivElement>
+                                  }
+                                  className={playerClassNames.secondary}
+                                  style={playerStyles.secondary}
+                                >
+                                  <div className="relative w-full aspect-video">
+                                    <video
+                                      src={secondaryClip.url}
+                                      ref={(el) => {
+                                        secondaryVideoRef.current = el;
+                                        if (playerActive === "secondary") {
+                                          setVideoRef(el);
+                                        }
+                                      }}
+                                      controls={false}
+                                      playsInline
+                                      muted={false}
+                                      className="w-full h-full object-contain rounded-lg"
+                                      poster={"/thumbnails/video-thumb-2.webp"}
+                                    />
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%]">
+                                      <Playback.Root>
+                                        <Playback.Controls>
+                                          <Playback.PlayToggle
+                                            playing={primaryPlayState.isPlaying}
+                                            onPlayingChange={() =>
+                                              primaryControls.toggle()
+                                            }
+                                          />
+                                          <Playback.LoopToggle
+                                            loop={repeatPrimary}
+                                            onLoopChange={setRepeatPrimary}
+                                          />
+                                          <Playback.RateControl
+                                            rate={ratePrimary}
+                                            onRateChange={setRatePrimary}
+                                            orientation="vertical"
+                                          />
+                                          <Playback.Volume>
+                                            <Volume.Root
+                                              orientation="vertical"
+                                              // value={settings.primaryVolume}
+                                              // onValueChange={(v) =>
+                                              //   updateSetting(
+                                              //     "primaryVolume",
+                                              //     v
+                                              //   )
+                                              // }
+                                            >
+                                              <Volume.Controls variant="pill">
+                                                <Volume.Button aria-label="Primary volume" />
+                                                <Volume.Slider>
+                                                  <Volume.Slider.Track>
+                                                    <Volume.Slider.Range />
+                                                    <Volume.Slider.Thumb />
+                                                  </Volume.Slider.Track>
+                                                </Volume.Slider>
+                                              </Volume.Controls>
+                                            </Volume.Root>
+                                          </Playback.Volume>
+                                        </Playback.Controls>
+                                      </Playback.Root>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
 
                             <div ref={traceRef} />
                             <PersistentOverlays duration={duration} />
@@ -1045,7 +1203,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     </BoundaryBox>
                   </div>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="self-end flex flex-col gap-2">
                     {keyframes && !!keyframes.length && (
                       <Button
                         size="sm"
@@ -1098,9 +1256,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           source={source}
                           baseAspect="16:9"
                           targetAspect={boundaryAspectRatio ?? "9:16"}
-                          variant="crop"
+                          variant={cropMode}
                           keyframes={keyframes}
-                          keyframeBounds={keyframeBounds}
+                          keyframeBounds={getKeyframeBounds(keyframes).primary}
                           className={classNames.renderer}
                           style={styles.renderer}
                         >
@@ -1151,6 +1309,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           ...trimData,
                         }));
                       }}
+                      keyframes={keyframes}
                     />
                   ) : isVideoLoaded ? (
                     <Timeline
@@ -1218,10 +1377,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                 isVideoLoaded={isVideoLoaded}
                 duration={duration}
                 clipData={clipData}
-                audioTracks={audioTracks}
-                onAudioTrackUpdate={updateAudioTrack}
-                onAudioTrackDelete={deleteAudioTrack}
-                onAddAudioTrack={addAudioTrack}
               />
             </EditorPanel.Body>
           </EditorPanel.Content>

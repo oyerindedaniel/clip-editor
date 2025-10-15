@@ -7,8 +7,9 @@ import DualVideoControls from "./dual-video-controls";
 import TextOverlayItemContainer from "./text-overlay-item";
 import ImageOverlayItemContainer from "./image-overlay-item";
 import { FileUpload } from "./ui/file-upload";
-import AudioItem from "@/components/audio-item";
-import type { S3ClipData, AudioTrack } from "@/types/app";
+import AudioItemContainer from "@/components/audio-item";
+import type { S3ClipData } from "@/types/app";
+import { AudioContext } from "@/contexts/audio-context";
 import { formatTime } from "@/utils/app";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
@@ -26,10 +27,6 @@ interface EditorRightPanelProps {
   isVideoLoaded: boolean;
   duration: number;
   clipData: S3ClipData;
-  audioTracks: AudioTrack[];
-  onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
-  onAudioTrackDelete: (id: string) => void;
-  onAddAudioTrack: () => void;
 }
 
 const STORAGE_KEY = "zinc:lastActiveSections";
@@ -38,12 +35,12 @@ export function EditorRightPanel({
   isVideoLoaded,
   duration,
   clipData,
-  audioTracks,
-  onAudioTrackUpdate,
-  onAudioTrackDelete,
-  onAddAudioTrack,
 }: EditorRightPanelProps) {
   const [activeSections, setActiveSections] = useState<string[]>(["clips"]);
+
+  const { addAudioTrack } = useShallowSelector(AudioContext, (state) => ({
+    addAudioTrack: state.addAudioTrack,
+  }));
 
   const { addTextOverlay, addImageOverlay } = useShallowSelector(
     OverlaysContext,
@@ -86,6 +83,15 @@ export function EditorRightPanel({
       addImageOverlay(file, 0, duration);
     },
     [addImageOverlay, duration]
+  );
+
+  const handleAudioFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      addAudioTrack(file, duration);
+    },
+    [addAudioTrack, duration]
   );
 
   const handleAccordionChange = (sections: string[]) => {
@@ -185,23 +191,13 @@ export function EditorRightPanel({
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-3">
-              <Button
-                onClick={onAddAudioTrack}
-                className="h-8 px-2 text-xs"
-                variant="outline"
-                size="sm"
-              >
-                <Music size={14} className="mr-1" /> Add Audio
-              </Button>
-              {audioTracks.map((track) => (
-                <AudioItem
-                  key={track.id}
-                  track={track}
-                  duration={duration}
-                  onUpdate={onAudioTrackUpdate}
-                  onDelete={onAudioTrackDelete}
-                />
-              ))}
+              <FileUpload
+                accept="audio/*"
+                hint="Add an audio track"
+                onChange={handleAudioFileSelect}
+                name="audio-track"
+              />
+              <AudioItemContainer duration={duration} />
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -297,10 +293,6 @@ export function EditorRightPanel({
       clipData,
       duration,
       isVideoLoaded,
-      onAddAudioTrack,
-      onAudioTrackDelete,
-      onAudioTrackUpdate,
-      audioTracks,
       handleImageFileSelect,
       keyframes,
       currentKeyframeId,

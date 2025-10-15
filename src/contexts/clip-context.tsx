@@ -40,7 +40,6 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
     {
       layout: "vertical-letterbox",
-      outputOrientation: "vertical",
       primaryAudio: "primary",
       normalizeAudio: true,
       primaryVolume: 0.8,

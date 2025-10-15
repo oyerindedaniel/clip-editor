@@ -4,7 +4,7 @@ import { useVideoTransformStyle } from "@/hooks/app/use-video-transform-style";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import { getElementRef } from "@/lib/get-element-ref";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import type { Variant } from "@/utils/scale-range";
+import type { CropMode } from "@/types/app";
 import { DOM_RENDERER_SYMBOL, TaggedRendererComponent } from "@/utils/renderer";
 import type { Video } from "./video-preview";
 
@@ -12,7 +12,7 @@ interface DOMVideoRendererProps {
   video: Video;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   transformData: InterpolatedResult;
-  variant: Variant;
+  variant: CropMode;
   className?: string;
 }
 

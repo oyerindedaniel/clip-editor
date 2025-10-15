@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import type { InterpolatedResult } from "./use-interpolated-transform";
-import type { Variant } from "@/utils/scale-range";
+import type { CropMode } from "@/types/app";
 
 export function useVideoTransformStyle(
   data: InterpolatedResult,
-  variant: Variant
+  variant: CropMode
 ): React.CSSProperties {
   return useMemo(() => {
     const baseStyle: React.CSSProperties = {
@@ -24,20 +24,15 @@ export function useVideoTransformStyle(
       };
     }
 
-    if (variant === "stretch") {
+    if (variant === "crop") {
       return {
         ...baseStyle,
-        objectFit: "fill",
-        transform: data.transform ?? `translate(0%, 0%) scale(${data.scale})`,
+        objectFit: "cover",
+        clipPath: data.clipPath,
+        transform: `translate(-50%, -50%) scale(1)`,
       };
     }
 
-    // crop
-    return {
-      ...baseStyle,
-      objectFit: "cover",
-      clipPath: data.clipPath,
-      transform: `translate(-50%, -50%) scale(1)`,
-    };
+    return baseStyle;
   }, [data, variant]);
 }

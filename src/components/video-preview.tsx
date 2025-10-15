@@ -2,11 +2,13 @@ import React, { useMemo, useRef, useEffect, forwardRef } from "react";
 import { AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeData } from "@/utils/keyframe";
 import {
-  getPlayingState,
   ReactiveVideoControls,
   useReactiveVideoTime,
-  type PlayingStatus,
 } from "@/hooks/app/use-reactive-video-time";
+import {
+  getPlayingState,
+  type PlayingStatus,
+} from "@/hooks/app/use-video-controls-core";
 import {
   useInterpolatedTransform,
   InterpolatedResult,
@@ -14,17 +16,17 @@ import {
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { getElementRef } from "@/lib/get-element-ref";
 import logger from "@/utils/logger";
-import type { Variant } from "@/utils/scale-range";
+import type { CropMode } from "@/types/app";
 import { CANVAS_RENDERER_SYMBOL, getRendererType } from "@/utils/renderer";
 import { Volume } from "./volume";
 import { VideoSeekBar } from "./video-seek-bar";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Repeat } from "lucide-react";
-import { VideoControls } from "./video-controls";
 import { cn } from "@/lib/utils";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
+import { Playback } from "./video-controls";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -39,7 +41,7 @@ export type PreviewRenderContext = {
   time: number;
   duration: number | null;
   playing: PlayingStatus;
-  variant: Variant;
+  variant: CropMode;
   baseAspect: AspectRatio;
   targetAspect: AspectRatio;
 } & ReactiveVideoControls;
@@ -48,7 +50,7 @@ export interface VideoPreviewProps {
   source: Video;
   baseAspect: AspectRatio;
   targetAspect: AspectRatio;
-  variant: Variant;
+  variant: CropMode;
   keyframes?: KeyframeData[];
 
   onTimeChange?: (t: number) => void;
@@ -56,8 +58,8 @@ export interface VideoPreviewProps {
   playing?: boolean;
   onPlayingChange?: (p: PlayingStatus) => void;
 
-  playbackRate?: number;
-  repeat?: boolean;
+  defaultPlaybackRate?: number;
+  defaultRepeat?: boolean;
 
   children?: (context: PreviewRenderContext) => React.ReactNode;
   className?: string;
@@ -80,8 +82,8 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       onTimeChange,
       playing: externalPlaying = false,
       onPlayingChange,
-      playbackRate: externalplaybackRate = 1,
-      repeat = false,
+      defaultPlaybackRate = 1,
+      defaultRepeat = false,
       keyframeBounds,
       children,
       className,
@@ -89,10 +91,11 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     } = props;
 
     const [volume, setVolume] = React.useState(1);
-    const [isRepeat, setIsRepeat] = React.useState(repeat);
+    const [isRepeat, setIsRepeat] = React.useState(defaultRepeat);
+    const [playbackRate, setplaybackRate] = React.useState(defaultPlaybackRate);
 
     const repeatRef = useLatestValue(isRepeat);
-    const playbackRateRef = useLatestValue(externalplaybackRate);
+    const playbackRateRef = useLatestValue(playbackRate);
 
     const startRef = useLatestValue(keyframeBounds.start);
     const endRef = useLatestValue(keyframeBounds.end);
@@ -201,7 +204,14 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
           } as React.CSSProperties
         }
       >
-        <div className="absolute inset-0">{renderedChild}</div>
+        <div
+          className={cn(
+            "absolute inset-0",
+            targetAspect !== "9:16" && "flex items-center justify-center"
+          )}
+        >
+          {renderedChild}
+        </div>
 
         <div className="absolute top-2 left-2 z-10">
           <Volume.Root value={volume} onValueChange={setVolume}>
@@ -234,10 +244,23 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
               />
 
               <div className="flex items-center justify-center gap-2">
-                <VideoControls
-                  playing={playState.isPlaying}
-                  onToggle={controls.toggle}
-                />
+                <Playback.Root>
+                  <Playback.Controls>
+                    <Playback.PlayToggle
+                      playing={playState.isPlaying}
+                      onPlayingChange={() => controls.toggle()}
+                    />
+                    <Playback.LoopToggle
+                      loop={isRepeat}
+                      onLoopChange={setIsRepeat}
+                    />
+                    <Playback.RateControl
+                      rate={playbackRate}
+                      onRateChange={setplaybackRate}
+                      orientation="vertical"
+                    />
+                  </Playback.Controls>
+                </Playback.Root>
 
                 <Tooltip>
                   <TooltipTrigger asChild>

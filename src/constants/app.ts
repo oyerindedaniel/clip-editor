@@ -5,8 +5,8 @@ import type {
   VideoFormat,
 } from "@/types/app";
 
-export const DEFAULT_ASPECT_RATIO = "original";
-export const DEFAULT_CROP_MODE = "none";
+export const DEFAULT_ASPECT_RATIO = "9:16";
+export const DEFAULT_CROP_MODE = "crop";
 
 export const DEFAULT_CLIP_PRE_MARK_MS = 10000;
 export const DEFAULT_CLIP_POST_MARK_MS = 10000;

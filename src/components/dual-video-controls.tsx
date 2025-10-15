@@ -29,7 +29,6 @@ import type {
   DualVideoClip,
   DualVideoSettings,
   DualVideoLayout,
-  DualVideoOrientation,
   PiPPosition,
   AudioMixMode,
   S3ClipData,
@@ -563,26 +562,6 @@ export default function DualVideoControls({
                     </div>
                   </div>
                 </div>
-
-                {/* <div className="flex flex-col gap-2">
-                  <label className="text-xs text-foreground-subtle">
-                    Output Orientation
-                  </label>
-                  <Select
-                    value={settings.outputOrientation}
-                    onValueChange={(value: DualVideoOrientation) =>
-                      updateSetting("outputOrientation", value)
-                    }
-                    disabled={disabled}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="vertical">Vertical (9:16)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div> */}
               </div>
             </motion.div>
           )}

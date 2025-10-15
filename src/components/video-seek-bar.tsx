@@ -8,7 +8,7 @@ import React, {
   useMemo,
 } from "react";
 import { cn } from "@/lib/utils";
-import { throttle } from "@/utils/app";
+import { debounce } from "@/utils/app";
 import type { TrimData } from "@/types/app";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useStableHandler } from "@/hooks/use-stable-handler";
@@ -66,6 +66,7 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
   const timelineDurationMs = calculateTimelineDuration();
 
+  // TODO: switch to canvas
   const getCurrentNormalizedTime = useCallback(() => {
     const primaryVideo = primaryVideoRef.current;
     const secondaryVideo = secondaryVideoRef?.current;
@@ -89,18 +90,22 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     const primaryTimelinePos = primaryRelativeMs;
     const secondaryTimelinePos = secondaryOffset + secondaryRelativeMs;
 
-    // If primary is at its end but secondary is still playing, use secondary position
-    const primaryEnd = primaryTrim.trimEnd - primaryTrim.trimStart;
+    const primaryDuration = primaryTrim.trimEnd - primaryTrim.trimStart;
     const secondaryDuration = secondaryTrim.trimEnd - secondaryTrim.trimStart;
     const secondaryTimelineEnd = secondaryOffset + secondaryDuration;
 
-    if (primaryTimelinePos >= primaryEnd && secondaryTimelineEnd > primaryEnd) {
-      // Primary finished, secondary still going - use secondary position
-      return secondaryTimelinePos;
+    // If secondary extends beyond primary, check if we're in that extended region
+    if (secondaryTimelineEnd > primaryDuration) {
+      // If primary has finished but secondary is still playing
+      if (primaryTimelinePos >= primaryDuration - 50) {
+        // Use secondary position when in the extended region
+        return Math.min(secondaryTimelinePos, secondaryTimelineEnd);
+      }
     }
 
+    // Normal case: use the furthest position
     return Math.max(primaryTimelinePos, secondaryTimelinePos);
-  }, [primaryTrim, secondaryTrim]);
+  }, [primaryTrim, secondaryTrim, primaryVideoRef, secondaryVideoRef]);
 
   const updateBufferDisplay = useCallback(() => {
     if (!bufferFillRef.current) return;
@@ -172,7 +177,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
       if (thumbRef.current) {
         const barWidth = barEl.offsetWidth;
-        const x = clamped * barWidth;
+        const thumbWidth = 10; // w-2.5 = 10px (2.5 * 4)
+        const x = clamped * barWidth - thumbWidth / 2;
         thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
       }
 
@@ -248,8 +254,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [timelineDurationMs]
   );
 
-  const throttledSeek = useMemo(
-    () => throttle((timeMs: number) => stableOnSeek(timeMs), 100),
+  const debouncedSeek = useMemo(
+    () => debounce((timeMs: number) => stableOnSeek(timeMs), 100),
     []
   );
 
@@ -274,7 +280,7 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       if (!isDragging) return;
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
-      throttledSeek(normalizedTimeMs);
+      debouncedSeek(normalizedTimeMs);
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
@@ -282,7 +288,7 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [
       isDragging,
       getTimeFromPosition,
-      throttledSeek,
+      debouncedSeek,
       timelineDurationMs,
       scheduleVisualUpdate,
     ]

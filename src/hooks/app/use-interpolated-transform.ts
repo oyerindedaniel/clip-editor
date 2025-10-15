@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { getEasingFunction } from "@/utils/keyframe";
 import { ASPECT_RATIOS, AspectRatio } from "@/utils/aspect-ratios";
-import { getScaleRange, Variant } from "@/utils/scale-range";
+import { getScaleRange } from "@/utils/scale-range";
+import type { CropMode } from "@/types/app";
 import type { KeyframeData } from "@/utils/keyframe";
 
 export type InterpolatedResult = {
@@ -63,7 +64,7 @@ function computeClipPathFromNormalized(
 export function useInterpolatedTransform(
   keyframes: KeyframeData[] | undefined,
   currentTime: number, // seconds
-  variant: Variant,
+  variant: CropMode,
   baseAspectKey: AspectRatio,
   targetAspectKey: AspectRatio
 ): InterpolatedResult {
