@@ -82,7 +82,7 @@ import { calculateHeight } from "@/utils/aspect-ratios";
 import KeyframeLists from "./keyframe-lists";
 import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
 import { AudioContext } from "@/contexts/audio-context";
-import { useVideos } from "@/hooks/app/use-videos";
+import { useVideoRefs } from "@/hooks/app/use-video-refs";
 import { Playback } from "./video-controls";
 import { VideoSeekBar } from "./video-seek-bar";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
@@ -142,6 +142,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setSecondaryTrim,
     secondaryClip,
     dualVideoSettingsRef,
+    getVideoRef,
+    primaryVideoRef,
+    secondaryVideoRef,
+    repeatPrimaryRef,
+    repeatSecondaryRef,
+    primaryVideoState,
+    secondaryVideoState,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -149,7 +156,19 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     setSecondaryTrim: state.setSecondaryTrim,
     secondaryClip: state.secondaryClip,
     dualVideoSettingsRef: state.dualVideoSettingsRef,
+    getVideoRef: state.getVideoRef,
+    primaryVideoRef: state.primaryVideoRef,
+    secondaryVideoRef: state.secondaryVideoRef,
+    repeatPrimaryRef: state.repeatPrimaryRef,
+    repeatSecondaryRef: state.repeatSecondaryRef,
+    primaryVideoState: state.primaryVideoState,
+    secondaryVideoState: state.secondaryVideoState,
   }));
+
+  const { status: primaryStatus, controls: primaryControls } =
+    primaryVideoState;
+  const { status: secondaryStatus, controls: secondaryControls } =
+    secondaryVideoState;
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
     audioTracksRef: state.audioTracksRef,
@@ -213,45 +232,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const playerActiveRef = useLatestValue(playerActive);
 
-  const {
-    getVideoRef,
-    primaryVideoRef,
-    secondaryVideoRef,
-    repeatPrimaryRef,
-    repeatSecondaryRef,
-    ratePrimaryRef,
-    rateSecondaryRef,
-    setRepeatPrimary,
-    setRepeatSecondary,
-    setRatePrimary,
-    setRateSecondary,
-    ratePrimary,
-    rateSecondary,
-    repeatPrimary,
-    repeatSecondary,
-  } = useVideos();
-
   const video = getVideoRef(playerActiveRef.current).current;
 
-  const { status: primaryStatus, controls: primaryControls } =
-    useConstrainedVideo({
-      videoRef: primaryVideoRef,
-      trimStartRef: useLatestValue(primaryTrimRef.current.trimStart ?? 0),
-      trimEndRef: useLatestValue(primaryTrimRef.current.trimEnd ?? 0),
-      repeatRef: repeatPrimaryRef,
-      playbackRateRef: ratePrimaryRef,
-    });
-
   const primaryPlayState = getPlayingState(primaryStatus);
-
-  const { status: secondaryStatus, controls: secondaryControls } =
-    useConstrainedVideo({
-      videoRef: secondaryVideoRef,
-      trimStartRef: useLatestValue(secondaryTrimRef.current.trimStart ?? 0),
-      trimEndRef: useLatestValue(secondaryTrimRef.current.trimEnd ?? 0),
-      repeatRef: repeatSecondaryRef,
-      playbackRateRef: rateSecondaryRef,
-    });
 
   const secondaryPlayState = getPlayingState(secondaryStatus);
 
@@ -843,40 +826,29 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       playsInline
                                       muted={false}
                                       className="w-full h-full object-contain rounded-lg"
-                                      poster={"/thumbnails/video-thumb-2.webp"}
+                                      poster="/thumbnails/video-thumb-2.webp"
                                     />
-                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%] w-full bg-red-700">
-                                      <Playback.Root>
-                                        <Playback.Controls className="mx-auto">
+                                    <Playback.Root>
+                                      <Playback.Controls className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
                                           <Playback.PlayToggle
                                             playing={primaryPlayState.isPlaying}
                                             onPlayingChange={() =>
                                               primaryControls.toggle()
                                             }
                                           />
-                                          <Playback.LoopToggle
-                                            loop={repeatPrimary}
-                                            onLoopChange={setRepeatPrimary}
-                                          />
-                                          <Playback.RateControl
-                                            rate={ratePrimary}
-                                            onRateChange={setRatePrimary}
-                                            orientation="vertical"
-                                          />
+
                                           <Playback.Volume>
                                             <Volume.Root
                                               orientation="horizontal"
-                                              // value={settings.primaryVolume}
-                                              // onValueChange={(v) =>
-                                              //   updateSetting(
-                                              //     "primaryVolume",
-                                              //     v
-                                              //   )
-                                              // }
+                                              defaultValue={primaryControls.getVolume()}
+                                              onValueChangeAlways={
+                                                primaryControls.setVolume
+                                              }
                                             >
                                               <Volume.Controls
                                                 variant="pill"
-                                                className="p-0 glass"
+                                                className="!p-0 !border-none bg-transparent hover:!glass"
                                               >
                                                 <Volume.Button
                                                   size="icon"
@@ -884,17 +856,33 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                                   aria-label="Primary volume"
                                                 />
                                                 <Volume.Slider>
-                                                  <Volume.Slider.Track>
-                                                    <Volume.Slider.Range />
-                                                    <Volume.Slider.Thumb />
+                                                  <Volume.Slider.Track className="!glass">
+                                                    <Volume.Slider.Range className="bg-white" />
+                                                    <Volume.Slider.Thumb className="bg-white" />
                                                   </Volume.Slider.Track>
                                                 </Volume.Slider>
                                               </Volume.Controls>
                                             </Volume.Root>
                                           </Playback.Volume>
-                                        </Playback.Controls>
-                                      </Playback.Root>
-                                    </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <Playback.LoopToggle
+                                            defaultLoop={
+                                              repeatPrimaryRef.current
+                                            }
+                                            onLoopChangeAlways={(value) => {
+                                              repeatPrimaryRef.current = value;
+                                            }}
+                                          />
+                                          <Playback.RateControl
+                                            defaultRate={primaryControls.getPlaybackRate()}
+                                            onRateChangeAlways={
+                                              primaryControls.setPlaybackRate
+                                            }
+                                          />
+                                        </div>
+                                      </Playback.Controls>
+                                    </Playback.Root>
                                   </div>
                                 </div>
                               )}
@@ -920,48 +908,56 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       playsInline
                                       muted={false}
                                       className="w-full h-full object-contain rounded-lg"
-                                      poster={"/thumbnails/video-thumb-2.webp"}
+                                      poster="/thumbnails/video-thumb-2.webp"
                                     />
                                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%]">
                                       <Playback.Root>
-                                        <Playback.Controls>
+                                        <Playback.Controls className="p-0 !glass">
                                           <Playback.PlayToggle
-                                            playing={primaryPlayState.isPlaying}
-                                            onPlayingChange={() =>
-                                              primaryControls.toggle()
+                                            playing={
+                                              secondaryPlayState.isPlaying
                                             }
-                                          />
-                                          <Playback.LoopToggle
-                                            loop={repeatPrimary}
-                                            onLoopChange={setRepeatPrimary}
-                                          />
-                                          <Playback.RateControl
-                                            rate={ratePrimary}
-                                            onRateChange={setRatePrimary}
-                                            orientation="vertical"
+                                            onPlayingChange={() =>
+                                              secondaryControls.toggle()
+                                            }
                                           />
                                           <Playback.Volume>
                                             <Volume.Root
                                               orientation="vertical"
-                                              // value={settings.primaryVolume}
-                                              // onValueChange={(v) =>
-                                              //   updateSetting(
-                                              //     "primaryVolume",
-                                              //     v
-                                              //   )
-                                              // }
+                                              defaultValue={secondaryControls.getVolume()}
+                                              onValueChangeAlways={
+                                                secondaryControls.setVolume
+                                              }
                                             >
-                                              <Volume.Controls variant="pill">
+                                              <Volume.Controls
+                                                variant="pill"
+                                                className="!p-0 !border-none bg-transparent hover:!glass"
+                                              >
                                                 <Volume.Button aria-label="Primary volume" />
                                                 <Volume.Slider>
-                                                  <Volume.Slider.Track>
-                                                    <Volume.Slider.Range />
-                                                    <Volume.Slider.Thumb />
+                                                  <Volume.Slider.Track className="!glass">
+                                                    <Volume.Slider.Range className="bg-white" />
+                                                    <Volume.Slider.Thumb className="bg-white" />
                                                   </Volume.Slider.Track>
                                                 </Volume.Slider>
                                               </Volume.Controls>
                                             </Volume.Root>
                                           </Playback.Volume>
+                                          <Playback.LoopToggle
+                                            defaultLoop={
+                                              repeatSecondaryRef.current
+                                            }
+                                            onLoopChangeAlways={(value) => {
+                                              repeatSecondaryRef.current =
+                                                value;
+                                            }}
+                                          />
+                                          <Playback.RateControl
+                                            defaultRate={secondaryControls.getPlaybackRate()}
+                                            onRateChangeAlways={
+                                              secondaryControls.setPlaybackRate
+                                            }
+                                          />
                                         </Playback.Controls>
                                       </Playback.Root>
                                     </div>

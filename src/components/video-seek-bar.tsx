@@ -16,14 +16,14 @@ import { HitArea } from "./hit-area";
 
 interface VideoSeekBarProps {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
-  secondaryVideoRef?: React.RefObject<HTMLVideoElement | null>;
+  secondaryVideoRef?: React.RefObject<HTMLVideoElement | null>; // for the dual system
   primaryTrim: TrimData;
   secondaryTrim: TrimData | null;
   isPlaying: boolean;
   onSeek: (normalizedTimeMs: number) => void;
   className?: React.HTMLAttributes<HTMLDivElement>["className"];
   primaryBuffered?: TimeRanges | null;
-  secondaryBuffered?: TimeRanges | null;
+  secondaryBuffered?: TimeRanges | null; // for the dual system
 }
 
 export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({

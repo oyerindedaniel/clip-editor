@@ -35,7 +35,7 @@ export const KeyframeLists: React.FC<KeyframeListsProps> = ({
           <Button
             size="icon"
             variant="outline"
-            className={cn("relative")}
+            className="relative"
             aria-label="Keyframes"
           >
             <ListChecks className="w-3.5 h-3.5" />

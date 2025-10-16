@@ -22,7 +22,7 @@ import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 
 type AspectRatioType = AspectRatio | null;
 
-interface AspectRatioSelectorProps {
+interface AspectRatioPickerProps {
   screenSize: ScreenSize;
   aspectRatio: AspectRatioType;
   onAspectRatioChange: (ratio: AspectRatioType) => void;
@@ -58,7 +58,7 @@ const aspectRatios916: {
   { value: "3:4", label: "3:4", description: "Portrait Standard" },
 ];
 
-const AspectRatioSelector = ({
+const AspectRatioPicker = ({
   screenSize,
   aspectRatio,
   onAspectRatioChange,
@@ -69,7 +69,7 @@ const AspectRatioSelector = ({
   onCropModeChange,
   padColor,
   onPadColorChange,
-}: AspectRatioSelectorProps) => {
+}: AspectRatioPickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [localAspectRatio, setLocalAspectRatio] =
     useState<AspectRatioType>(aspectRatio);
@@ -229,4 +229,4 @@ const AspectRatioSelector = ({
   );
 };
 
-export default AspectRatioSelector;
+export default AspectRatioPicker;

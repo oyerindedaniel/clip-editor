@@ -10,7 +10,14 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
-import { useControllableState } from "@/hooks/use-controllable-state";
+import { useControllableStateWithCallback } from "@/hooks/use-controllable-state-with-callback";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import VideoPreview from "./video-preview";
+import { VideoSeekBar } from "./video-seek-bar";
 
 interface PlaybackRootProps {
   children: React.ReactNode;
@@ -36,7 +43,11 @@ const PlaybackControls = React.forwardRef<
   return (
     <div
       ref={ref}
-      className={cn("flex items-center gap-2", className)}
+      className={cn(
+        "flex items-center gap-2 glass border-none",
+        "absolute bottom-0 px-8 py-1 left-1/2 -translate-x-1/2 w-full",
+        className
+      )}
       {...props}
     >
       {children}
@@ -50,6 +61,7 @@ interface PlayToggleProps extends React.ComponentPropsWithoutRef<"button"> {
   defaultPlaying?: boolean;
   playing?: boolean;
   onPlayingChange?: (playing: boolean) => void;
+  onPlayingChangeAlways?: (playing: boolean) => void;
 }
 
 const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
@@ -58,15 +70,17 @@ const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
       defaultPlaying = false,
       playing: controlledPlaying,
       onPlayingChange,
+      onPlayingChangeAlways,
       className,
       ...props
     },
     ref
   ) => {
-    const [playing, setPlaying] = useControllableState({
+    const [playing, setPlaying] = useControllableStateWithCallback({
       defaultValue: defaultPlaying,
       controlled: controlledPlaying,
       onChange: onPlayingChange,
+      onValueChangeAlways: onPlayingChangeAlways,
     });
 
     const togglePlay = React.useCallback(() => {
@@ -108,6 +122,7 @@ interface LoopToggleProps extends React.ComponentPropsWithoutRef<"button"> {
   defaultLoop?: boolean;
   loop?: boolean;
   onLoopChange?: (loop: boolean) => void;
+  onLoopChangeAlways?: (loop: boolean) => void;
 }
 
 const LoopToggle = React.forwardRef<HTMLButtonElement, LoopToggleProps>(
@@ -116,15 +131,17 @@ const LoopToggle = React.forwardRef<HTMLButtonElement, LoopToggleProps>(
       defaultLoop = false,
       loop: controlledLoop,
       onLoopChange,
+      onLoopChangeAlways,
       className,
       ...props
     },
     ref
   ) => {
-    const [loop, setLoop] = useControllableState({
+    const [loop, setLoop] = useControllableStateWithCallback({
       defaultValue: defaultLoop,
       controlled: controlledLoop,
       onChange: onLoopChange,
+      onValueChangeAlways: onLoopChangeAlways,
     });
 
     const toggleLoop = React.useCallback(() => {
@@ -164,8 +181,8 @@ interface RateControlProps
   defaultRate?: number;
   rate?: number;
   onRateChange?: (rate: number) => void;
+  onRateChangeAlways?: (rate: number) => void;
   rates?: number[];
-  orientation?: "horizontal" | "vertical";
 }
 
 const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
@@ -174,80 +191,74 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
       defaultRate = 1,
       rate: controlledRate,
       onRateChange,
+      onRateChangeAlways,
       rates = [0.5, 1, 1.25, 1.5, 2],
-      orientation = "horizontal",
       className,
       ...props
     },
     ref
   ) => {
-    const [rate, setRate] = useControllableState({
+    const [rate, setRate] = useControllableStateWithCallback({
       defaultValue: defaultRate,
       controlled: controlledRate,
       onChange: onRateChange,
+      onValueChangeAlways: onRateChangeAlways,
     });
 
-    const [hover, setHover] = React.useState(false);
+    const [open, setOpen] = React.useState(false);
+
+    const handleSelect = React.useCallback(
+      (r: number) => {
+        setRate(r);
+        setOpen(false);
+      },
+      [setRate]
+    );
+
+    const rateButtons = React.useMemo(
+      () =>
+        rates.map((r) => (
+          <Button
+            key={r}
+            size="icon"
+            variant="glass"
+            onClick={() => handleSelect(r)}
+            className={cn(
+              "text-xs",
+              r === rate && "bg-white/20 text-white border-2"
+            )}
+          >
+            {r}
+          </Button>
+        )),
+      [rates, rate, handleSelect]
+    );
 
     return (
       <div
         ref={ref}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        className={cn(
-          "relative flex items-center",
-          orientation === "horizontal" ? "flex-row" : "flex-col",
-          className
-        )}
+        className={cn("relative flex items-center select-none", className)}
         {...props}
       >
-        <div className="relative overflow-hidden">
-          <div
-            className={cn(
-              "absolute inset-0 transition-[clip-path,opacity] duration-250 ease-in-out",
-              hover
-                ? orientation === "horizontal"
-                  ? "[clip-path:inset(0_0_0_0)] opacity-100"
-                  : "[clip-path:inset(0_0_0_0)] opacity-100"
-                : orientation === "horizontal"
-                ? "[clip-path:inset(0_100%_0_0)] opacity-0"
-                : "[clip-path:inset(100%_0_0_0)] opacity-0"
-            )}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button className="h-8 w-fit" variant="glass">
+              {rate}x
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="center"
+            className="!glass w-fit py-2 px-1 flex flex-col justify-center gap-1"
           >
-            <div
-              className={cn(
-                "flex gap-1",
-                orientation === "horizontal" ? "flex-row" : "flex-col"
-              )}
-            >
-              {rates.map((r) => (
-                <Button
-                  key={r}
-                  size="icon"
-                  className={cn(
-                    "text-white/80 hover:text-white",
-                    r === rate && "bg-white/20 text-white"
-                  )}
-                  onClick={() => setRate(r)}
-                >
-                  {r}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <Button
-            size="icon"
-            variant="glass"
-            className="relative z-10"
-            onClick={() => setHover((h) => !h)}
-          >
-            <Zap className="size-4" />
-          </Button>
-        </div>
+            {rateButtons}
+          </PopoverContent>
+        </Popover>
       </div>
     );
   }
 );
+
 RateControl.displayName = "RateControl";
 
 interface PlaybackVolumeProps
@@ -260,6 +271,16 @@ const PlaybackVolume = React.forwardRef<HTMLDivElement, PlaybackVolumeProps>(
 );
 
 PlaybackVolume.displayName = "PlaybackVolume";
+
+interface PlaybackSeekProps extends React.ComponentProps<typeof VideoSeekBar> {}
+
+const PlaybackSeek = React.forwardRef<HTMLDivElement, PlaybackSeekProps>(
+  (props, ref) => {
+    return <VideoSeekBar {...props} />;
+  }
+);
+
+PlaybackSeek.displayName = "PlaybackSeek";
 
 export const Playback = {
   Root: PlaybackRoot,

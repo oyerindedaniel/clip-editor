@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback, useRef } from "react";
-import { useIsomorphicLayoutEffect } from "./use-Isomorphic-layout-effect";
+import React, { useCallback, useRef } from "react";
+
+const useInsertionEffect: typeof React.useLayoutEffect =
+  (React as any)["useInsertionEffect"] || React.useLayoutEffect;
 
 /**
  * A custom hook to create a stable event handler reference.
@@ -13,7 +15,7 @@ export function useStableHandler<T extends (...args: any[]) => any>(
 ): (...args: Parameters<T>) => ReturnType<T> {
   const handlerRef = useRef<T>(handler);
 
-  useIsomorphicLayoutEffect(() => {
+  useInsertionEffect(() => {
     handlerRef.current = handler;
   });
 

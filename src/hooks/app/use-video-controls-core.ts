@@ -5,7 +5,6 @@ export interface BuildVideoControlsOptions {
   trimStartRef: React.RefObject<number>;
   trimEndRef: React.RefObject<number>;
   repeatRef?: React.RefObject<boolean>;
-  playbackRateRef?: React.RefObject<number>;
   // For reactive hooks that need to update store state
   updateStoreTime?: (time: number) => void;
   notifyStore?: () => void;
@@ -19,6 +18,10 @@ export interface VideoControls {
   pause: () => void;
   toggle: () => void;
   seek: (time: number) => void;
+  setPlaybackRate: (rate: number) => void;
+  getPlaybackRate: () => number;
+  setVolume: (volume: number) => void;
+  getVolume: () => number;
 }
 
 export function useBuildVideoControls(
@@ -29,7 +32,6 @@ export function useBuildVideoControls(
     trimStartRef,
     trimEndRef,
     repeatRef,
-    playbackRateRef,
     updateStoreTime,
     notifyStore,
     startLoop,
@@ -94,18 +96,33 @@ export function useBuildVideoControls(
           startLoop?.();
         }
       },
+
+      setPlaybackRate: (rate: number) => {
+        const video = videoRef.current;
+        if (!video) return;
+        // const clamped = Math.max(0.25, Math.min(rate, 4));
+        video.playbackRate = rate;
+      },
+
+      getPlaybackRate: () => {
+        const video = videoRef.current;
+        return video ? video.playbackRate : 1;
+      },
+
+      setVolume: (volume: number) => {
+        const video = videoRef.current;
+        if (!video) return;
+        const clamped = Math.max(0, Math.min(volume, 1));
+        video.volume = clamped;
+      },
+
+      getVolume: () => {
+        const video = videoRef.current;
+        if (!video) return 0.8;
+        return video.volume;
+      },
     };
-  }, [
-    videoRef,
-    trimStartRef,
-    trimEndRef,
-    repeatRef,
-    playbackRateRef,
-    updateStoreTime,
-    notifyStore,
-    startLoop,
-    onSeek,
-  ]);
+  }, [updateStoreTime, notifyStore, startLoop, onSeek]);
 }
 
 export function getPlayingState(status: PlayingStatus) {

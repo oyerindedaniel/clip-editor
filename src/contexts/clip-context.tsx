@@ -9,6 +9,8 @@ import type {
 import { type StoreApi, useContextStore } from "react-shallow-store";
 import { DEFAULT_TRIM_DATA } from "@/constants/app";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import { useVideoRefs } from "@/hooks/app/use-video-refs";
+import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
 
 type DualVideoContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
@@ -27,6 +29,15 @@ type DualVideoContextValue = {
   secondaryTrim: TrimData;
   setSecondaryTrim: React.Dispatch<React.SetStateAction<TrimData>>;
   secondaryTrimRef: React.RefObject<TrimData>;
+
+  getVideoRef: ReturnType<typeof useVideoRefs>["getVideoRef"];
+  primaryVideoRef: ReturnType<typeof useVideoRefs>["primaryVideoRef"];
+  secondaryVideoRef: ReturnType<typeof useVideoRefs>["secondaryVideoRef"];
+  repeatPrimaryRef: ReturnType<typeof useVideoRefs>["repeatPrimaryRef"];
+  repeatSecondaryRef: ReturnType<typeof useVideoRefs>["repeatSecondaryRef"];
+
+  primaryVideoState: ReturnType<typeof useConstrainedVideo>;
+  secondaryVideoState: ReturnType<typeof useConstrainedVideo>;
 };
 
 export const ClipContext =
@@ -59,6 +70,28 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
 
+  const {
+    getVideoRef,
+    primaryVideoRef,
+    secondaryVideoRef,
+    repeatPrimaryRef,
+    repeatSecondaryRef,
+  } = useVideoRefs();
+
+  const primaryVideoState = useConstrainedVideo({
+    videoRef: primaryVideoRef,
+    trimStartRef: useLatestValue(primaryTrimRef.current.trimStart ?? 0),
+    trimEndRef: useLatestValue(primaryTrimRef.current.trimEnd ?? 0),
+    repeatRef: repeatPrimaryRef,
+  });
+
+  const secondaryVideoState = useConstrainedVideo({
+    videoRef: secondaryVideoRef,
+    trimStartRef: useLatestValue(secondaryTrimRef.current.trimStart ?? 0),
+    trimEndRef: useLatestValue(secondaryTrimRef.current.trimEnd ?? 0),
+    repeatRef: repeatSecondaryRef,
+  });
+
   const contextValue = useMemo(
     () => ({
       secondaryClip,
@@ -72,6 +105,15 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
       setSecondaryTrim,
       primaryTrimRef,
       secondaryTrimRef,
+
+      getVideoRef,
+      primaryVideoRef,
+      secondaryVideoRef,
+      repeatPrimaryRef,
+      repeatSecondaryRef,
+
+      primaryVideoState,
+      secondaryVideoState,
     }),
     [
       secondaryClip,
@@ -85,6 +127,15 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
       setSecondaryTrim,
       primaryTrimRef,
       secondaryTrimRef,
+
+      getVideoRef,
+      primaryVideoRef,
+      secondaryVideoRef,
+      repeatPrimaryRef,
+      repeatSecondaryRef,
+
+      primaryVideoState,
+      secondaryVideoState,
     ]
   );
 

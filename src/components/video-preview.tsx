@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, forwardRef } from "react";
+import React, { useMemo, useRef, forwardRef } from "react";
 import { AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeData } from "@/utils/keyframe";
 import {
@@ -20,9 +20,6 @@ import type { CropMode } from "@/types/app";
 import { CANVAS_RENDERER_SYMBOL, getRendererType } from "@/utils/renderer";
 import { Volume } from "./volume";
 import { VideoSeekBar } from "./video-seek-bar";
-import { Button } from "./ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
@@ -58,7 +55,6 @@ export interface VideoPreviewProps {
   playing?: boolean;
   onPlayingChange?: (p: PlayingStatus) => void;
 
-  defaultPlaybackRate?: number;
   defaultRepeat?: boolean;
 
   children?: (context: PreviewRenderContext) => React.ReactNode;
@@ -82,7 +78,6 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       onTimeChange,
       playing: externalPlaying = false,
       onPlayingChange,
-      defaultPlaybackRate = 1,
       defaultRepeat = false,
       keyframeBounds,
       children,
@@ -90,12 +85,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       style,
     } = props;
 
-    const [volume, setVolume] = React.useState(1);
-    const [isRepeat, setIsRepeat] = React.useState(defaultRepeat);
-    const [playbackRate, setplaybackRate] = React.useState(defaultPlaybackRate);
-
-    const repeatRef = useLatestValue(isRepeat);
-    const playbackRateRef = useLatestValue(playbackRate);
+    const repeatRef = useRef(defaultRepeat);
 
     const startRef = useLatestValue(keyframeBounds.start);
     const endRef = useLatestValue(keyframeBounds.end);
@@ -130,7 +120,6 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       trimEndRef: endRef,
       repeatRef,
       playing: externalPlaying,
-      playbackRateRef,
       onTimeChange,
       onPlayingChange,
     });
@@ -214,7 +203,10 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         </div>
 
         <div className="absolute top-2 left-2 z-10">
-          <Volume.Root value={volume} onValueChange={setVolume}>
+          <Volume.Root
+            defaultValue={controls.getVolume()}
+            onValueChangeAlways={controls.setVolume}
+          >
             <Volume.Controls variant="pill">
               <Volume.Button aria-label="Volume" />
               <Volume.Slider>
@@ -247,44 +239,21 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
                 <Playback.Root>
                   <Playback.Controls>
                     <Playback.PlayToggle
-                      playing={playState.isPlaying}
-                      onPlayingChange={() => controls.toggle()}
+                      defaultPlaying={playState.isPlaying}
+                      onPlayingChangeAlways={() => controls.toggle()}
                     />
                     <Playback.LoopToggle
-                      loop={isRepeat}
-                      onLoopChange={setIsRepeat}
+                      defaultLoop={repeatRef.current}
+                      onLoopChange={(value) => {
+                        repeatRef.current = value;
+                      }}
                     />
                     <Playback.RateControl
-                      rate={playbackRate}
-                      onRateChange={setplaybackRate}
-                      orientation="vertical"
+                      defaultRate={controls.getPlaybackRate()}
+                      onRateChangeAlways={controls.setPlaybackRate}
                     />
                   </Playback.Controls>
                 </Playback.Root>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => setIsRepeat((r) => !r)}
-                      className={cn(
-                        "h-8 w-8 border-white/30 text-white transition-all duration-200 hover:scale-105 shadow-sm",
-                        isRepeat
-                          ? "bg-primary/90 hover:bg-primary text-foreground-on-accent border-primary/50"
-                          : "bg-white/10 hover:bg-white/20"
-                      )}
-                    >
-                      <Repeat className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="top"
-                    className="bg-surface-primary border-surface-tertiary text-foreground-default font-medium"
-                  >
-                    {isRepeat ? "Repeat On" : "Repeat Off"}
-                  </TooltipContent>
-                </Tooltip>
               </div>
             </div>
           </div>

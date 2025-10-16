@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   useBuildVideoControls,
   type PlayingStatus,
 } from "./use-video-controls-core";
+import { useStableHandler } from "../use-stable-handler";
 
 export interface UseConstrainedVideoOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   trimStartRef: React.RefObject<number>;
   trimEndRef: React.RefObject<number>;
   repeatRef?: React.RefObject<boolean>;
-  playbackRateRef?: React.RefObject<number>;
   onStatusChange?: (status: PlayingStatus) => void;
 }
 
@@ -21,32 +21,30 @@ export interface ConstrainedVideoControls {
 }
 
 export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
-  const {
-    videoRef,
-    trimStartRef,
-    trimEndRef,
-    repeatRef,
-    playbackRateRef,
-    onStatusChange,
-  } = opts;
+  const { videoRef, trimStartRef, trimEndRef, repeatRef, onStatusChange } =
+    opts;
 
   const [status, setStatus] = useState<PlayingStatus>("idle");
+  const [buffered, setBuffered] = useState<TimeRanges | null>(null);
   const lastStatus = useRef<PlayingStatus>("idle");
 
-  const updateStatus = useCallback(
-    (next: PlayingStatus) => {
-      if (lastStatus.current !== next) {
-        lastStatus.current = next;
-        setStatus(next);
-        onStatusChange?.(next);
-      }
-    },
-    [onStatusChange]
-  );
+  const stableOnStatusChange = useStableHandler(onStatusChange!);
+
+  const updateStatus = useCallback((next: PlayingStatus) => {
+    if (lastStatus.current !== next) {
+      lastStatus.current = next;
+      setStatus(next);
+      stableOnStatusChange?.(next);
+    }
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    const handleProgress = () => {
+      setBuffered(video.buffered);
+    };
 
     const handleTimeUpdate = () => {
       const trimStart = trimStartRef.current ?? 0;
@@ -76,44 +74,35 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
     const handlePause = () => {
       const current = video.currentTime;
       const trimEnd = trimEndRef.current ?? video.duration ?? 0;
-      if (current < trimEnd) {
-        updateStatus("paused");
-      }
+      if (current < trimEnd) updateStatus("paused");
     };
 
-    const playbackRate = playbackRateRef?.current ?? 1;
-    if (video.playbackRate !== playbackRate) {
-      video.playbackRate = playbackRate;
-    }
-
+    video.addEventListener("progress", handleProgress);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
 
+    handleProgress();
     const isInitiallyPlaying = !video.paused;
     updateStatus(isInitiallyPlaying ? "playing" : "idle");
 
     return () => {
+      video.removeEventListener("progress", handleProgress);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
     };
-  }, [
-    videoRef,
-    trimStartRef,
-    trimEndRef,
-    repeatRef,
-    playbackRateRef,
-    updateStatus,
-  ]);
+  }, [updateStatus]);
 
   const controls = useBuildVideoControls({
     videoRef,
     trimStartRef,
     trimEndRef,
     repeatRef,
-    playbackRateRef,
   });
 
-  return { status, controls };
+  return useMemo(
+    () => ({ status, controls, buffered }),
+    [status, controls, buffered]
+  );
 }

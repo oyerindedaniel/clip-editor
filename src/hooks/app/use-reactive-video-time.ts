@@ -10,7 +10,6 @@ export interface UseReactiveVideoTimeOptions {
   trimEndRef: React.RefObject<number>;
   repeatRef?: React.RefObject<boolean>;
   playing?: boolean;
-  playbackRateRef?: React.RefObject<number>;
   onTimeChange?: (time: number) => void;
   onPlayingChange?: (status: PlayingStatus) => void;
 }
@@ -34,7 +33,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     trimEndRef,
     repeatRef,
     playing,
-    playbackRateRef,
     onTimeChange,
     onPlayingChange,
   } = opts;
@@ -81,11 +79,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
         const trimStart = trimStartRef.current ?? 0;
         const trimEnd = trimEndRef.current ?? video.duration ?? 0;
         const repeat = repeatRef?.current ?? false;
-        const playbackRate = playbackRateRef?.current ?? 1;
-
-        if (video.playbackRate !== playbackRate) {
-          video.playbackRate = playbackRate;
-        }
 
         let current = video.currentTime;
         let status: ReactiveVideoState["status"];
@@ -171,7 +164,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     trimStartRef,
     trimEndRef,
     repeatRef,
-    playbackRateRef,
     updateStoreTime: (time) => {
       storeRef.current.state = { ...storeRef.current.state, time };
     },

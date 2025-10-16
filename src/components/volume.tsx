@@ -8,7 +8,7 @@ import type { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import { useControllableState } from "@/hooks/use-controllable-state";
+import { useControllableStateWithCallback } from "@/hooks/use-controllable-state-with-callback";
 import { HitArea } from "./hit-area";
 import type { AnimationState } from "@/hooks/use-animate-presence";
 import { useElementReadyForMeasurement } from "@/hooks/use-element-ready-for-measurement";
@@ -42,6 +42,7 @@ interface VolumeRootProps {
   value?: number;
   defaultValue?: number;
   onValueChange?: (v: number) => void;
+  onValueChangeAlways?: (v: number) => void;
   min?: number;
   max?: number;
   step?: number;
@@ -53,6 +54,7 @@ function VolumeRoot({
   value: controlledValue,
   defaultValue = 1,
   onValueChange,
+  onValueChangeAlways,
   min = 0,
   max = 1,
   step = 0.01,
@@ -61,10 +63,11 @@ function VolumeRoot({
 }: VolumeRootProps) {
   const [thumbId, setThumbId] = React.useState<string | undefined>();
 
-  const [volume, setVolume] = useControllableState<number>({
+  const [volume, setVolume] = useControllableStateWithCallback<number>({
     controlled: controlledValue,
     defaultValue,
     onChange: onValueChange,
+    onValueChangeAlways,
   });
 
   const [hovering, setHovering] = React.useState(false);
@@ -175,7 +178,9 @@ function useControlsContext() {
   return ctx;
 }
 
-interface VolumeControlsProps extends React.HTMLAttributes<HTMLDivElement> {
+interface VolumeControlsProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    Pick<React.ComponentProps<typeof HitArea>, "debug" | "buffer"> {
   variant?: VolumeControlsVariant;
 }
 
@@ -409,7 +414,7 @@ interface VolumeSliderProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
-  ({ children, ...props }, forwardedRef) => {
+  ({ children, className, ...props }, forwardedRef) => {
     const { orientation } = useVolumeContext();
     const { forceOpenRef, sliderRef, shouldRender, state, variant } =
       useControlsContext();
@@ -430,7 +435,8 @@ const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
           variant === "default" &&
             (orientation === "horizontal"
               ? "data-[state=open]:animate-volume-reveal-x-in data-[state=closed]:animate-volume-reveal-x-out"
-              : "data-[state=open]:animate-volume-reveal-y-in data-[state=closed]:animate-volume-reveal-y-out")
+              : "data-[state=open]:animate-volume-reveal-y-in data-[state=closed]:animate-volume-reveal-y-out"),
+          className
         )}
         {...props}
       >
@@ -446,7 +452,7 @@ interface VolumeSliderTrackProps extends React.HTMLAttributes<HTMLDivElement> {}
 const VolumeSliderTrack = React.forwardRef<
   HTMLDivElement,
   VolumeSliderTrackProps
->(({ children, onPointerDown, ...props }, forwardedRef) => {
+>(({ children, onPointerDown, className, ...props }, forwardedRef) => {
   const { setVolume, min, max, orientation } = useVolumeContext();
   const { trackRef } = useControlsContext();
 
@@ -479,7 +485,10 @@ const VolumeSliderTrack = React.forwardRef<
         aria-orientation={orientation}
         className={cn(
           "relative bg-surface-tertiary rounded",
-          orientation === "horizontal" ? "w-full h-1" : "h-full w-1"
+          orientation === "horizontal"
+            ? "w-full h-1 px-1.5"
+            : "h-full w-1 py-1.5",
+          className
         )}
         onPointerDown={handlePointerDown}
         {...props}
@@ -550,7 +559,7 @@ const VolumeSliderThumb = React.forwardRef<
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (onPointerDown) {
-      onPointerDown?.(event);
+      onPointerDown(event);
       if (event.defaultPrevented) return;
     }
 
