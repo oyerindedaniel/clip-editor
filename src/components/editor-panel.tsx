@@ -411,7 +411,7 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
           className={cn(
             "fixed top-0 bottom-0 z-50 outline-none focus:outline-none",
             "bg-surface-secondary/95 backdrop-blur-sm",
-            "border-l border-default",
+            "border-default border-t border-l border-r",
             "shadow-2xl shadow-black/20",
             side === "right" ? "right-0" : "left-0",
             side === "right"

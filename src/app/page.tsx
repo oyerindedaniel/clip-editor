@@ -18,14 +18,14 @@ function HomePageSkeleton() {
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="p-4 bg-surface-secondary rounded-lg aspect-[4/3] w-full"
+            className="p-4 bg-surface-secondary rounded-3xl aspect-[4/3] w-full"
           >
-            <div className="bg-surface-secondary rounded-lg overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
+            <div className="bg-surface-secondary rounded-2xl overflow-hidden border border-gray-700/50 hover:border-primary/50 transition-colors cursor-pointer group">
               <div className="bg-gray-800 aspect-[4/3] w-full h-full relative overflow-hidden">
                 <Skeleton className="w-full h-full" />
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="flex space-x-2">
-                    <Skeleton className="h-8 w-8 rounded" />
+                    <Skeleton className="h-8 w-8 rounded-full" />
                   </div>
                 </div>
               </div>

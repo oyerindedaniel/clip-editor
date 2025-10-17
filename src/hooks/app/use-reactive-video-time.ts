@@ -1,6 +1,8 @@
-import { useRef, useSyncExternalStore, useCallback, useMemo } from "react";
-
-export type PlayingStatus = "idle" | "playing" | "paused" | "ended";
+import { useRef, useSyncExternalStore, useCallback } from "react";
+import {
+  useBuildVideoControls,
+  type PlayingStatus,
+} from "./use-video-controls-core";
 
 export interface UseReactiveVideoTimeOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -8,7 +10,6 @@ export interface UseReactiveVideoTimeOptions {
   trimEndRef: React.RefObject<number>;
   repeatRef?: React.RefObject<boolean>;
   playing?: boolean;
-  playbackRateRef?: React.RefObject<number>;
   onTimeChange?: (time: number) => void;
   onPlayingChange?: (status: PlayingStatus) => void;
 }
@@ -32,7 +33,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     trimEndRef,
     repeatRef,
     playing,
-    playbackRateRef,
     onTimeChange,
     onPlayingChange,
   } = opts;
@@ -79,11 +79,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
         const trimStart = trimStartRef.current ?? 0;
         const trimEnd = trimEndRef.current ?? video.duration ?? 0;
         const repeat = repeatRef?.current ?? false;
-        const playbackRate = playbackRateRef?.current ?? 1;
-
-        if (video.playbackRate !== playbackRate) {
-          video.playbackRate = playbackRate;
-        }
 
         let current = video.currentTime;
         let status: ReactiveVideoState["status"];
@@ -164,63 +159,22 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
 
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const controls: ReactiveVideoControls = useMemo(() => {
-    return {
-      play: () => {
-        const video = videoRef.current;
-        if (!video) return;
-        const trimStart = trimStartRef.current ?? 0;
-        if (video.currentTime < trimStart) {
-          video.currentTime = trimStart;
-        }
-        video.play().catch(() => {});
-        storeRef.current.startLoop();
-      },
-      pause: () => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.pause();
-      },
-      toggle: () => {
-        const video = videoRef.current;
-        if (!video) return;
-        if (video.paused) {
-          const trimStart = trimStartRef.current ?? 0;
-          if (video.currentTime < trimStart) {
-            video.currentTime = trimStart;
-          }
-          video.play().catch(() => {});
-          storeRef.current.startLoop();
-        } else {
-          video.pause();
-        }
-      },
-      seek: (time: number) => {
-        const video = videoRef.current;
-        if (!video) return;
-        const trimStart = trimStartRef.current ?? 0;
-        const trimEnd = trimEndRef.current ?? video.duration ?? 0;
-        const clamped = Math.min(Math.max(time, trimStart), trimEnd);
-        video.currentTime = clamped;
-        storeRef.current.state = { ...storeRef.current.state, time: clamped };
-        storeRef.current.notify();
-        onTimeChange?.(clamped);
-        if (!video.paused) {
-          storeRef.current.startLoop();
-        }
-      },
-    };
-  }, [onTimeChange]);
+  const controls = useBuildVideoControls({
+    videoRef,
+    trimStartRef,
+    trimEndRef,
+    repeatRef,
+    updateStoreTime: (time) => {
+      storeRef.current.state = { ...storeRef.current.state, time };
+    },
+    notifyStore: () => {
+      storeRef.current.notify();
+    },
+    startLoop: () => {
+      storeRef.current.startLoop();
+    },
+    onSeek: onTimeChange,
+  });
 
   return { ...state, controls };
 }
-
-export const getPlayingState = (status: PlayingStatus) => ({
-  isPlaying: status === "playing",
-  isPaused: status === "paused",
-  isIdle: status === "idle",
-  isEnded: status === "ended",
-  isActive: status === "playing" || status === "paused",
-  showPauseIcon: status === "playing",
-  showPlayIcon: status !== "playing",
-});

@@ -1,58 +1,92 @@
 "use client";
 
-import React, {
-  useCallback,
-  useRef,
-  useState,
-  useEffect,
-  useMemo,
-} from "react";
+import * as React from "react";
 import { cn } from "@/lib/utils";
-import { throttle } from "@/utils/app";
+import { debounce } from "@/utils/app";
 import type { TrimData } from "@/types/app";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useStableHandler } from "@/hooks/use-stable-handler";
 import { HitArea } from "./hit-area";
+import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { formatTime } from "@/utils/app";
+import { useLatestValue } from "@/hooks/use-latest-value";
 
-interface VideoSeekBarProps {
+interface SeekContextValue {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
   secondaryVideoRef?: React.RefObject<HTMLVideoElement | null>;
   primaryTrim: TrimData;
   secondaryTrim: TrimData | null;
   isPlaying: boolean;
   onSeek: (normalizedTimeMs: number) => void;
-  className?: React.HTMLAttributes<HTMLDivElement>["className"];
   primaryBuffered?: TimeRanges | null;
   secondaryBuffered?: TimeRanges | null;
+  timelineDurationMs: number;
+  isDragging: boolean;
+  setIsDragging: (v: boolean) => void;
+  hoverTime: number | null;
+  setHoverTime: (v: number | null) => void;
+  isHovered: boolean;
+  setIsHovered: (v: boolean) => void;
+  progressRef: React.RefObject<number>;
+  _bufferRef: React.RefObject<HTMLDivElement | null>;
+  _progressRef: React.RefObject<HTMLDivElement | null>;
+  _thumbRef: React.RefObject<HTMLDivElement | null>;
+  currentTimeRef: React.RefObject<HTMLSpanElement | null>;
+  _trackRef: React.RefObject<HTMLDivElement | null>;
+  // Accessibility IDs
+  seekSliderId: string;
+  currentTimeId: string;
+  durationId: string;
 }
 
-export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
+const SeekContext = React.createContext<SeekContextValue | null>(null);
+
+function useSeekContext(): SeekContextValue {
+  const context = React.useContext(SeekContext);
+  if (!context) {
+    throw new Error("Seek components must be used within <Seek.Root>");
+  }
+  return context;
+}
+
+interface SeekRootProps {
+  primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
+  secondaryVideoRef?: React.RefObject<HTMLVideoElement | null>;
+  primaryTrim: TrimData;
+  secondaryTrim: TrimData | null;
+  isPlaying: boolean;
+  onSeek: (normalizedTimeMs: number) => void;
+  primaryBuffered?: TimeRanges | null;
+  secondaryBuffered?: TimeRanges | null;
+  children: React.ReactNode;
+}
+
+function SeekRoot({
   primaryVideoRef,
   secondaryVideoRef,
   primaryTrim,
-  primaryBuffered,
-  secondaryBuffered,
   secondaryTrim,
   isPlaying,
   onSeek,
-  className,
-}) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const [isHovered, setIsHovered] = useState(false);
+  primaryBuffered,
+  secondaryBuffered,
+  children,
+}: SeekRootProps) {
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [hoverTime, setHoverTime] = React.useState<number | null>(null);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const progressRef = React.useRef(0);
 
-  const seekBarRef = useRef<HTMLDivElement | null>(null);
-  const bufferFillRef = useRef<HTMLDivElement | null>(null);
-  const progressFillRef = useRef<HTMLDivElement | null>(null);
-  const thumbRef = useRef<HTMLDivElement | null>(null);
-  const animationRef = useRef<number>(0);
-  const visualUpdateRef = useRef<number>(0);
-  const progressRef = useRef(0);
-  const currentTimeDisplayRef = useRef<HTMLSpanElement | null>(null);
+  const _bufferRef = React.useRef<HTMLDivElement | null>(null);
+  const _progressRef = React.useRef<HTMLDivElement | null>(null);
+  const _thumbRef = React.useRef<HTMLDivElement | null>(null);
+  const currentTimeRef = React.useRef<HTMLSpanElement | null>(null);
+  const _trackRef = React.useRef<HTMLDivElement | null>(null);
 
-  const stableOnSeek = useStableHandler(onSeek);
+  const seekSliderId = React.useId();
+  const currentTimeId = React.useId();
+  const durationId = React.useId();
 
-  const calculateTimelineDuration = useCallback(() => {
+  const calculateTimelineDuration = React.useCallback(() => {
     const primaryDuration = primaryTrim.trimEnd - primaryTrim.trimStart;
 
     if (!secondaryTrim) return primaryDuration;
@@ -66,7 +100,334 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
 
   const timelineDurationMs = calculateTimelineDuration();
 
-  const getCurrentNormalizedTime = useCallback(() => {
+  const context = React.useMemo(
+    () => ({
+      primaryVideoRef,
+      secondaryVideoRef,
+      primaryTrim,
+      secondaryTrim,
+      isPlaying,
+      onSeek,
+      primaryBuffered,
+      secondaryBuffered,
+      timelineDurationMs,
+      isDragging,
+      setIsDragging,
+      hoverTime,
+      setHoverTime,
+      isHovered,
+      setIsHovered,
+      progressRef,
+      _bufferRef,
+      _progressRef,
+      _thumbRef,
+      currentTimeRef,
+      _trackRef,
+      seekSliderId,
+      currentTimeId,
+      durationId,
+    }),
+    [
+      primaryVideoRef,
+      secondaryVideoRef,
+      primaryTrim,
+      secondaryTrim,
+      isPlaying,
+      onSeek,
+      primaryBuffered,
+      secondaryBuffered,
+      timelineDurationMs,
+      isDragging,
+      hoverTime,
+      isHovered,
+      seekSliderId,
+      currentTimeId,
+      durationId,
+    ]
+  );
+
+  return (
+    <SeekContext.Provider value={context}>{children}</SeekContext.Provider>
+  );
+}
+
+interface SeekContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+const SeekContent = React.forwardRef<HTMLDivElement, SeekContentProps>(
+  ({ children, className, ...props }, forwardedRef) => {
+    return (
+      <div
+        ref={forwardedRef}
+        className={cn("w-full pointer-events-auto", className)}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+SeekContent.displayName = "SeekContent";
+
+interface SeekTimeDisplayProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+const SeekTimeDisplay = React.forwardRef<HTMLDivElement, SeekTimeDisplayProps>(
+  ({ children, className, ...props }, forwardedRef) => {
+    const { timelineDurationMs, currentTimeRef, currentTimeId, durationId } =
+      useSeekContext();
+
+    return (
+      <div
+        ref={forwardedRef}
+        className={cn(
+          "flex items-center gap-1.5 text-sm w-fit font-sans pointer-events-auto text-white !glass rounded-3xl px-3 h-8",
+          className
+        )}
+        role="timer"
+        aria-live="off"
+        {...props}
+      >
+        <span ref={currentTimeRef} id={currentTimeId} aria-label="Current time">
+          {children}
+        </span>
+        <span className="opacity-70" aria-hidden="true">
+          /
+        </span>
+        <span id={durationId} aria-label="Duration">
+          {formatTime(timelineDurationMs)}
+        </span>
+      </div>
+    );
+  }
+);
+SeekTimeDisplay.displayName = "SeekTimeDisplay";
+
+interface SeekTrackProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
+  ({ children, className, ...props }, forwardedRef) => {
+    const {
+      _trackRef,
+      seekSliderId,
+      currentTimeId,
+      durationId,
+      timelineDurationMs,
+      progressRef,
+      onSeek,
+      setIsDragging,
+      setHoverTime,
+      setIsHovered,
+    } = useSeekContext();
+    const composedRefs = useComposedRefs(forwardedRef, _trackRef);
+
+    const stableOnSeek = useStableHandler(onSeek);
+
+    const handleKeyDown = React.useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const currentProgress = progressRef.current;
+        const currentTimeMs = currentProgress * timelineDurationMs;
+        let newTimeMs = currentTimeMs;
+
+        // Arrow keys: 5 second increments
+        // Page Up/Down: 10 second increments
+        // Home/End: Jump to start/end
+        switch (e.key) {
+          case "ArrowRight":
+          case "ArrowUp":
+            e.preventDefault();
+            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + 5000);
+            break;
+          case "ArrowLeft":
+          case "ArrowDown":
+            e.preventDefault();
+            newTimeMs = Math.max(0, currentTimeMs - 5000);
+            break;
+          case "PageUp":
+            e.preventDefault();
+            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + 10000);
+            break;
+          case "PageDown":
+            e.preventDefault();
+            newTimeMs = Math.max(0, currentTimeMs - 10000);
+            break;
+          case "Home":
+            e.preventDefault();
+            newTimeMs = 0;
+            break;
+          case "End":
+            e.preventDefault();
+            newTimeMs = timelineDurationMs;
+            break;
+          default:
+            return;
+        }
+
+        stableOnSeek(newTimeMs);
+      },
+      [timelineDurationMs, progressRef, stableOnSeek]
+    );
+
+    const handleMouseEnter = React.useCallback(() => {
+      setIsHovered(true);
+    }, [setIsHovered]);
+
+    const handleMouseLeave = React.useCallback(() => {
+      setIsHovered(false);
+      setHoverTime(null);
+    }, [setIsHovered, setHoverTime]);
+
+    const handleMouseMove = React.useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        const trackElement = _trackRef.current;
+        if (!trackElement) return;
+
+        const rect = trackElement.getBoundingClientRect();
+        const ratio = Math.max(
+          0,
+          Math.min(1, (e.clientX - rect.left) / rect.width)
+        );
+        const timeMs = ratio * timelineDurationMs;
+        setHoverTime(timeMs);
+      },
+      [timelineDurationMs, setHoverTime, _trackRef]
+    );
+
+    const ariaValueNow = Math.round(progressRef.current * 100);
+    const ariaValueText = `${formatTime(
+      progressRef.current * timelineDurationMs
+    )} of ${formatTime(timelineDurationMs)}`;
+
+    return (
+      <HitArea
+        buffer={10}
+        variant="y"
+        className={cn(
+          "relative cursor-pointer pointer-events-auto rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-200",
+          className
+        )}
+        ref={composedRefs}
+        role="slider"
+        id={seekSliderId}
+        aria-label="Seek video"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={ariaValueNow}
+        aria-valuetext={ariaValueText}
+        aria-describedby={`${currentTimeId} ${durationId}`}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onMouseMove={handleMouseMove}
+        {...props}
+      >
+        <div>{children}</div>
+      </HitArea>
+    );
+  }
+);
+SeekTrack.displayName = "SeekTrack";
+
+const SeekBuffer = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, forwardedRef) => {
+  const { _bufferRef } = useSeekContext();
+  const composedRefs = useComposedRefs(forwardedRef, _bufferRef);
+
+  return (
+    <div
+      ref={composedRefs}
+      className={cn(
+        "absolute inset-0 bg-primary/30 rounded-full origin-left will-change-transform pointer-events-none",
+        className
+      )}
+      aria-hidden="true"
+      {...props}
+    />
+  );
+});
+SeekBuffer.displayName = "SeekBuffer";
+
+const SeekProgress = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, forwardedRef) => {
+  const { _progressRef } = useSeekContext();
+  const composedRefs = useComposedRefs(forwardedRef, _progressRef);
+
+  return (
+    <div
+      ref={composedRefs}
+      className={cn(
+        "absolute inset-0 bg-primary rounded-full origin-left will-change-transform pointer-events-auto",
+        className
+      )}
+      aria-hidden="true"
+      {...props}
+    />
+  );
+});
+SeekProgress.displayName = "SeekProgress";
+
+interface SeekThumbProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+const SeekThumb = React.forwardRef<HTMLDivElement, SeekThumbProps>(
+  ({ className, ...props }, forwardedRef) => {
+    const { isHovered, hoverTime, _thumbRef } = useSeekContext();
+    const composedRefs = useComposedRefs(forwardedRef, _thumbRef);
+
+    if (!isHovered) return null;
+
+    return (
+      <HitArea buffer={8} variant="all">
+        <div
+          ref={composedRefs}
+          className={cn(
+            "absolute top-1/2 left-0 size-3 hover:size-3.5 transition-[width,height] duration-200 rounded-full bg-primary shadow-lg will-change-transform pointer-events-auto",
+            className
+          )}
+          role="presentation"
+          aria-hidden="true"
+          {...props}
+        />
+      </HitArea>
+    );
+  }
+);
+SeekThumb.displayName = "SeekThumb";
+
+function SeekAnimator() {
+  const {
+    primaryVideoRef,
+    secondaryVideoRef,
+    primaryTrim,
+    secondaryTrim,
+    primaryBuffered,
+    secondaryBuffered,
+    isPlaying,
+    isDragging,
+    timelineDurationMs,
+    onSeek,
+    progressRef,
+    _bufferRef,
+    _progressRef,
+    _thumbRef,
+    currentTimeRef,
+    _trackRef,
+    setIsDragging,
+    setHoverTime,
+    seekSliderId,
+  } = useSeekContext();
+
+  const isDraggingRef = useLatestValue(isDragging);
+
+  const animationRef = React.useRef<number>(0);
+  const visualUpdateRef = React.useRef<number>(0);
+  const stableOnSeek = useStableHandler(onSeek);
+
+  const getCurrentNormalizedTime = React.useCallback(() => {
     const primaryVideo = primaryVideoRef.current;
     const secondaryVideo = secondaryVideoRef?.current;
     if (!primaryVideo) return 0;
@@ -102,8 +463,8 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     return Math.max(primaryTimelinePos, secondaryTimelinePos);
   }, [primaryTrim, secondaryTrim]);
 
-  const updateBufferDisplay = useCallback(() => {
-    if (!bufferFillRef.current) return;
+  const updateBufferDisplay = React.useCallback(() => {
+    if (!_bufferRef.current) return;
 
     const primary = primaryVideoRef.current;
     if (!primary) return;
@@ -149,44 +510,60 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     }
 
     const bufferProgress = Math.min(1, totalBufferedMs / timelineDurationMs);
-    bufferFillRef.current.style.transform = `scaleX(${bufferProgress})`;
+    _bufferRef.current.style.transform = `scaleX(${bufferProgress})`;
   }, [
     primaryBuffered,
     secondaryBuffered,
     primaryTrim,
     secondaryTrim,
     timelineDurationMs,
+    primaryVideoRef,
+    secondaryVideoRef,
   ]);
 
-  const updateVisualElements = useCallback(
+  const updateVisualElements = React.useCallback(
     (progress: number) => {
-      const barEl = seekBarRef.current;
-      if (!barEl) return;
-
       const clamped = Math.max(0, Math.min(1, progress));
       progressRef.current = clamped;
 
-      if (progressFillRef.current) {
-        progressFillRef.current.style.transform = `scaleX(${clamped})`;
+      if (_progressRef.current) {
+        _progressRef.current.style.transform = `scaleX(${clamped})`;
       }
 
-      if (thumbRef.current) {
-        const barWidth = barEl.offsetWidth;
-        const x = clamped * barWidth;
-        thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
+      if (_thumbRef.current) {
+        const track = _trackRef.current;
+        const thumb = _thumbRef.current;
+        if (track) {
+          const barWidth = track.offsetWidth;
+          const thumbWidth = thumb.offsetWidth;
+          const x = clamped * barWidth - thumbWidth / 2;
+          _thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
+        }
       }
 
-      if (currentTimeDisplayRef.current) {
+      if (currentTimeRef.current) {
         const currentTimeMs = clamped * timelineDurationMs;
-        currentTimeDisplayRef.current.textContent = formatTime(currentTimeMs);
+        currentTimeRef.current.textContent = formatTime(currentTimeMs);
+      }
+
+      // Update aria-valuenow on the slider
+      const sliderElement = document.getElementById(seekSliderId);
+      if (sliderElement) {
+        const ariaValueNow = Math.round(clamped * 100);
+        const currentTimeMs = clamped * timelineDurationMs;
+        const ariaValueText = `${formatTime(currentTimeMs)} of ${formatTime(
+          timelineDurationMs
+        )}`;
+        sliderElement.setAttribute("aria-valuenow", ariaValueNow.toString());
+        sliderElement.setAttribute("aria-valuetext", ariaValueText);
       }
 
       updateBufferDisplay();
     },
-    [timelineDurationMs, updateBufferDisplay]
+    [timelineDurationMs, updateBufferDisplay, formatTime, seekSliderId]
   );
 
-  const scheduleVisualUpdate = useCallback(
+  const scheduleVisualUpdate = React.useCallback(
     (progress: number) => {
       if (visualUpdateRef.current) {
         cancelAnimationFrame(visualUpdateRef.current);
@@ -199,9 +576,11 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [updateVisualElements]
   );
 
-  const updateProgress = useCallback(() => {
+  // This separate to avoid nesting one requestAnimationFrame inside another.
+  const updateProgress = React.useCallback(() => {
     const normalizedTimeMs = getCurrentNormalizedTime();
     let newProgress = 0;
+
     if (timelineDurationMs > 0 && Number.isFinite(normalizedTimeMs)) {
       newProgress = Math.min(1, normalizedTimeMs / timelineDurationMs);
     }
@@ -209,11 +588,12 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     updateVisualElements(newProgress);
   }, [getCurrentNormalizedTime, timelineDurationMs, updateVisualElements]);
 
+  // Stable callback so that only "isPlaying" changes can re-trigger the effect.
   const stableUpdateProgress = useStableHandler(updateProgress);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const animate = () => {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         stableUpdateProgress();
       }
       if (isPlaying) {
@@ -231,14 +611,14 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       cancelAnimationFrame(animationRef.current);
       cancelAnimationFrame(visualUpdateRef.current);
     };
-  }, [isPlaying, isDragging, stableUpdateProgress]);
+  }, [isPlaying, stableUpdateProgress]);
 
-  const getTimeFromPosition = useCallback(
+  const getTimeFromPosition = React.useCallback(
     (clientX: number): number => {
-      const seekBar = seekBarRef.current;
-      if (!seekBar) return 0;
+      const trackElement = _trackRef.current;
+      if (!trackElement) return 0;
 
-      const rect = seekBar.getBoundingClientRect();
+      const rect = trackElement.getBoundingClientRect();
       const ratio = Math.max(
         0,
         Math.min(1, (clientX - rect.left) / rect.width)
@@ -248,15 +628,20 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
     [timelineDurationMs]
   );
 
-  const throttledSeek = useMemo(
-    () => throttle((timeMs: number) => stableOnSeek(timeMs), 100),
+  const debouncedSeek = React.useMemo(
+    () => debounce((timeMs: number) => stableOnSeek(timeMs), 100),
     []
   );
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
+  React.useEffect(() => {
+    const trackElement = _trackRef.current;
+    if (!trackElement) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
       e.preventDefault();
       setIsDragging(true);
+
+      trackElement.setPointerCapture(e.pointerId);
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
       stableOnSeek(normalizedTimeMs);
@@ -265,119 +650,45 @@ export const VideoSeekBar: React.FC<VideoSeekBarProps> = ({
       scheduleVisualUpdate(newProgress);
 
       setHoverTime(normalizedTimeMs);
-    },
-    [getTimeFromPosition, timelineDurationMs, scheduleVisualUpdate]
-  );
+    };
 
-  const handlePointerMove = useCallback(
-    (e: PointerEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (!isDragging) return;
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
-      throttledSeek(normalizedTimeMs);
+      debouncedSeek(normalizedTimeMs);
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
-    },
-    [
-      isDragging,
-      getTimeFromPosition,
-      throttledSeek,
-      timelineDurationMs,
-      scheduleVisualUpdate,
-    ]
-  );
+    };
 
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+    const handlePointerUp = (e: PointerEvent) => {
+      if (!isDragging) return;
+      trackElement.releasePointerCapture(e.pointerId);
+      setIsDragging(false);
+    };
 
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("pointermove", handlePointerMove);
-      document.addEventListener("pointerup", handlePointerUp);
+    trackElement.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
 
-      return () => {
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-      };
-    }
-  }, [isDragging, handlePointerMove, handlePointerUp]);
+    return () => {
+      trackElement.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isDragging, timelineDurationMs, updateVisualElements]);
 
-  const handleHover = useCallback(
-    (e: React.PointerEvent) => {
-      const seekBar = seekBarRef.current;
-      if (!seekBar) return;
+  return null;
+}
 
-      const normalizedProgressMs = progressRef.current * timelineDurationMs;
-
-      setIsHovered(true);
-      setHoverTime(normalizedProgressMs);
-    },
-    [getTimeFromPosition, timelineDurationMs]
-  );
-
-  const handleHoverLeave = useCallback(() => {
-    setIsHovered(false);
-  }, []);
-
-  const formatTime = useCallback((timeMs: number): string => {
-    const seconds = Math.floor(timeMs / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    const hours = Math.floor(mins / 60);
-    const displayMins = mins % 60;
-
-    if (hours > 0) {
-      return `${hours}:${displayMins.toString().padStart(2, "0")}:${secs
-        .toString()
-        .padStart(2, "0")}`;
-    }
-    return `${displayMins}:${secs.toString().padStart(2, "0")}`;
-  }, []);
-
-  return (
-    <div className={cn("w-full space-y-2", className)}>
-      <div className="flex justify-between text-xs text-white">
-        <span ref={currentTimeDisplayRef} />
-        <span>{formatTime(timelineDurationMs)}</span>
-      </div>
-
-      <HitArea
-        buffer={10}
-        variant="y"
-        className="relative cursor-pointer rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-300"
-        ref={seekBarRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handleHover}
-        onPointerLeave={handleHoverLeave}
-      >
-        <div>
-          <div
-            ref={bufferFillRef}
-            className="absolute inset-0 bg-primary/30 rounded-full origin-left will-change-transform"
-          />
-
-          <div
-            ref={progressFillRef}
-            className="absolute inset-0 bg-primary rounded-full origin-left will-change-transform"
-          />
-
-          <Tooltip open={isHovered}>
-            <TooltipTrigger asChild className="z-10">
-              <HitArea buffer={8} variant="all">
-                <div
-                  ref={thumbRef}
-                  className="absolute top-1/2 left-0 w-2.5 h-2.5 rounded-full bg-primary shadow-lg will-change-transform"
-                />
-              </HitArea>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {formatTime(hoverTime || 0)}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </HitArea>
-    </div>
-  );
+export const Seek = {
+  Root: SeekRoot,
+  Content: SeekContent,
+  TimeDisplay: SeekTimeDisplay,
+  Track: SeekTrack,
+  Buffer: SeekBuffer,
+  Progress: SeekProgress,
+  Thumb: SeekThumb,
+  Animator: SeekAnimator,
 };

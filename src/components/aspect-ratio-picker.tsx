@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Crop } from "lucide-react";
+import { Crop, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -9,22 +9,30 @@ import {
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { cn } from "@/lib/utils";
+import ColorPalette, { Color } from "@/components/color-palette";
+import type { CropMode } from "@/types/app";
 import type {
   ScreenSize,
   AspectRatio169,
   AspectRatio916,
   AspectRatio,
 } from "@/utils/aspect-ratios";
+import { cropModes } from "./aspect-ratio-selector";
+import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 
 type AspectRatioType = AspectRatio | null;
 
-interface AspectRatioSelectorProps {
+interface AspectRatioPickerProps {
   screenSize: ScreenSize;
   aspectRatio: AspectRatioType;
   onAspectRatioChange: (ratio: AspectRatioType) => void;
   visible: boolean;
   onVisibleChange: (visible: boolean) => void;
   disabled?: boolean;
+  cropMode?: CropMode;
+  onCropModeChange?: (mode: CropMode) => void;
+  padColor?: Color;
+  onPadColorChange?: (color: Color) => void;
 }
 
 const aspectRatios169: {
@@ -50,14 +58,18 @@ const aspectRatios916: {
   { value: "3:4", label: "3:4", description: "Portrait Standard" },
 ];
 
-const AspectRatioSelector = ({
+const AspectRatioPicker = ({
   screenSize,
   aspectRatio,
   onAspectRatioChange,
   visible,
   onVisibleChange,
   disabled = false,
-}: AspectRatioSelectorProps) => {
+  cropMode,
+  onCropModeChange,
+  padColor,
+  onPadColorChange,
+}: AspectRatioPickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [localAspectRatio, setLocalAspectRatio] =
     useState<AspectRatioType>(aspectRatio);
@@ -103,6 +115,7 @@ const AspectRatioSelector = ({
       </PopoverTrigger>
 
       <PopoverContent
+        data-dialog-popover-ratio
         className="w-fit bg-surface-primary"
         align="start"
         side="bottom"
@@ -133,6 +146,62 @@ const AspectRatioSelector = ({
             ))}
           </div>
 
+          {onCropModeChange && (
+            <div className="grid gap-2">
+              <div className="text-xs font-medium text-foreground-default">
+                Crop Mode
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {cropModes.map((mode) => (
+                  <Button
+                    key={mode.value}
+                    onClick={() => onCropModeChange(mode.value as CropMode)}
+                    className={cn(
+                      "flex items-center justify-center gap-1 rounded-3xl p-2 text-xs border",
+                      cropMode === mode.value
+                        ? "bg-primary/20 text-primary border-primary"
+                        : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
+                    )}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    {mode.icon}
+                    <span className="font-medium">{mode.label}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {onPadColorChange && cropMode === "letterbox" && (
+            <div className="grid gap-2">
+              <div className="text-xs font-medium text-foreground-default">
+                Pad Color
+              </div>
+              <ColorPalette
+                id="padColor"
+                value={padColor ?? DEFAULT_CLIP_METADATA.padColor}
+                onChange={(c) => onPadColorChange(c)}
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs flex items-center gap-2"
+                >
+                  <span
+                    className="h-4 w-4 rounded border"
+                    style={{
+                      backgroundColor:
+                        padColor ?? DEFAULT_CLIP_METADATA.padColor,
+                    }}
+                  />
+                  <span>{padColor ?? DEFAULT_CLIP_METADATA.padColor}</span>
+                </Button>
+              </ColorPalette>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             {visible && aspectRatio && (
               <Button
@@ -160,4 +229,4 @@ const AspectRatioSelector = ({
   );
 };
 
-export default AspectRatioSelector;
+export default AspectRatioPicker;

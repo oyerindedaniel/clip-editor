@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Video, Crop, Maximize2, Settings } from "lucide-react";
+import { Crop, Maximize2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -34,7 +34,7 @@ interface AspectRatioSelectorProps extends React.PropsWithChildren {
   isExporting: boolean;
 }
 
-const aspectRatios = [
+export const aspectRatios = [
   { value: "original", label: "Keep Original", description: "No conversion" },
   { value: "16:9", label: "16:9", description: "Widescreen (YouTube, TV)" },
   { value: "9:16", label: "9:16", description: "Portrait (TikTok, Stories)" },
@@ -44,10 +44,10 @@ const aspectRatios = [
   { value: "3:4", label: "3:4", description: "Portrait Standard" },
 ] as const;
 
-const cropModes = [
+export const cropModes = [
   { value: "letterbox", label: "Letterbox", icon: <Maximize2 size={14} /> },
   { value: "crop", label: "Crop", icon: <Crop size={14} /> },
-  { value: "stretch", label: "Stretch", icon: <Video size={14} /> },
+  // { value: "stretch", label: "Stretch", icon: <Video size={14} /> },
 ];
 
 export type AspectRatioValue = (typeof aspectRatios)[number]["value"];

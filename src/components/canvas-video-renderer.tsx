@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
-import type { Variant } from "@/utils/scale-range";
+import type { CropMode } from "@/types/app";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Color } from "./color-palette";
 import {
@@ -22,7 +22,7 @@ export interface CanvasVideoRendererProps {
   transformData: InterpolatedResult;
   width: number;
   height: number;
-  variant: Variant;
+  variant: CropMode;
   className?: string;
   color?: Color;
   renderEnabled?: boolean;
@@ -58,21 +58,6 @@ const CanvasVideoRenderer: TaggedRendererComponent<
     if (vw <= 0 || vh <= 0) return;
 
     ctx.clearRect(0, 0, width, height);
-
-    // Stretch: distorts video to fill canvas, applies uniform scale and position offset
-    if (variant === "stretch") {
-      ctx.save();
-
-      const tx = (transform.x - 0.5) * width;
-      const ty = (transform.y - 0.5) * height;
-
-      ctx.translate(width / 2 + tx, height / 2 + ty);
-      ctx.scale(transform.scale, transform.scale);
-
-      ctx.drawImage(video, -width / 2, -height / 2, width, height);
-      ctx.restore();
-      return;
-    }
 
     // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
     if (variant === "crop") {

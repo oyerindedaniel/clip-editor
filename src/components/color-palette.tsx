@@ -53,14 +53,14 @@ export function ColorPalette({
       <PopoverTrigger
         id={id}
         asChild
-        className="bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50"
+        className="bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50 w-fit"
       >
         {children}
       </PopoverTrigger>
       <PopoverContent
         className={cn(
           "w-auto p-3 !duration-(--total-duration)",
-          "[[data-state=closed][data-dialog-aspect-ratio]+[data-radix-popper-content-wrapper]>*]:opacity-0"
+          "[[data-state=closed][data-popover-aspect-ratio]+[data-radix-popper-content-wrapper]>*]:opacity-0"
         )}
         style={
           {

@@ -53,6 +53,7 @@ import {
 } from "media-chrome/react/media-store";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 const ROOT_NAME = "MediaPlayer";
 const SEEK_NAME = "MediaPlayerSeek";
@@ -2504,7 +2505,9 @@ function MediaPlayerPlaybackSpeed(props: MediaPlayerPlaybackSpeedProps) {
   );
 }
 
-interface MediaPlayerLoopProps extends React.ComponentProps<typeof Button> {}
+interface MediaPlayerLoopProps extends React.ComponentProps<typeof Button> {
+  onLoopingChange?: (isLooping: boolean) => void;
+}
 
 function MediaPlayerLoop(props: MediaPlayerLoopProps) {
   const { children, className, disabled, ...loopProps } = props;
@@ -2517,21 +2520,33 @@ function MediaPlayerLoop(props: MediaPlayerLoopProps) {
     return mediaElement?.loop ?? false;
   });
 
+  const stableOnLoopingChange = useStableHandler(props.onLoopingChange!);
+
+  const handleLoopChange = React.useCallback(
+    (newLoopState: boolean) => {
+      setIsLooping(newLoopState);
+      stableOnLoopingChange?.(newLoopState);
+    },
+    [stableOnLoopingChange]
+  );
+
   React.useEffect(() => {
     const mediaElement = context.mediaRef.current;
     if (!mediaElement) return;
 
     setIsLooping(mediaElement.loop);
 
-    const checkLoop = () => setIsLooping(mediaElement.loop);
-    const observer = new MutationObserver(checkLoop);
+    const observer = new MutationObserver(() => {
+      handleLoopChange(mediaElement.loop);
+    });
+
     observer.observe(mediaElement, {
       attributes: true,
       attributeFilter: ["loop"],
     });
 
     return () => observer.disconnect();
-  }, [context.mediaRef]);
+  }, [context.mediaRef, handleLoopChange]);
 
   const onLoopToggle = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -2539,13 +2554,13 @@ function MediaPlayerLoop(props: MediaPlayerLoopProps) {
       if (event.defaultPrevented) return;
 
       const mediaElement = context.mediaRef.current;
-      if (mediaElement) {
-        const newLoopState = !mediaElement.loop;
-        mediaElement.loop = newLoopState;
-        setIsLooping(newLoopState);
-      }
+      if (!mediaElement) return;
+
+      const newLoopState = !mediaElement.loop;
+      mediaElement.loop = newLoopState;
+      handleLoopChange(newLoopState);
     },
-    [context.mediaRef, props.onClick]
+    [context.mediaRef, props.onClick, handleLoopChange]
   );
 
   return (

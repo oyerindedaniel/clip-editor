@@ -106,12 +106,12 @@ export async function processClip(
         filterArgs = ["-vf", `${scaleExpr},${cropExpr}`];
         break;
       }
-      case "stretch": {
-        const stretchW = Math.round(inputH * targetRatio);
-        const stretchH = inputH;
-        filterArgs = ["-vf", `scale=${stretchW}:${stretchH}`];
-        break;
-      }
+      // case "stretch": {
+      //   const stretchW = Math.round(inputH * targetRatio);
+      //   const stretchH = inputH;
+      //   filterArgs = ["-vf", `scale=${stretchW}:${stretchH}`];
+      //   break;
+      // }
     }
 
     args = [

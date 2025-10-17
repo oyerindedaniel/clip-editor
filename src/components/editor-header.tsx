@@ -13,10 +13,8 @@ interface EditorHeaderProps {
   isExporting: boolean;
   showTrace: boolean;
   onToggleTrace: () => void;
-  onOpenAdjust: () => void;
   onOpenExport: () => void;
   settings: Settings;
-  onSettingsApplied: (settings: Settings) => void;
   isBufferDownloaded: boolean;
 }
 
@@ -25,14 +23,12 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   isExporting,
   showTrace,
   onToggleTrace,
-  onOpenAdjust,
   onOpenExport,
   settings,
-  onSettingsApplied,
   isBufferDownloaded,
 }) => {
   return (
-    <div className="sticky top-0 z-50 w-full bg-surface-primary">
+    <div className="sticky top-0 z-50 w-full bg-surface-primary border-default border-b">
       <div className="flex relative items-center justify-between px-5 py-2">
         <Link className="absolute top-2/4 -translate-y-2/4" href="/">
           <Image
@@ -59,12 +55,12 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               Trace
             </Button>
 
-            <AspectRatioSelector
+            {/* <AspectRatioSelector
               settings={settings}
               onSettingsApplied={onSettingsApplied}
               isBufferDownloaded={isBufferDownloaded}
               isExporting={isExporting}
-            />
+            /> */}
           </div>
 
           <Button

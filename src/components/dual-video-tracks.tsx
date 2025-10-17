@@ -27,6 +27,10 @@ import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MAX_HISTORY } from "@/constants/app";
 import { HitArea } from "./hit-area";
+import type { KeyframeData } from "@/utils/keyframe";
+import { Keyframe } from "./keyframe";
+import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
+import { TimelineTooltip } from "./timeline-tooltip";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -37,6 +41,7 @@ interface DualVideoTracksProps {
   onCutSecondaryAt?: (trimData: { trimStart: number; trimEnd: number }) => void;
   primaryPreviewFrames?: string[];
   secondaryPreviewFrames?: string[];
+  keyframes?: KeyframeData[];
 }
 
 type HistoryAction = "init" | "mark" | "cut";
@@ -58,6 +63,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   onCommitOffset,
   primaryPreviewFrames,
   secondaryPreviewFrames,
+  keyframes,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -68,6 +74,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const secondaryStripRef = useRef<HTMLDivElement | null>(null);
   const rulerRef = useRef<HTMLDivElement | null>(null);
   const spacerRef = useRef<HTMLDivElement | null>(null);
+
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const { updateTooltip, lastTooltipState } = useTimelineTooltip({
+    tooltipRef,
+    scrollContainerRef,
+  });
 
   const [trimStart, setTrimStart] = useState<number | null>(null);
   const [trimEnd, setTrimEnd] = useState<number | null>(null);
@@ -107,10 +119,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const moveRafIdRef = useRef<number | null>(null);
 
   const [showTooltip, setShowTooltip] = useState(false);
-
-  const tooltipContentRef = useRef<HTMLSpanElement>(null);
-  const lastSecondaryTooltipRef = useRef<string>("");
-  const lastPlayheadTooltipRef = useRef<string>("");
 
   const primaryStripInitialized = useRef(false);
 
@@ -518,11 +526,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           onOffsetChange?.(newOffset);
           renderBlocks();
 
-          if (tooltipContentRef.current) {
-            const text = `Offset: ${formatDurationDisplay(newOffset)}`;
-            tooltipContentRef.current.textContent = text;
-            lastSecondaryTooltipRef.current = text;
-          }
+          const markerX =
+            msToPx(newOffset, pxPerMs) - scrollContainer.scrollLeft;
+          updateTooltip(markerX, `Offset: ${formatDurationDisplay(newOffset)}`);
         }
       });
 
@@ -530,11 +536,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         setShowTooltip(true);
       });
 
-      if (tooltipContentRef.current) {
-        const text = `Offset: ${formatDurationDisplay(startOffset)}`;
-        tooltipContentRef.current.textContent = text;
-        lastSecondaryTooltipRef.current = text;
-      }
+      const markerX = msToPx(startOffset, pxPerMs) - scrollContainer.scrollLeft;
+      updateTooltip(markerX, `Offset: ${formatDurationDisplay(startOffset)}`);
 
       const onMove = (moveEvent: MouseEvent) => {
         if (!isDragging) return;
@@ -581,11 +584,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             onOffsetChange?.(newOffset);
             renderBlocks();
 
-            if (tooltipContentRef.current) {
-              const text = `Offset: ${formatDurationDisplay(newOffset)}`;
-              tooltipContentRef.current.textContent = text;
-              lastSecondaryTooltipRef.current = text;
-            }
+            const markerX =
+              msToPx(newOffset, pxPerMs) - scrollContainer.scrollLeft;
+            updateTooltip(
+              markerX,
+              `Offset: ${formatDurationDisplay(newOffset)}`
+            );
           }
         });
       };
@@ -619,6 +623,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       stopAutoScroll,
       primaryDurationMs,
       hasBothMarkers,
+      maxDurationMs,
+      pxPerSecond,
+      updateTooltip,
     ]
   );
 
@@ -654,11 +661,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
           playhead.style.left = `${newLeft}px`;
           const timeMs = pxToMs(newLeft, pxPerMs);
-          if (tooltipContentRef.current) {
-            const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
-            tooltipContentRef.current.textContent = text;
-            lastPlayheadTooltipRef.current = text;
-          }
+          const markerX = newLeft - scrollContainer.scrollLeft;
+          updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
         }
       });
 
@@ -666,12 +670,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         setShowTooltip(true);
       });
 
-      if (tooltipContentRef.current) {
-        const timeMs = pxToMs(startPlayheadPos, pxPerMs);
-        const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
-        tooltipContentRef.current.textContent = text;
-        lastPlayheadTooltipRef.current = text;
-      }
+      const timeMs = pxToMs(startPlayheadPos, pxPerMs);
+      const markerX = startPlayheadPos - scrollContainer.scrollLeft;
+      updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
 
       const onMove = (moveEvent: MouseEvent) => {
         const playhead = playheadRef.current;
@@ -703,11 +704,11 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
             playhead.style.left = `${newX}px`;
             const timeMs = pxToMs(newX, pxPerMs);
-            if (tooltipContentRef.current) {
-              const text = `Playhead: ${formatDurationDisplay(timeMs)}`;
-              tooltipContentRef.current.textContent = text;
-              lastPlayheadTooltipRef.current = text;
-            }
+            const markerX = newX - scrollContainer.scrollLeft;
+            updateTooltip(
+              markerX,
+              `Playhead: ${formatDurationDisplay(timeMs)}`
+            );
           }
         });
       };
@@ -728,7 +729,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [pxPerMs, handleAutoScroll, startAutoScroll, stopAutoScroll, maxDurationMs]
+    [
+      pxPerMs,
+      handleAutoScroll,
+      startAutoScroll,
+      stopAutoScroll,
+      currentSecondaryDurationMs,
+      updateTooltip,
+    ]
   );
 
   return (
@@ -874,19 +882,31 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                 ref={secondaryStripRef}
                 className="absolute inset-0 flex items-stretch"
               />
+              {trimStart !== null && trimEnd !== null && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{
+                    left: `${msToPx(trimStart, pxPerMs)}px`,
+                    width: `${Math.max(
+                      0,
+                      msToPx(trimEnd - trimStart, pxPerMs)
+                    )}px`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-primary/15 border-2 border-primary" />
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {showTooltip && (
-        <div className="absolute z-50 pointer-events-none translate-x-2/4">
-          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-3xl shadow-lg text-xs font-medium whitespace-nowrap">
-            <span className="text-primary" ref={tooltipContentRef} />
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-surface-secondary" />
-          </div>
-        </div>
-      )}
+      <TimelineTooltip
+        ref={tooltipRef}
+        tooltipState={lastTooltipState}
+        visible={showTooltip}
+        container={scrollContainerRef.current}
+      />
     </div>
   );
 };

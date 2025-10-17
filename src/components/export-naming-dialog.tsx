@@ -50,7 +50,7 @@ interface ExportNamingDialogProps {
   isBufferDownloaded: boolean;
 }
 
-export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
+const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   isOpen,
   onOpenChange,
   streamerName,
@@ -618,3 +618,5 @@ export const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
     </Dialog>
   );
 };
+
+export default ExportNamingDialog;

@@ -153,10 +153,10 @@ function getVisibleOverlays(overlays: Overlay[], currentTimeMs: number) {
 }
 
 function getBufferKey(settings: Settings) {
-  const aspectRatio = settings.aspectRatio || "original";
-  const cropMode = settings.cropMode || "none";
-  const padColor = settings.padColor || "white";
-  const format = settings.format || "mp4";
+  const aspectRatio = settings.aspectRatio;
+  const cropMode = settings.cropMode;
+  const padColor = settings.padColor;
+  const format = settings.format;
 
   return `${aspectRatio}-${cropMode}-${padColor}-${format}`;
 }

@@ -4,24 +4,37 @@ function EditPageSkeleton() {
   return (
     <div className="flex flex-col h-dvh bg-surface-primary text-foreground-default text-sm">
       {/* Header skeleton */}
-      <div className="sticky top-0 z-50 w-full bg-surface-secondary border-b border-gray-700/50">
+      <div className="sticky top-0 z-50 w-full bg-surface-primary border-b border-subtle">
         <div className="flex relative items-center justify-between px-5 py-2">
           {/* Logo - rectangular instead of round */}
-          <Skeleton className="h-8 w-12 rounded-md" />
+          <Skeleton className="h-8 w-12 rounded-lg" />
           <div />
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <Skeleton className="h-8 w-16 rounded-md" />
-              <Skeleton className="h-8 w-20 rounded-md" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-20 rounded-3xl" />
+              <Skeleton className="h-8 w-24 rounded-3xl" />
             </div>
-            <Skeleton className="h-8 w-24 rounded-md" />
+            <Skeleton className="h-8 w-24 rounded-3xl" />
           </div>
         </div>
       </div>
 
       {/* Main content skeleton */}
       <div className="flex-1 min-h-0">
-        <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+        <div className="h-full flex flex-col p-4 space-y-4 max-w-6xl mx-auto">
+          {/* Top controls row */}
+          <div className="w-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-24 rounded-3xl" />
+              <Skeleton className="h-8 w-28 rounded-3xl" />
+              <Skeleton className="h-8 w-10 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-32 rounded-3xl" />
+              <Skeleton className="h-8 w-28 rounded-3xl" />
+            </div>
+          </div>
+
           {/* Video players section - responsive layout */}
           <div className="w-full flex flex-col lg:flex-row items-center gap-4">
             {/* 16:9 primary player */}
@@ -31,14 +44,14 @@ function EditPageSkeleton() {
                 {/* Video controls skeleton */}
                 <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-6 rounded" />
-                    <Skeleton className="h-6 w-6 rounded" />
-                    <Skeleton className="h-6 w-6 rounded" />
+                    <Skeleton className="h-7 w-20 rounded-3xl" />
+                    <Skeleton className="h-7 w-7 rounded-full" />
+                    <Skeleton className="h-7 w-24 rounded-3xl" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-16 rounded" />
-                    <Skeleton className="h-6 w-6 rounded" />
-                    <Skeleton className="h-6 w-6 rounded" />
+                    <Skeleton className="h-7 w-16 rounded-3xl" />
+                    <Skeleton className="h-7 w-7 rounded-full" />
+                    <Skeleton className="h-7 w-7 rounded-full" />
                   </div>
                 </div>
               </div>
@@ -59,18 +72,18 @@ function EditPageSkeleton() {
             <div className="space-y-3">
               {/* Timeline header */}
               <div className="flex items-center justify-between">
-                <Skeleton className="h-4 w-20 rounded" />
+                <Skeleton className="h-4 w-24 rounded-3xl" />
                 <div className="flex items-center gap-2">
-                  <Skeleton className="h-6 w-6 rounded" />
-                  <Skeleton className="h-6 w-6 rounded" />
+                  <Skeleton className="h-7 w-7 rounded-full" />
+                  <Skeleton className="h-7 w-7 rounded-full" />
                 </div>
               </div>
 
               {/* Timeline track */}
-              <div className="relative h-16 bg-surface-secondary rounded-lg overflow-hidden">
+              <div className="relative h-16 bg-surface-secondary rounded-lg overflow-hidden border border-subtle">
                 <Skeleton className="absolute inset-0" />
                 {/* Timeline markers */}
-                <div className="absolute top-2 left-0 right-0 h-2 flex items-center">
+                <div className="absolute top-2 left-0 right-0 h-2 flex items-center px-2">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-1 w-8 mx-1 rounded" />
                   ))}

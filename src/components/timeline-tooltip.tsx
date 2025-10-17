@@ -14,7 +14,7 @@ interface TimelineTooltipProps extends React.HTMLAttributes<HTMLDivElement> {
     text: string;
   };
   visible: boolean;
-  container?: HTMLElement | null;
+  container?: HTMLDivElement | null;
 }
 
 const TimelineTooltip = React.forwardRef<HTMLDivElement, TimelineTooltipProps>(

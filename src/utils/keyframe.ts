@@ -14,12 +14,16 @@ type Transform = KeyframeTransform;
 
 type KeyframeEasing = (typeof KEYFRAME_EASINGS)[number];
 
+type KeyframeTarget = "primary" | "secondary";
+
 interface KeyframeData {
   id: string;
   time: number;
   transform: KeyframeTransform;
   easing: KeyframeEasing;
   color?: (typeof DEFAULT_COLORS)[number];
+  name?: string;
+  target: KeyframeTarget;
 }
 
 const KEYFRAME_EASINGS = Object.freeze([
@@ -64,6 +68,34 @@ export function getEasingFunction(
   }
 }
 
-export type { KeyframeTransform, Transform, KeyframeData, KeyframeEasing };
+export type {
+  KeyframeTransform,
+  Transform,
+  KeyframeData,
+  KeyframeEasing,
+  KeyframeTarget,
+};
 
 export { KEYFRAME_EASINGS, DEFAULT_TRANSFORM };
+
+export type SortOrder = "asc" | "desc";
+
+export function filterKeyframesByTarget(
+  keyframes: KeyframeData[],
+  target: KeyframeTarget,
+  order: SortOrder = "asc"
+): KeyframeData[] {
+  return keyframes
+    .filter((kf) => kf.target === target)
+    .sort((a, b) => (order === "asc" ? a.time - b.time : b.time - a.time));
+}
+
+export function groupKeyframesByTarget(
+  keyframes: KeyframeData[],
+  order: SortOrder = "asc"
+): Record<KeyframeTarget, KeyframeData[]> {
+  return {
+    primary: filterKeyframesByTarget(keyframes, "primary", order),
+    secondary: filterKeyframesByTarget(keyframes, "secondary", order),
+  };
+}

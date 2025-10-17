@@ -21,6 +21,10 @@ import { ClipContext } from "@/contexts/clip-context";
 import { useShallowSelector } from "react-shallow-store";
 import type { KeyframeData } from "@/utils/keyframe";
 import { Keyframe } from "./keyframe";
+import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
+import { TimelineTooltip } from "./timeline-tooltip";
+import InfoTooltip from "./info-tooltip";
+import { Scissors } from "lucide-react";
 
 interface TimelineProps {
   duration: number;
@@ -49,9 +53,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const blockRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
-
-  const leftTooltipContentRef = useRef<HTMLSpanElement>(null);
-  const rightTooltipContentRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const rafIdRef = useRef<number | null>(null);
   const trimValuesRef = useRef({ start: 0, end: duration });
@@ -75,7 +77,15 @@ const Timeline: React.FC<TimelineProps> = ({
     acceleration: 1.2,
   });
 
+  const { updateTooltip, lastTooltipState } = useTimelineTooltip({
+    tooltipRef,
+    scrollContainerRef,
+    edgeThreshold: EDGE_THRESHOLD,
+    offsetY: 30,
+  });
+
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const pxPerSecond = pxPerMs * 1000; // in px
   const maxContentWidth = duration * pxPerMs;
@@ -141,15 +151,6 @@ const Timeline: React.FC<TimelineProps> = ({
     maxContentWidth,
   ]);
 
-  const updateTooltipContent = useCallback((start: number, end: number) => {
-    const startText = `Start: ${formatDurationDisplay(start)}`;
-    const endText = `End: ${formatDurationDisplay(end)}`;
-    if (leftTooltipContentRef.current)
-      leftTooltipContentRef.current.textContent = startText;
-    if (rightTooltipContentRef.current)
-      rightTooltipContentRef.current.textContent = endText;
-  }, []);
-
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, handleType: Dir) => {
       const timelineEl = timelineRef.current;
@@ -160,7 +161,24 @@ const Timeline: React.FC<TimelineProps> = ({
 
       e.currentTarget.setPointerCapture(e.pointerId);
       let isDragging = true;
+      setIsDragging(true);
       setShowTooltip(true);
+
+      const updateTooltipForHandle = (handleType: Dir) => {
+        const leftPos = parseFloat(leftHandle.style.left || "0");
+        const rightPos = parseFloat(
+          rightHandle.style.left || `${maxContentWidth}`
+        );
+
+        const markerX = handleType === "left" ? leftPos : rightPos;
+        const displayText = `Start: ${formatDurationDisplay(
+          trimValuesRef.current.start
+        )} • End: ${formatDurationDisplay(trimValuesRef.current.end)}`;
+
+        updateTooltip(markerX - scrollEl.scrollLeft, displayText);
+      };
+
+      updateTooltipForHandle(handleType);
 
       startAutoScroll(scrollEl, (scrollDelta) => {
         const { canScrollLeft, canScrollRight } = getScrollState(scrollEl);
@@ -183,7 +201,7 @@ const Timeline: React.FC<TimelineProps> = ({
           leftHandle.style.left = `${newLeft}px`;
           const newStart = pxToMs(newLeft, pxPerMs);
           trimValuesRef.current.start = newStart;
-          updateTooltipContent(newStart, trimValuesRef.current.end);
+          updateTooltipForHandle(handleType);
         } else {
           const newRight = Math.max(
             leftPos + pxPerSecond,
@@ -192,7 +210,7 @@ const Timeline: React.FC<TimelineProps> = ({
           rightHandle.style.left = `${newRight}px`;
           const newEnd = pxToMs(newRight, pxPerMs);
           trimValuesRef.current.end = newEnd;
-          updateTooltipContent(trimValuesRef.current.start, newEnd);
+          updateTooltipForHandle(handleType);
         }
       });
 
@@ -225,7 +243,7 @@ const Timeline: React.FC<TimelineProps> = ({
               const newStart = Math.max(0, Math.min(newTime, maxLeft));
               trimValuesRef.current.start = newStart;
               leftHandle.style.left = `${newStart * pxPerMs}px`;
-              updateTooltipContent(newStart, trimValuesRef.current.end);
+              updateTooltipForHandle(handleType);
             } else {
               const left = parseFloat(leftHandle.style.left || "0");
               const minRight =
@@ -233,7 +251,7 @@ const Timeline: React.FC<TimelineProps> = ({
               const newEnd = Math.min(duration, Math.max(newTime, minRight));
               trimValuesRef.current.end = newEnd;
               rightHandle.style.left = `${msToPx(newEnd, pxPerMs)}px`;
-              updateTooltipContent(trimValuesRef.current.start, newEnd);
+              updateTooltipForHandle(handleType);
             }
           }
         });
@@ -241,6 +259,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
       const onPointerUp = () => {
         isDragging = false;
+        setIsDragging(false);
         stopAutoScroll();
         setShowTooltip(false);
 
@@ -269,7 +288,7 @@ const Timeline: React.FC<TimelineProps> = ({
       handleAutoScroll,
       startAutoScroll,
       stopAutoScroll,
-      updateTooltipContent,
+      updateTooltip,
       setPrimaryTrim,
     ]
   );
@@ -279,10 +298,15 @@ const Timeline: React.FC<TimelineProps> = ({
   return (
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-foreground-subtle">✂️</div>
-        <div className="text-xs text-foreground-muted">
-          Drag handles to trim
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-foreground-subtle">
+            <Scissors size={14} />
+          </div>
+          <div className="text-xs text-foreground-muted">
+            Drag handles to trim
+          </div>
         </div>
+        <InfoTooltip content="Drag the left and right handles to set the start and end points of your trimmed video. The minimum duration is 1 second." />
       </div>
 
       <div
@@ -308,6 +332,28 @@ const Timeline: React.FC<TimelineProps> = ({
                 ref={stripRef}
                 className="absolute inset-0 flex items-stretch"
               />
+
+              {!isDragging && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{
+                    left: `${msToPx(trimValuesRef.current.start, pxPerMs)}px`,
+                    width: `${Math.max(
+                      0,
+                      msToPx(
+                        Math.max(
+                          0,
+                          trimValuesRef.current.end -
+                            trimValuesRef.current.start
+                        ),
+                        pxPerMs
+                      )
+                    )}px`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-primary/15 border-2 border-primary rounded-none" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -351,21 +397,12 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {showTooltip && (
-        <div className="absolute z-50 pointer-events-none translate-x-2/4">
-          <div className="bg-surface-secondary text-foreground-default px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap">
-            <div className="flex gap-3">
-              <span className="text-primary" ref={leftTooltipContentRef}>
-                {formatDurationDisplay(trimValuesRef.current.start)}
-              </span>
-              <span className="text-foreground-muted">•</span>
-              <span className="text-primary" ref={rightTooltipContentRef}>
-                {formatDurationDisplay(trimValuesRef.current.end)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      <TimelineTooltip
+        ref={tooltipRef}
+        tooltipState={lastTooltipState}
+        visible={showTooltip}
+        container={scrollContainerRef.current}
+      />
     </div>
   );
 };

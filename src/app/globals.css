@@ -320,6 +320,14 @@
   }
 }
 
+@utility glass {
+  @apply bg-white/10 border border-white/30 text-white fill-white/10 shadow-sm backdrop-blur-md backdrop-saturate-150 bg-clip-padding transition-colors duration-250;
+
+  @variant hover {
+    @apply bg-white/20 fill-white/20;
+  }
+}
+
 html {
   overscroll-behavior: none;
 }

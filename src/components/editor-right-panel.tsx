@@ -7,8 +7,9 @@ import DualVideoControls from "./dual-video-controls";
 import TextOverlayItemContainer from "./text-overlay-item";
 import ImageOverlayItemContainer from "./image-overlay-item";
 import { FileUpload } from "./ui/file-upload";
-import AudioItem from "@/components/audio-item";
-import type { S3ClipData, AudioTrack } from "@/types/app";
+import AudioItemContainer from "@/components/audio-item";
+import type { S3ClipData } from "@/types/app";
+import { AudioContext } from "@/contexts/audio-context";
 import { formatTime } from "@/utils/app";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
@@ -20,16 +21,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { KeyframeContext } from "@/contexts/keyframe-context";
-import { cn } from "@/lib/utils";
+import KeyframePanelList from "@/components/keyframe-panel-list";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
   duration: number;
   clipData: S3ClipData;
-  audioTracks: AudioTrack[];
-  onAudioTrackUpdate: (id: string, updates: Partial<AudioTrack>) => void;
-  onAudioTrackDelete: (id: string) => void;
-  onAddAudioTrack: () => void;
 }
 
 const STORAGE_KEY = "zinc:lastActiveSections";
@@ -38,12 +35,12 @@ export function EditorRightPanel({
   isVideoLoaded,
   duration,
   clipData,
-  audioTracks,
-  onAudioTrackUpdate,
-  onAudioTrackDelete,
-  onAddAudioTrack,
 }: EditorRightPanelProps) {
   const [activeSections, setActiveSections] = useState<string[]>(["clips"]);
+
+  const { addAudioTrack } = useShallowSelector(AudioContext, (state) => ({
+    addAudioTrack: state.addAudioTrack,
+  }));
 
   const { addTextOverlay, addImageOverlay } = useShallowSelector(
     OverlaysContext,
@@ -86,6 +83,15 @@ export function EditorRightPanel({
       addImageOverlay(file, 0, duration);
     },
     [addImageOverlay, duration]
+  );
+
+  const handleAudioFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      addAudioTrack(file, duration);
+    },
+    [addAudioTrack, duration]
   );
 
   const handleAccordionChange = (sections: string[]) => {
@@ -185,23 +191,13 @@ export function EditorRightPanel({
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-3">
-              <Button
-                onClick={onAddAudioTrack}
-                className="h-8 px-2 text-xs"
-                variant="outline"
-                size="sm"
-              >
-                <Music size={14} className="mr-1" /> Add Audio
-              </Button>
-              {audioTracks.map((track) => (
-                <AudioItem
-                  key={track.id}
-                  track={track}
-                  duration={duration}
-                  onUpdate={onAudioTrackUpdate}
-                  onDelete={onAudioTrackDelete}
-                />
-              ))}
+              <FileUpload
+                accept="audio/*"
+                hint="Add an audio track"
+                onChange={handleAudioFileSelect}
+                name="audio-track"
+              />
+              <AudioItemContainer duration={duration} />
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -214,64 +210,17 @@ export function EditorRightPanel({
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="space-y-2">
-              {keyframes && keyframes.length ? (
-                <div className="flex flex-col gap-1">
-                  {keyframes
-                    .slice()
-                    .sort((a, b) => a.time - b.time)
-                    .map((kf) => (
-                      <div
-                        key={kf.id}
-                        className={cn(
-                          "group relative w-full h-10 rounded-3xl border bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
-                          currentKeyframeId === kf.id &&
-                            "ring-1 ring-primary/40 border-primary/50"
-                        )}
-                      >
-                        <button
-                          onClick={() => setCurrentKeyframeId(kf.id)}
-                          className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
-                        >
-                          <span
-                            className="h-3 w-3 rounded-full border bg-(--color)"
-                            style={
-                              {
-                                "--color": kf.color || "#22c55e",
-                              } as React.CSSProperties
-                            }
-                          />
-                          <span className="text-xs font-medium tracking-tight text-foreground-default">
-                            {kf.time.toFixed(2)}s
-                          </span>
-                          <span className="ml-auto text-[10px] text-foreground-muted">
-                            {kf.id.replace(/^kf-/, "#")}
-                          </span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setKeyframes((prev) =>
-                              prev.filter((x) => x.id !== kf.id)
-                            );
-                            if (currentKeyframeId === kf.id) {
-                              setCurrentKeyframeId(null);
-                            }
-                          }}
-                          aria-label="Remove keyframe"
-                          className="absolute right-2 cursor-pointer top-1/2 -translate-y-1/2 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm rounded-full h-6 px-2 py-0 text-[10px] leading-none shadow-sm"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-xs text-foreground-muted">
-                  No keyframes yet.
-                </div>
-              )}
-            </div>
+            <KeyframePanelList
+              keyframes={keyframes}
+              currentKeyframeId={currentKeyframeId}
+              onKeyframeSelect={(id) => setCurrentKeyframeId(id)}
+              onKeyframeRemove={(id) => {
+                setKeyframes((prev) => prev.filter((x) => x.id !== id));
+                if (currentKeyframeId === id) {
+                  setCurrentKeyframeId(null);
+                }
+              }}
+            />
           </AccordionContent>
         </AccordionItem>
 
@@ -297,10 +246,6 @@ export function EditorRightPanel({
       clipData,
       duration,
       isVideoLoaded,
-      onAddAudioTrack,
-      onAudioTrackDelete,
-      onAudioTrackUpdate,
-      audioTracks,
       handleImageFileSelect,
       keyframes,
       currentKeyframeId,

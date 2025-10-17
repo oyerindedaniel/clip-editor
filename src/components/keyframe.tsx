@@ -6,14 +6,17 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import type { KeyframeData } from "@/utils/keyframe";
+import type { KeyframeData, KeyframeTarget } from "@/utils/keyframe";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
-import { TOOLTIP_OFFSET_Y, TimelineTooltip } from "./timeline-tooltip";
+import { TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import type { AnimationState } from "@/hooks/use-animate-presence";
 import type { Color } from "./color-palette";
 import { getScrollState } from "@/utils/timeline-utils";
 import { HitArea } from "./hit-area";
+import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
+
+export type KeyframeBounds = { start: number; end: number };
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -24,10 +27,9 @@ interface KeyframeContextValue {
   deleteKeyframe: (id: string) => void;
   getKeyframe: (id: string) => KeyframeData | undefined;
   updateColors: (id: string, color: Color) => void;
-  keyframeBounds: {
-    start: number;
-    end: number;
-  };
+  getKeyframeBounds: (
+    keyframes: KeyframeData[]
+  ) => Record<KeyframeTarget, KeyframeBounds>;
   maxTime: number;
 }
 
@@ -74,22 +76,63 @@ function KeyframeRoot({
     onChange: onCurrentKeyframeIdChange,
   });
 
-  const keyframeBounds = React.useMemo(() => {
-    if (keyframes.length === 0) return { start: 0, end: 0 };
-    const sorted = [...keyframes].sort((a, b) => a.time - b.time);
-    return { start: sorted[0].time, end: sorted[sorted.length - 1].time };
-  }, [keyframes]);
+  const getKeyframeBounds = React.useCallback(
+    (keyframes: KeyframeData[]): Record<KeyframeTarget, KeyframeBounds> => {
+      if (keyframes.length === 0) {
+        return {
+          primary: { start: 0, end: 0 },
+          secondary: { start: 0, end: 0 },
+        };
+      }
+
+      const grouped: Record<KeyframeTarget, KeyframeData[]> = {
+        primary: [],
+        secondary: [],
+      };
+
+      for (let i = 0; i < keyframes.length; i++) {
+        const kf = keyframes[i];
+        grouped[kf.target].push(kf);
+      }
+
+      const result: Record<KeyframeTarget, KeyframeBounds> = {
+        primary: { start: 0, end: 0 },
+        secondary: { start: 0, end: 0 },
+      };
+
+      (Object.keys(grouped) as KeyframeTarget[]).forEach((target) => {
+        const frames = grouped[target];
+        if (frames.length === 0) return;
+
+        const sorted = frames.slice().sort((a, b) => a.time - b.time);
+        result[target] = {
+          start: sorted[0].time,
+          end: sorted[sorted.length - 1].time,
+        };
+      });
+
+      return result;
+    },
+    []
+  );
 
   const addKeyframe = React.useCallback(
     (data: Omit<KeyframeData, "id">) => {
       const id = `kf-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2, 9)}`;
-      const newKeyframe: KeyframeData = { ...data, id };
 
-      setKeyframes((prev) => [...prev, newKeyframe]);
+      setKeyframes((prev) => {
+        const count = prev.length + 1;
+        const newKeyframe: KeyframeData = {
+          ...data,
+          id,
+          name: `#keyframe${count}`,
+        };
+        return [...prev, newKeyframe];
+      });
+
       setCurrentKeyframeId(id);
-
       return id;
     },
     [setKeyframes, setCurrentKeyframeId]
@@ -139,7 +182,7 @@ function KeyframeRoot({
       getKeyframe,
       updateColors,
       maxTime,
-      keyframeBounds,
+      getKeyframeBounds,
     }),
     [
       keyframes,
@@ -151,7 +194,7 @@ function KeyframeRoot({
       getKeyframe,
       updateColors,
       maxTime,
-      keyframeBounds,
+      getKeyframeBounds,
     ]
   );
 
@@ -204,16 +247,6 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const rafId = React.useRef(0);
     const moved = React.useRef(false);
 
-    const lastTooltipState = React.useRef<{
-      x: number;
-      y: number;
-      text: string;
-    }>({
-      x: 0,
-      y: 0,
-      text: "",
-    });
-
     const [visible, setVisible] = React.useState(false);
 
     const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll(
@@ -224,6 +257,12 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       }
     );
 
+    const { updateTooltip, lastTooltipState } = useTimelineTooltip({
+      tooltipRef,
+      scrollContainerRef: scrollRef,
+      edgeThreshold,
+    });
+
     // keyframe.time is stored in seconds; convert to milliseconds for layout math
     const keyframeTimeMs = keyframe ? keyframe.time * 1000 : 0;
     const left = keyframeTimeMs * pxPerMs;
@@ -232,37 +271,6 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       const el = markerRef.current;
       if (el) el.style.transform = `translate3d(${left}px,0,0)`;
     }, [left]);
-
-    const updateTooltip = React.useCallback(
-      (markerX: number, displayTime: number) => {
-        const tooltip = tooltipRef.current;
-        const scrollContainer = scrollEl;
-        if (!tooltip || !scrollContainer) return;
-
-        const rect = scrollContainer.getBoundingClientRect();
-
-        let relativeX = markerX;
-
-        const clampedX = Math.min(
-          rect.width - edgeThreshold,
-          Math.max(edgeThreshold, relativeX)
-        );
-
-        const scrollX = window.scrollX;
-        const scrollY = window.scrollY;
-
-        const tooltipWidth = tooltip.offsetWidth;
-        const x = scrollX + rect.left + clampedX - tooltipWidth / 2;
-        const y = scrollY + rect.top - TOOLTIP_OFFSET_Y;
-        const text = `${displayTime.toFixed(2)}s`;
-
-        tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-        tooltip.textContent = text;
-
-        lastTooltipState.current = { x, y, text };
-      },
-      [scrollEl]
-    );
 
     const handlePointerDown = React.useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
@@ -282,7 +290,10 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
         setVisible(true);
 
-        updateTooltip(startTimeRef.current * pxPerMs, keyframe.time);
+        updateTooltip(
+          startTimeRef.current * pxPerMs,
+          `${keyframe.time.toFixed(2)}s`
+        );
 
         startAutoScroll(scrollEl, (scrollDelta) => {
           const el = markerRef.current;
@@ -307,7 +318,10 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           );
 
           el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
-          updateTooltip(newLeftPx - scrollLeft, newTimeMs / 1000);
+          updateTooltip(
+            newLeftPx - scrollLeft,
+            `${newTimeMs / 1000}.toFixed(2)}s`
+          );
 
           dragTimeRef.current = newTimeMs;
         });
@@ -355,7 +369,10 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
               if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
 
               moved.current = true;
-              updateTooltip(newLeftPx - scrollLeft, newTimeMs / 1000);
+              updateTooltip(
+                newLeftPx - scrollLeft,
+                `${newTimeMs / 1000}.toFixed(2)}s`
+              );
             }
           });
         };
@@ -437,7 +454,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
         <TimelineTooltip
           ref={tooltipRef}
-          tooltipState={lastTooltipState.current}
+          tooltipState={lastTooltipState}
           visible={visible}
           container={scrollEl}
         />

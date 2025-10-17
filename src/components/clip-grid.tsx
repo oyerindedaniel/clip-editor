@@ -70,14 +70,12 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
       canvas.width = width;
       canvas.height = height;
 
-      let timeoutId: NodeJS.Timeout | null = null;
       let isCleaningUp = false;
 
       const cleanup = () => {
         if (isCleaningUp) return;
         isCleaningUp = true;
 
-        if (timeoutId) clearTimeout(timeoutId);
         video.removeEventListener("seeked", drawFrame);
         video.removeEventListener("error", onError);
         video.removeEventListener("loadeddata", onLoadedData);

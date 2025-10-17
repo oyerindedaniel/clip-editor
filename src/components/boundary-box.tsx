@@ -804,9 +804,94 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
 
 BoundaryBoxResizable.displayName = "BoundaryBoxResizable";
 
+type PositionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+interface PositionedProps extends React.HTMLAttributes<HTMLDivElement> {
+  position: PositionCorner;
+}
+
+const BoundaryBoxPositioned = React.forwardRef<HTMLDivElement, PositionedProps>(
+  function BoundaryBoxPositioned(
+    { position, className, children, ...props },
+    ref
+  ) {
+    const { containerRef, overlayRef, setTransform } = useBoundaryBoxContext();
+
+    const positionOverlay = React.useCallback(() => {
+      const container = containerRef.current;
+      const overlay = overlayRef.current;
+      if (!container || !overlay) return;
+
+      const rafId = requestAnimationFrame(() => {
+        if (!containerRef.current || !overlayRef.current) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
+
+        const width = overlayRect.width;
+        const height = overlayRect.height;
+
+        let x: number;
+        let y: number;
+
+        switch (position) {
+          case "top-left":
+            x = 0;
+            y = 0;
+            break;
+          case "top-right":
+            x = containerRect.width - width;
+            y = 0;
+            break;
+          case "bottom-left":
+            x = 0;
+            y = containerRect.height - height;
+            break;
+          case "bottom-right":
+            x = containerRect.width - width;
+            y = containerRect.height - height;
+            break;
+        }
+
+        overlay.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+
+        const scaleX = width / containerRect.width;
+        const scaleY = height / containerRect.height;
+        const scale = 1 / Math.max(scaleX, scaleY);
+
+        const normX = x / containerRect.width;
+        const normY = y / containerRect.height;
+
+        setTransform({ x, y, width, height, scale, normX, normY });
+      });
+
+      return () => cancelAnimationFrame(rafId);
+    }, [position, containerRef, overlayRef, setTransform]);
+
+    React.useLayoutEffect(() => {
+      const cleanup = positionOverlay();
+      return cleanup;
+    }, [positionOverlay]);
+
+    React.useEffect(() => {
+      const handleResize = () => {
+        positionOverlay();
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, [positionOverlay]);
+
+    return <>{children}</>;
+  }
+);
+
+BoundaryBoxPositioned.displayName = "BoundaryBoxPositioned";
+
 export const BoundaryBox = Object.assign(BoundaryBoxRoot, {
   Container: BoundaryBoxContainer,
   Overlay: BoundaryBoxOverlay,
   Draggable: BoundaryBoxDraggable,
+  Positioned: BoundaryBoxPositioned,
   Resizable: BoundaryBoxResizable,
 });

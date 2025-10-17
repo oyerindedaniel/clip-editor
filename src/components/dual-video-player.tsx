@@ -11,23 +11,20 @@ import {
   Expand,
   Maximize,
   SquareStack,
-  Repeat,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { S3ClipData, DualVideoClip } from "@/types/app";
-import { Button } from "./ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { ClipContext } from "@/contexts/clip-context";
 import { PersistentOverlays } from "./persistent-overlays";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
-import { VideoSeekBar } from "./video-seek-bar";
+import { Seek } from "./video-seek-bar";
 import { Volume } from "./volume";
-import { VideoControls } from "./video-controls";
+import { Playback } from "./video-controls";
 
 interface DualVideoPlayerProps {
   isPrimaryVideoLoaded: boolean;
@@ -942,7 +939,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
           >
             <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
               <div className="px-4 py-3 space-y-3">
-                <VideoSeekBar
+                <Seek.Root
                   primaryVideoRef={primaryVideoRef}
                   primaryTrim={primaryTrim}
                   secondaryTrim={secondaryClip ? secondaryTrim : null}
@@ -950,38 +947,35 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   secondaryBuffered={secondaryBuffered}
                   isPlaying={isPlaying}
                   onSeek={handleSeek}
-                  className="w-full"
-                />
-
+                >
+                  <Seek.Content>
+                    <Seek.TimeDisplay />
+                    <Seek.Track>
+                      <Seek.Buffer />
+                      <Seek.Progress />
+                      <Seek.Thumb />
+                    </Seek.Track>
+                    <Seek.Animator />
+                  </Seek.Content>
+                </Seek.Root>
                 <div className="flex items-center justify-center gap-2">
-                  <VideoControls
-                    playing={isPlaying}
-                    onToggle={() => togglePlay()}
-                  />
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => setIsRepeat((r) => !r)}
-                        className={cn(
-                          "h-8 w-8 border-white/30 text-white transition-all duration-200 hover:scale-105 shadow-sm",
-                          isRepeat
-                            ? "bg-primary/90 hover:bg-primary text-foreground-on-accent border-primary/50"
-                            : "bg-white/10 hover:bg-white/20"
-                        )}
-                      >
-                        <Repeat className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="top"
-                      className="bg-surface-primary border-surface-tertiary text-foreground-default font-medium"
-                    >
-                      {isRepeat ? "Repeat On" : "Repeat Off"}
-                    </TooltipContent>
-                  </Tooltip>
+                  <Playback.Root isPlaying={isPlaying}>
+                    <Playback.Controls>
+                      <Playback.PlayToggle
+                        playing={isPlaying}
+                        onPlayingChange={() => togglePlay()}
+                      />
+                      <Playback.LoopToggle
+                        loop={isRepeat}
+                        onLoopChange={setIsRepeat}
+                      />
+                      {/* <Playback.RateControl
+                        rate={ratePrimary}
+                        onRateChange={setRatePrimary}
+                        orientation="vertical"
+                      /> */}
+                    </Playback.Controls>
+                  </Playback.Root>
                 </div>
               </div>
             </div>
@@ -1005,5 +999,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
     );
   }
 );
+
+DualVideoPlayer.displayName = "DualVideoPlayer";
 
 export default DualVideoPlayer;
