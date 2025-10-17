@@ -31,14 +31,6 @@ type DualVideoContextValue = {
   getVideoRef: ReturnType<typeof useVideoRefs>["getVideoRef"];
   primaryVideoRef: ReturnType<typeof useVideoRefs>["primaryVideoRef"];
   secondaryVideoRef: ReturnType<typeof useVideoRefs>["secondaryVideoRef"];
-  repeatPrimaryRef: ReturnType<typeof useVideoRefs>["repeatPrimaryRef"];
-  repeatSecondaryRef: ReturnType<typeof useVideoRefs>["repeatSecondaryRef"];
-  primaryStatus: VideoState["status"];
-  primaryControls: VideoState["controls"];
-  primaryBuffered: VideoState["buffered"];
-  secondaryStatus: VideoState["status"];
-  secondaryControls: VideoState["controls"];
-  secondaryBuffered: VideoState["buffered"];
 };
 
 export const ClipContext =
@@ -71,27 +63,7 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
 
-  const {
-    getVideoRef,
-    primaryVideoRef,
-    secondaryVideoRef,
-    repeatPrimaryRef,
-    repeatSecondaryRef,
-  } = useVideoRefs();
-
-  const primaryVideoState = useConstrainedVideo({
-    videoRef: primaryVideoRef,
-    trimStartRef: useLatestValue(primaryTrimRef.current.trimStart ?? 0),
-    trimEndRef: useLatestValue(primaryTrimRef.current.trimEnd ?? 0),
-    repeatRef: repeatPrimaryRef,
-  });
-
-  const secondaryVideoState = useConstrainedVideo({
-    videoRef: secondaryVideoRef,
-    trimStartRef: useLatestValue(secondaryTrimRef.current.trimStart ?? 0),
-    trimEndRef: useLatestValue(secondaryTrimRef.current.trimEnd ?? 0),
-    repeatRef: repeatSecondaryRef,
-  });
+  const { getVideoRef, primaryVideoRef, secondaryVideoRef } = useVideoRefs();
 
   const contextValue = useMemo<DualVideoContextValue>(
     () => ({
@@ -109,14 +81,6 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
       getVideoRef,
       primaryVideoRef,
       secondaryVideoRef,
-      repeatPrimaryRef,
-      repeatSecondaryRef,
-      primaryStatus: primaryVideoState.status,
-      primaryControls: primaryVideoState.controls,
-      primaryBuffered: primaryVideoState.buffered,
-      secondaryStatus: secondaryVideoState.status,
-      secondaryControls: secondaryVideoState.controls,
-      secondaryBuffered: secondaryVideoState.buffered,
     }),
     [
       secondaryClip,
@@ -133,10 +97,6 @@ export const ClipProvider = ({ children }: { children: ReactNode }) => {
       getVideoRef,
       primaryVideoRef,
       secondaryVideoRef,
-      repeatPrimaryRef,
-      repeatSecondaryRef,
-      primaryVideoState,
-      secondaryVideoState,
     ]
   );
 

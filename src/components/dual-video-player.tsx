@@ -959,12 +959,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   </Seek.Content>
                 </Seek.Root>
                 <div className="flex items-center justify-center gap-2">
-                  <Playback.Root isPlaying={isPlaying}>
+                  <Playback.Root
+                    playing={isPlaying}
+                    onPlayingChange={() => togglePlay()}
+                  >
                     <Playback.Controls>
-                      <Playback.PlayToggle
-                        playing={isPlaying}
-                        onPlayingChange={() => togglePlay()}
-                      />
+                      <Playback.PlayToggle />
                       <Playback.LoopToggle
                         loop={isRepeat}
                         onLoopChange={setIsRepeat}

@@ -17,18 +17,24 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Seek } from "./video-seek-bar";
-import { ClipContext } from "@/contexts/clip-context";
-import { useShallowSelector } from "react-shallow-store";
-import { getPlayingState } from "@/hooks/app/use-video-controls-core";
+import { type PlayingStatus } from "@/hooks/app/use-video-controls-core";
 
 interface PlaybackContextValue {
-  isPlaying: boolean;
   hovered: boolean;
+
+  playing: boolean;
+  setPlaying: (next: boolean | ((prev: boolean) => boolean)) => void;
+  togglePlay: () => void;
+
   // Accessibility IDs
   playToggleId: string;
   loopToggleId: string;
   rateControlId: string;
   controlsRegionId: string;
+
+  showFeedback: boolean;
+  triggerFeedback: () => void;
+  feedbackKey: number;
 }
 
 const PlaybackContext = React.createContext<PlaybackContextValue | null>(null);
@@ -43,50 +49,117 @@ export function usePlayback() {
 
 interface PlaybackRootProps {
   children: React.ReactNode;
-  isPlaying: boolean;
+  defaultPlaying?: boolean;
+  playing?: boolean;
+  onPlayingChange?: (playing: boolean) => void;
+  onPlayingChangeAlways?: (playing: boolean) => void;
+  playingStatus?: PlayingStatus;
 }
 
 const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
-  ({ children, isPlaying, ...props }, _) => {
+  (
+    {
+      children,
+      defaultPlaying,
+      playing: controlledPlaying,
+      onPlayingChange,
+      onPlayingChangeAlways,
+      playingStatus = "idle",
+      ...props
+    },
+    _
+  ) => {
+    const [playing, setPlaying] = useControllableStateWithCallback({
+      defaultValue: defaultPlaying ?? false,
+      controlled: controlledPlaying,
+      onChange: onPlayingChange,
+      onValueChangeAlways: onPlayingChangeAlways,
+    });
+
     const [hovered, setHovered] = React.useState(false);
+
+    const timeoutRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+
+    const [showFeedback, setShowFeedback] = React.useState<boolean>(false);
+    const [feedbackKey, setFeedbackKey] = React.useState(0);
 
     const playToggleId = React.useId();
     const loopToggleId = React.useId();
     const rateControlId = React.useId();
     const controlsRegionId = React.useId();
 
+    const togglePlay = React.useCallback(() => {
+      setPlaying((prev) => !prev);
+    }, [setPlaying]);
+
+    const triggerFeedback = React.useCallback(() => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      togglePlay();
+
+      setFeedbackKey((prev) => prev + 1);
+      setShowFeedback(true);
+
+      timeoutRef.current = setTimeout(() => {
+        setShowFeedback(false);
+        timeoutRef.current = null;
+      }, 500);
+    }, [togglePlay]);
+
     const handleMouseEnter = React.useCallback(() => setHovered(true), []);
     const handleMouseLeave = React.useCallback(() => setHovered(false), []);
 
+    React.useEffect(() => {
+      if (playingStatus !== "playing") {
+        setPlaying(false);
+      }
+    }, [playingStatus]);
+
     const contextValue = React.useMemo(
       () => ({
-        isPlaying,
+        playing,
+        setPlaying,
+        togglePlay,
         hovered,
         playToggleId,
         loopToggleId,
         rateControlId,
         controlsRegionId,
+        showFeedback,
+        triggerFeedback,
+        feedbackKey,
       }),
       [
-        isPlaying,
+        playing,
+        setPlaying,
+        togglePlay,
         hovered,
         playToggleId,
         loopToggleId,
         rateControlId,
         controlsRegionId,
+        showFeedback,
+        triggerFeedback,
+        feedbackKey,
       ]
     );
 
     return (
       <PlaybackContext.Provider value={contextValue}>
         <div
-          className="absolute inset-0 pointer-events-none"
+          className={cn(
+            "absolute inset-0 z-10 bg-transparent pointer-events-auto"
+          )}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          onClick={triggerFeedback}
           role="region"
           aria-label="Video player"
           {...props}
         >
+          <PlaybackFeedbackOverlay />
           {children}
         </div>
       </PlaybackContext.Provider>
@@ -95,15 +168,44 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 );
 PlaybackRoot.displayName = "PlaybackRoot";
 
+const PlaybackFeedbackOverlay: React.FC = () => {
+  const { showFeedback, feedbackKey, playing } = usePlayback();
+
+  const icon = React.useMemo(() => {
+    return playing ? (
+      <Pause className="size-12 text-white" />
+    ) : (
+      <Play className="size-12 text-white" />
+    );
+  }, [playing]);
+
+  if (!showFeedback) return null;
+
+  return (
+    <div
+      className={cn(
+        "absolute inset-0 flex items-center justify-center pointer-events-none bg-transparent"
+      )}
+    >
+      <div
+        key={feedbackKey} // Forces remount on trigger to restart animation
+        className="glass rounded-full p-6 flex items-center justify-center animate-scale-fade"
+      >
+        {icon}
+      </div>
+    </div>
+  );
+};
+
 interface PlaybackControlsProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const PlaybackControls = React.forwardRef<
   HTMLDivElement,
   PlaybackControlsProps
 >(({ className, children, ...props }, ref) => {
-  const { isPlaying, hovered, controlsRegionId } = usePlayback();
+  const { playing, hovered, controlsRegionId } = usePlayback();
 
-  if (isPlaying && !hovered) return null;
+  if (playing && !hovered) return null;
 
   return (
     <div
@@ -111,9 +213,10 @@ const PlaybackControls = React.forwardRef<
       id={controlsRegionId}
       role="group"
       aria-label="Video controls"
+      onClick={(e) => e.stopPropagation()}
       className={cn(
-        "flex items-center gap-2 border-none",
-        "absolute bottom-2 pointer-events-auto px-8 py-1 left-1/2 -translate-x-1/2 w-full",
+        "flex items-center gap-2 border-none z-20",
+        "absolute bottom-0 pointer-events-auto px-8 pb-3 pt-3.5 left-1/2 -translate-x-1/2 w-full",
         className
       )}
       {...props}
@@ -125,37 +228,11 @@ const PlaybackControls = React.forwardRef<
 
 PlaybackControls.displayName = "PlaybackControls";
 
-interface PlayToggleProps extends React.ComponentPropsWithoutRef<"button"> {
-  defaultPlaying?: boolean;
-  playing?: boolean;
-  onPlayingChange?: (playing: boolean) => void;
-  onPlayingChangeAlways?: (playing: boolean) => void;
-}
+interface PlayToggleProps extends React.ComponentPropsWithoutRef<"button"> {}
 
 const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
-  (
-    {
-      defaultPlaying = false,
-      playing: controlledPlaying,
-      onPlayingChange,
-      onPlayingChangeAlways,
-      className,
-      ...props
-    },
-    ref
-  ) => {
-    const { playToggleId } = usePlayback();
-
-    const [playing, setPlaying] = useControllableStateWithCallback({
-      defaultValue: defaultPlaying,
-      controlled: controlledPlaying,
-      onChange: onPlayingChange,
-      onValueChangeAlways: onPlayingChangeAlways,
-    });
-
-    const togglePlay = React.useCallback(() => {
-      setPlaying((prev) => !prev);
-    }, [setPlaying]);
+  ({ className, ...props }, ref) => {
+    const { playing, togglePlay, playToggleId } = usePlayback();
 
     // (Space/K to toggle play)
     const handleKeyDown = React.useCallback(
@@ -192,7 +269,7 @@ const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" className="!glass" role="tooltip">
-          {playing ? "Pause (k)" : "Play (k)"}
+          {playing ? "Pause (Space)" : "Play (Space)"}
         </TooltipContent>
       </Tooltip>
     );
@@ -428,103 +505,15 @@ const PlaybackVolume = React.forwardRef<HTMLDivElement, PlaybackVolumeProps>(
 PlaybackVolume.displayName = "PlaybackVolume";
 
 interface PlaybackSeekProps
-  extends Partial<React.ComponentProps<typeof Seek.Root>> {
-  playerActive?: "primary" | "secondary";
-}
+  extends Omit<React.ComponentProps<typeof Seek.Root>, "children"> {}
 
 const PlaybackSeek = React.forwardRef<HTMLDivElement, PlaybackSeekProps>(
-  ({ playerActive, ...props }, _) => {
-    const {
-      primaryTrim,
-      getVideoRef,
-      primaryStatus,
-      primaryBuffered,
-      secondaryStatus,
-      secondaryBuffered,
-      primaryControls,
-      secondaryControls,
-    } = useShallowSelector(ClipContext, (state) => ({
-      primaryTrim: state.primaryTrim,
-      getVideoRef: state.getVideoRef,
-      primaryStatus: state.primaryStatus,
-      primaryBuffered: state.primaryBuffered,
-      primaryControls: state.primaryControls,
-      secondaryStatus: state.secondaryStatus,
-      secondaryBuffered: state.secondaryBuffered,
-      secondaryControls: state.secondaryControls,
-    }));
-
-    const effectivePlayer = playerActive ?? "primary";
-
-    const activeVideoRef = React.useMemo(() => {
-      if (props.primaryVideoRef) return props.primaryVideoRef;
-      return getVideoRef(effectivePlayer);
-    }, [props.primaryVideoRef, getVideoRef, effectivePlayer]);
-
-    const activeTrim = React.useMemo(() => {
-      if (props.primaryTrim) return props.primaryTrim;
-      return primaryTrim;
-    }, [props.primaryTrim, primaryTrim]);
-
-    const { status, buffered } = React.useMemo(() => {
-      if (effectivePlayer === "primary") {
-        return {
-          status:
-            props.isPlaying !== undefined
-              ? { isPlaying: props.isPlaying }
-              : { isPlaying: getPlayingState(primaryStatus).isPlaying },
-          buffered: props.primaryBuffered ?? primaryBuffered,
-        };
-      }
-
-      return {
-        status:
-          props.isPlaying !== undefined
-            ? { isPlaying: props.isPlaying }
-            : { isPlaying: getPlayingState(secondaryStatus).isPlaying },
-        buffered: props.primaryBuffered ?? secondaryBuffered,
-      };
-    }, [
-      effectivePlayer,
-      props.isPlaying,
-      props.primaryBuffered,
-      primaryStatus,
-      primaryBuffered,
-      secondaryStatus,
-      secondaryBuffered,
-    ]);
-
-    const isPlaying = props.isPlaying ?? status.isPlaying;
-
-    const handleSeek = React.useCallback(
-      (normalizedTimeMs: number) => {
-        if (props.onSeek) {
-          props.onSeek(normalizedTimeMs);
-        } else {
-          const controls =
-            effectivePlayer === "primary" ? primaryControls : secondaryControls;
-          if (controls?.seek) {
-            controls.seek(normalizedTimeMs / 1000);
-          }
-        }
-      },
-      [props.onSeek, effectivePlayer, primaryControls, secondaryControls]
-    );
-
+  (props, _) => {
     return (
-      <Seek.Root
-        primaryVideoRef={activeVideoRef}
-        secondaryVideoRef={props.secondaryVideoRef ?? undefined}
-        primaryTrim={activeTrim}
-        secondaryTrim={props.secondaryTrim ?? null}
-        isPlaying={isPlaying}
-        onSeek={handleSeek}
-        primaryBuffered={buffered}
-        secondaryBuffered={props.secondaryBuffered ?? null}
-      >
+      <Seek.Root {...props}>
         <Seek.Content>
-          {/* This is absolute to the Playback.Content */}
-          <Seek.Track className="absolute bottom-0 -translate-y-full max-w-[100%] left-2/4 -translate-x-2/4">
+          {/* This is absolute to the Playback.Controls */}
+          <Seek.Track className="-translate-y-full absolute top-0 w-[95%] left-1/2 -translate-x-1/2">
             <Seek.Buffer />
             <Seek.Progress />
             <Seek.Thumb />

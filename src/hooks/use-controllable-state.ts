@@ -1,17 +1,12 @@
 import * as React from "react";
+import { useStableHandler } from "./use-stable-handler";
 
-const useInsertionEffect: typeof React.useLayoutEffect =
-  (React as any)["useInsertionEffect"] || React.useLayoutEffect;
+type OnChangeHandler<T> = (value: T) => void;
 
-type OnChangeHandler<T, ExtraArgs extends any[] = []> = (
-  value: T,
-  ...args: ExtraArgs
-) => void;
-
-interface UseControllableStateOptions<T, ExtraArgs extends any[] = []> {
+interface UseControllableStateOptions<T> {
   defaultValue: T;
   controlled?: T;
-  onChange?: OnChangeHandler<T, ExtraArgs>;
+  onChange?: OnChangeHandler<T>;
 }
 
 /**
@@ -19,22 +14,19 @@ interface UseControllableStateOptions<T, ExtraArgs extends any[] = []> {
  * - Controlled when `controlled` is defined.
  * - Uncontrolled otherwise, starting from `defaultValue`.
  */
-export function useControllableState<T, ExtraArgs extends any[] = []>({
+export function useControllableState<T>({
   defaultValue,
   controlled,
   onChange,
-}: UseControllableStateOptions<T, ExtraArgs>) {
+}: UseControllableStateOptions<T>) {
   const [uncontrolled, setUncontrolled] = React.useState<T>(defaultValue);
   const isControlled = controlled !== undefined;
   const value = isControlled ? (controlled as T) : uncontrolled;
 
-  const onChangeRef = React.useRef(onChange);
-  useInsertionEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
+  const stableOnChange = useStableHandler(onChange!);
 
   const setValue = React.useCallback(
-    (next: T | ((prev: T) => T), ...args: ExtraArgs) => {
+    (next: T | ((prev: T) => T)) => {
       if (isControlled) {
         const newValue =
           typeof next === "function"
@@ -42,7 +34,7 @@ export function useControllableState<T, ExtraArgs extends any[] = []>({
             : next;
 
         if (newValue !== controlled) {
-          onChangeRef.current?.(newValue, ...args);
+          stableOnChange?.(newValue);
         }
       } else {
         setUncontrolled(next);

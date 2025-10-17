@@ -462,6 +462,7 @@ const VolumeSliderTrack = React.forwardRef<
       onPointerDown(event);
       if (event.defaultPrevented) return;
     }
+
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio =
       orientation === "horizontal"
@@ -476,11 +477,7 @@ const VolumeSliderTrack = React.forwardRef<
     <HitArea variant={orientation === "horizontal" ? "y" : "x"}>
       <div
         ref={composedRefs}
-        role="slider"
-        tabIndex={0}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-orientation={orientation}
+        tabIndex={-1}
         className={cn(
           "relative bg-surface-tertiary rounded",
           orientation === "horizontal"
@@ -496,7 +493,6 @@ const VolumeSliderTrack = React.forwardRef<
     </HitArea>
   );
 });
-VolumeSliderTrack.displayName = "VolumeSliderTrack";
 
 const VolumeSliderRange = React.forwardRef<
   HTMLDivElement,

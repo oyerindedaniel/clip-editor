@@ -24,8 +24,6 @@ interface SeekContextValue {
   setIsDragging: (v: boolean) => void;
   hoverTime: number | null;
   setHoverTime: (v: number | null) => void;
-  isHovered: boolean;
-  setIsHovered: (v: boolean) => void;
   progressRef: React.RefObject<number>;
   _bufferRef: React.RefObject<HTMLDivElement | null>;
   _progressRef: React.RefObject<HTMLDivElement | null>;
@@ -73,7 +71,6 @@ function SeekRoot({
 }: SeekRootProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState<number | null>(null);
-  const [isHovered, setIsHovered] = React.useState(false);
   const progressRef = React.useRef(0);
 
   const _bufferRef = React.useRef<HTMLDivElement | null>(null);
@@ -115,8 +112,6 @@ function SeekRoot({
       setIsDragging,
       hoverTime,
       setHoverTime,
-      isHovered,
-      setIsHovered,
       progressRef,
       _bufferRef,
       _progressRef,
@@ -139,7 +134,6 @@ function SeekRoot({
       timelineDurationMs,
       isDragging,
       hoverTime,
-      isHovered,
       seekSliderId,
       currentTimeId,
       durationId,
@@ -215,9 +209,6 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
       timelineDurationMs,
       progressRef,
       onSeek,
-      setIsDragging,
-      setHoverTime,
-      setIsHovered,
     } = useSeekContext();
     const composedRefs = useComposedRefs(forwardedRef, _trackRef);
 
@@ -268,31 +259,6 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
       [timelineDurationMs, progressRef, stableOnSeek]
     );
 
-    const handleMouseEnter = React.useCallback(() => {
-      setIsHovered(true);
-    }, [setIsHovered]);
-
-    const handleMouseLeave = React.useCallback(() => {
-      setIsHovered(false);
-      setHoverTime(null);
-    }, [setIsHovered, setHoverTime]);
-
-    const handleMouseMove = React.useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        const trackElement = _trackRef.current;
-        if (!trackElement) return;
-
-        const rect = trackElement.getBoundingClientRect();
-        const ratio = Math.max(
-          0,
-          Math.min(1, (e.clientX - rect.left) / rect.width)
-        );
-        const timeMs = ratio * timelineDurationMs;
-        setHoverTime(timeMs);
-      },
-      [timelineDurationMs, setHoverTime, _trackRef]
-    );
-
     const ariaValueNow = Math.round(progressRef.current * 100);
     const ariaValueText = `${formatTime(
       progressRef.current * timelineDurationMs
@@ -303,7 +269,7 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         buffer={10}
         variant="y"
         className={cn(
-          "relative cursor-pointer pointer-events-auto rounded-full bg-primary/30 h-[4.5px] hover:h-[5px] transition-[height] duration-200",
+          "relative cursor-pointer pointer-events-auto rounded-full bg-primary/40 h-[5px]",
           className
         )}
         ref={composedRefs}
@@ -317,9 +283,6 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         aria-describedby={`${currentTimeId} ${durationId}`}
         tabIndex={0}
         onKeyDown={handleKeyDown}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onMouseMove={handleMouseMove}
         {...props}
       >
         <div>{children}</div>
@@ -375,17 +338,15 @@ interface SeekThumbProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const SeekThumb = React.forwardRef<HTMLDivElement, SeekThumbProps>(
   ({ className, ...props }, forwardedRef) => {
-    const { isHovered, hoverTime, _thumbRef } = useSeekContext();
+    const { _thumbRef } = useSeekContext();
     const composedRefs = useComposedRefs(forwardedRef, _thumbRef);
-
-    if (!isHovered) return null;
 
     return (
       <HitArea buffer={8} variant="all">
         <div
           ref={composedRefs}
           className={cn(
-            "absolute top-1/2 left-0 size-3 hover:size-3.5 transition-[width,height] duration-200 rounded-full bg-primary shadow-lg will-change-transform pointer-events-auto",
+            "absolute top-1/2 left-0 size-3 rounded-full bg-primary shadow-lg pointer-events-auto will-change-transform",
             className
           )}
           role="presentation"
@@ -546,16 +507,15 @@ function SeekAnimator() {
         currentTimeRef.current.textContent = formatTime(currentTimeMs);
       }
 
-      // Update aria-valuenow on the slider
-      const sliderElement = document.getElementById(seekSliderId);
-      if (sliderElement) {
+      if (_trackRef.current) {
+        const track = _trackRef.current;
         const ariaValueNow = Math.round(clamped * 100);
         const currentTimeMs = clamped * timelineDurationMs;
         const ariaValueText = `${formatTime(currentTimeMs)} of ${formatTime(
           timelineDurationMs
         )}`;
-        sliderElement.setAttribute("aria-valuenow", ariaValueNow.toString());
-        sliderElement.setAttribute("aria-valuetext", ariaValueText);
+        track.setAttribute("aria-valuenow", ariaValueNow.toString());
+        track.setAttribute("aria-valuetext", ariaValueText);
       }
 
       updateBufferDisplay();

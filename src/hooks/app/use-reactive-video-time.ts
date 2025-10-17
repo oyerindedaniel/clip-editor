@@ -163,7 +163,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     videoRef,
     trimStartRef,
     trimEndRef,
-    repeatRef,
     updateStoreTime: (time) => {
       storeRef.current.state = { ...storeRef.current.state, time };
     },

@@ -242,12 +242,18 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
               </Seek.Root>
 
               <div className="flex items-center justify-center gap-2">
-                <Playback.Root isPlaying={playState.isPlaying}>
+                <Playback.Root
+                  defaultPlaying={playState.isPlaying}
+                  onPlayingChangeAlways={(shouldPlay) => {
+                    if (shouldPlay) {
+                      controls.play();
+                    } else {
+                      controls.pause();
+                    }
+                  }}
+                >
                   <Playback.Controls>
-                    <Playback.PlayToggle
-                      defaultPlaying={playState.isPlaying}
-                      onPlayingChangeAlways={() => controls.toggle()}
-                    />
+                    <Playback.PlayToggle />
                     <Playback.LoopToggle
                       defaultLoop={repeatRef.current}
                       onLoopChange={(value) => {

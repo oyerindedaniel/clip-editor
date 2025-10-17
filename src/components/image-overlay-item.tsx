@@ -79,7 +79,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
 
       <PopoverContent className="w-64">
         <div className="flex flex-col gap-2">
-          <div className="w-full aspect-[4/3] overflow-hidden rounded-lg bg-surface-tertiary">
+          <div className="w-full aspect-[4/3] overflow-hidden rounded-2xl bg-surface-tertiary">
             <img
               src={objectUrl.current}
               alt={overlay.file.name}

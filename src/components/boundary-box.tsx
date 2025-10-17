@@ -79,6 +79,7 @@ export interface BoundaryBoxRootProps {
   visible?: boolean;
   defaultVisible?: boolean;
   onVisibleChange?: (v: boolean) => void;
+  currentKeyframe?: { transform: Transform } | undefined;
 }
 
 export function BoundaryBoxRoot({
@@ -95,6 +96,7 @@ export function BoundaryBoxRoot({
   visible: controlledVisible,
   defaultVisible = false,
   onVisibleChange,
+  currentKeyframe,
 }: BoundaryBoxRootProps) {
   const [aspectRatio, setAspectRatio] = useControllableState<AspectRatio>({
     defaultValue:
@@ -228,6 +230,28 @@ export function BoundaryBoxRoot({
     },
     [throttledUpdateTransform]
   );
+
+  React.useEffect(() => {
+    if (!currentKeyframe?.transform || !visible) return;
+
+    const overlay = overlayRef.current;
+    const container = containerRef.current;
+    if (!overlay || !container) return;
+
+    const rafId = requestAnimationFrame(() => {
+      if (!overlayRef.current || !containerRef.current) return;
+
+      const { x, y, width, height } = currentKeyframe.transform;
+
+      overlay.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      overlay.style.width = `${width}px`;
+      overlay.style.height = `${height}px`;
+
+      stableSetTransform(currentKeyframe.transform);
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [currentKeyframe, visible]);
 
   const methods = React.useMemo(
     () => ({

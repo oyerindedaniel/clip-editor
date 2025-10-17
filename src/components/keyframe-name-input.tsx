@@ -21,7 +21,7 @@ export default function KeyframeNameInput({
   const name = keyframe?.name || "Keyframe";
   const [value, setValue] = useState(name);
 
-  const debounced = useMemo(
+  const debouncedUpdateKeyframe = useMemo(
     () =>
       debounce((next) => {
         updateKeyframe(currentKeyframeId, { name: next });
@@ -30,8 +30,10 @@ export default function KeyframeNameInput({
   );
 
   useEffect(() => {
-    setValue(name);
-  }, [name]);
+    if (value !== name) {
+      setValue(name);
+    }
+  }, [name, value]);
 
   return (
     <Input
@@ -40,7 +42,7 @@ export default function KeyframeNameInput({
       onChange={(e) => {
         const next = e.target.value;
         setValue(next);
-        debounced(next);
+        debouncedUpdateKeyframe(next);
       }}
       placeholder="Enter name"
       {...props}
