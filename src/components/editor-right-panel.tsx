@@ -21,7 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { KeyframeContext } from "@/contexts/keyframe-context";
-import KeyframePanelList from "@/components/keyframe-panel-list";
+import KeyframePanelList from "@/components/keyframe-panel-lists";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
