@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 import { KeyframeList, KeyframeListEmpty } from "./keyframe-lists";
 import { useFilteredKeyframes } from "@/hooks/app/use-filtered-keyframes";
 
-interface KeyframePanelListProps extends React.HTMLAttributes<HTMLDivElement> {
+interface KeyframePanelListsProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframes: KeyframeData[];
   currentKeyframeId: string | null;
   onKeyframeSelect: (id: string) => void;
   onKeyframeRemove?: (id: string) => void;
 }
 
-export const KeyframePanelList: React.FC<KeyframePanelListProps> = ({
+export const KeyframePanelLists: React.FC<KeyframePanelListsProps> = ({
   keyframes,
   currentKeyframeId,
   onKeyframeSelect,
@@ -87,4 +87,4 @@ export const KeyframePanelList: React.FC<KeyframePanelListProps> = ({
   );
 };
 
-export default KeyframePanelList;
+export default KeyframePanelLists;

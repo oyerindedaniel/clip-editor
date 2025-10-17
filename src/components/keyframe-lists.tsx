@@ -133,33 +133,33 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
               {section}
             </div>
 
-            {keyframes.map((kf) => (
+            {keyframes.map((keyframe) => (
               <div
-                key={kf.id}
+                key={keyframe.id}
                 className={cn(
                   "group relative w-full h-8 rounded-3xl border",
                   "bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
-                  currentKeyframeId === kf.id &&
+                  currentKeyframeId === keyframe.id &&
                     "ring-1 ring-primary/40 border-primary/50"
                 )}
               >
                 <button
-                  onClick={() => onKeyframeSelect(kf.id)}
+                  onClick={() => onKeyframeSelect(keyframe.id)}
                   className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
                 >
                   <span
                     className="h-3 w-3 rounded-full border bg-(--color)"
                     style={
                       {
-                        "--color": (kf.color || "#22c55e") as string,
+                        "--color": (keyframe.color || "#22c55e") as string,
                       } as React.CSSProperties
                     }
                   />
                   <span className="text-xs font-medium tracking-tight text-foreground-default">
-                    {kf.time.toFixed(1)}s
+                    {keyframe.time.toFixed(1)}s
                   </span>
                   <span className="ml-auto text-[10px] text-foreground-muted">
-                    {kf.name || kf.id.replace(/^kf-/, "#")}
+                    {keyframe.name || keyframe.id.replace(/^keyframe-/, "#")}
                   </span>
                 </button>
 
@@ -167,7 +167,7 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onKeyframeRemove(kf.id);
+                      onKeyframeRemove(keyframe.id);
                     }}
                     aria-label="Remove keyframe"
                     className={cn(

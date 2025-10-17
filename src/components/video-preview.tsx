@@ -104,7 +104,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         preload: source.props.preload ?? "auto",
         playsInline: source.props.playsInline ?? true,
       });
-    }, [source, composedRef]);
+    }, [source]);
 
     const { time, status, controls } = useReactiveVideoTime({
       videoRef,
