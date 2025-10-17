@@ -320,7 +320,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
           updateTooltip(
             newLeftPx - scrollLeft,
-            `${newTimeMs / 1000}.toFixed(2)}s`
+            `${(newTimeMs / 1000).toFixed(2)}s`
           );
 
           dragTimeRef.current = newTimeMs;
@@ -371,7 +371,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
               moved.current = true;
               updateTooltip(
                 newLeftPx - scrollLeft,
-                `${newTimeMs / 1000}.toFixed(2)}s`
+                `${(newTimeMs / 1000).toFixed(2)}s`
               );
             }
           });
