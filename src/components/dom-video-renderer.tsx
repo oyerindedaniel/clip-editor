@@ -25,9 +25,9 @@ const DOMVideoRenderer: TaggedRendererComponent<DOMVideoRendererProps> = ({
 }) => {
   const style = useVideoTransformStyle(transformData, variant);
 
-  const cloned = useMemo(() => {
-    const composedRef = useComposedRefs(videoRef, getElementRef(video));
+  const composedRef = useComposedRefs(videoRef, getElementRef(video));
 
+  const cloned = useMemo(() => {
     return React.cloneElement(video, {
       ref: composedRef,
       className: cn(

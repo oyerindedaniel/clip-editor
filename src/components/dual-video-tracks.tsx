@@ -120,9 +120,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const [showTooltip, setShowTooltip] = useState(false);
 
-  const lastSecondaryTooltipRef = useRef<string>("");
-  const lastPlayheadTooltipRef = useRef<string>("");
-
   const primaryStripInitialized = useRef(false);
 
   const maxDurationMs = Math.max(primaryDurationMs, currentSecondaryDurationMs);

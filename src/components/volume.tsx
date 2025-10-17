@@ -24,8 +24,7 @@ interface VolumeContextValue {
   max: number;
   step: number;
   orientation: "horizontal" | "vertical";
-  thumbId?: string;
-  setThumbId: (id: string) => void;
+  thumbId: string;
 }
 
 const VolumeContext = React.createContext<VolumeContextValue | null>(null);
@@ -61,7 +60,7 @@ function VolumeRoot({
   orientation = "horizontal",
   children,
 }: VolumeRootProps) {
-  const [thumbId, setThumbId] = React.useState<string | undefined>();
+  const thumbId = React.useId();
 
   const [volume, setVolume] = useControllableStateWithCallback<number>({
     controlled: controlledValue,
@@ -102,7 +101,6 @@ function VolumeRoot({
       step,
       orientation,
       thumbId,
-      setThumbId,
     }),
     [
       volume,
@@ -532,14 +530,13 @@ const VolumeSliderThumb = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ onKeyDown, onPointerDown, className, style, ...props }, forwardedRef) => {
-  const { volume, setVolume, min, max, orientation, step, setThumbId } =
+  const { volume, setVolume, min, max, orientation, step, thumbId } =
     useVolumeContext();
   const { trackRef, thumbRef } = useControlsContext();
 
   const ref = React.useRef<HTMLDivElement>(null);
   const composedRefs = useComposedRefs(forwardedRef, ref, thumbRef);
 
-  const thumbId = React.useId();
   const percent = (volume - min) / (max - min);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -589,10 +586,6 @@ const VolumeSliderThumb = React.forwardRef<
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
   };
-
-  React.useLayoutEffect(() => {
-    setThumbId(thumbId);
-  }, [thumbId]);
 
   const offset =
     orientation === "horizontal"

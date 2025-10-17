@@ -1,12 +1,15 @@
 import React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Scissors } from "lucide-react";
 
-export const TimelineSkeleton: React.FC = () => {
+const TimelineSkeleton: React.FC = () => {
   return (
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-foreground-subtle">✂️</div>
+        <div className="text-xs text-foreground-subtle">
+          <Scissors size={14} />
+        </div>
         <div className="flex items-center gap-2">
           <Skeleton className="h-3 w-32 bg-surface-tertiary rounded" />
         </div>
@@ -32,3 +35,5 @@ export const TimelineSkeleton: React.FC = () => {
     </div>
   );
 };
+
+export default TimelineSkeleton;

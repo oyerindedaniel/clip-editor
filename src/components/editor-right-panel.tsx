@@ -21,7 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { KeyframeContext } from "@/contexts/keyframe-context";
-import { cn } from "@/lib/utils";
+import KeyframePanelList from "@/components/keyframe-panel-list";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -210,64 +210,17 @@ export function EditorRightPanel({
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="space-y-2">
-              {keyframes && keyframes.length ? (
-                <div className="flex flex-col gap-1">
-                  {keyframes
-                    .slice()
-                    .sort((a, b) => a.time - b.time)
-                    .map((kf) => (
-                      <div
-                        key={kf.id}
-                        className={cn(
-                          "group relative w-full h-10 rounded-3xl border bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
-                          currentKeyframeId === kf.id &&
-                            "ring-1 ring-primary/40 border-primary/50"
-                        )}
-                      >
-                        <button
-                          onClick={() => setCurrentKeyframeId(kf.id)}
-                          className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
-                        >
-                          <span
-                            className="h-3 w-3 rounded-full border bg-(--color)"
-                            style={
-                              {
-                                "--color": kf.color || "#22c55e",
-                              } as React.CSSProperties
-                            }
-                          />
-                          <span className="text-xs font-medium tracking-tight text-foreground-default">
-                            {kf.time.toFixed(2)}s
-                          </span>
-                          <span className="ml-auto text-[10px] text-foreground-muted">
-                            {kf.id.replace(/^kf-/, "#")}
-                          </span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setKeyframes((prev) =>
-                              prev.filter((x) => x.id !== kf.id)
-                            );
-                            if (currentKeyframeId === kf.id) {
-                              setCurrentKeyframeId(null);
-                            }
-                          }}
-                          aria-label="Remove keyframe"
-                          className="absolute right-2 cursor-pointer top-1/2 -translate-y-1/2 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm rounded-full h-6 px-2 py-0 text-[10px] leading-none shadow-sm"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-xs text-foreground-muted">
-                  No keyframes yet.
-                </div>
-              )}
-            </div>
+            <KeyframePanelList
+              keyframes={keyframes}
+              currentKeyframeId={currentKeyframeId}
+              onKeyframeSelect={(id) => setCurrentKeyframeId(id)}
+              onKeyframeRemove={(id) => {
+                setKeyframes((prev) => prev.filter((x) => x.id !== id));
+                if (currentKeyframeId === id) {
+                  setCurrentKeyframeId(null);
+                }
+              }}
+            />
           </AccordionContent>
         </AccordionItem>
 

@@ -42,7 +42,6 @@ export const PiPOverlay = React.forwardRef<HTMLDivElement, PiPOverlayProps>(
       trimEndRef,
       repeatRef,
       playing,
-      playbackRateRef,
       onPiPTimeUpdate,
       primaryVideoRef,
       visible = true,
@@ -79,24 +78,21 @@ export const PiPOverlay = React.forwardRef<HTMLDivElement, PiPOverlayProps>(
       controlled: visible,
     });
 
-    const internalVideoRef = React.useRef<HTMLVideoElement | null>(null);
+    const _videoRef = React.useRef<HTMLVideoElement | null>(null);
     const composedRefs = useComposedRefs(forwardedRef);
-    const localTrimStartRef = trimStartRef ?? React.useRef<number>(0);
-    const localTrimEndRef = trimEndRef ?? React.useRef<number>(Infinity);
 
     useReactiveVideoTime({
-      videoRef: internalVideoRef,
-      trimStartRef: localTrimStartRef,
-      trimEndRef: localTrimEndRef,
+      videoRef: _videoRef,
+      trimStartRef,
+      trimEndRef,
       repeatRef,
       playing,
-      playbackRateRef,
       onTimeChange: onPiPTimeUpdate,
       onPlayingChange: undefined,
     });
 
     const existingRef = getElementRef(children);
-    const videoRef = useComposedRefs(internalVideoRef, existingRef);
+    const videoRef = useComposedRefs(_videoRef, existingRef);
 
     const clonedVideo = React.useMemo(() => {
       if (!React.isValidElement(children)) return null;

@@ -8,7 +8,7 @@ import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import type { KeyframeData, KeyframeTarget } from "@/utils/keyframe";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
-import { TOOLTIP_OFFSET_Y, TimelineTooltip } from "./timeline-tooltip";
+import { TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
 import type { AnimationState } from "@/hooks/use-animate-presence";
 import type { Color } from "./color-palette";
@@ -90,7 +90,7 @@ function KeyframeRoot({
         secondary: [],
       };
 
-      for (var i = 0; i < keyframes.length; i++) {
+      for (let i = 0; i < keyframes.length; i++) {
         const kf = keyframes[i];
         grouped[kf.target].push(kf);
       }
@@ -121,14 +121,18 @@ function KeyframeRoot({
       const id = `kf-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2, 9)}`;
-      const newKeyframe: KeyframeData = {
-        ...data,
-        id,
-      };
 
-      setKeyframes((prev) => [...prev, newKeyframe]);
+      setKeyframes((prev) => {
+        const count = prev.length + 1;
+        const newKeyframe: KeyframeData = {
+          ...data,
+          id,
+          name: `#keyframe${count}`,
+        };
+        return [...prev, newKeyframe];
+      });
+
       setCurrentKeyframeId(id);
-
       return id;
     },
     [setKeyframes, setCurrentKeyframeId]

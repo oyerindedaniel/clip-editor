@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type {
-  AudioTrack,
   ExportSettings,
   ClipExportData,
   ClipMetadata,
@@ -17,15 +16,13 @@ import {
   getVideoBoundingBox,
   getTargetVideoDimensions,
   getFormatFromSrc,
-  getBufferKey,
-  getOriginalBufferKey,
 } from "@/utils/video";
 import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
-import { TimelineSkeleton } from "@/components/timeline-skeleton";
-import { ExportNamingDialog } from "./export-naming-dialog";
+import TimelineSkeleton from "@/components/timeline-skeleton";
+import ExportNamingDialog from "./export-naming-dialog";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { EditorRightPanel } from "./editor-right-panel";
@@ -80,13 +77,21 @@ import { LoaderIcon } from "@/icons/loader";
 import { cn } from "@/lib/utils";
 import { calculateHeight } from "@/utils/aspect-ratios";
 import KeyframeLists from "./keyframe-lists";
-import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
 import { AudioContext } from "@/contexts/audio-context";
-import { useVideoRefs } from "@/hooks/app/use-video-refs";
 import { Playback } from "./video-controls";
-import { VideoSeekBar } from "./video-seek-bar";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 import { Volume } from "./volume";
+import KeyframeNameInput from "./keyframe-name-input";
+
+interface Data {
+  buffer: ArrayBuffer;
+  url: string;
+}
+
+interface BufferStatus {
+  data: Data | null;
+  isValid: boolean;
+}
 
 interface ClipEditorProps {
   clipData: ClipData;
@@ -147,8 +152,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     secondaryVideoRef,
     repeatPrimaryRef,
     repeatSecondaryRef,
-    primaryVideoState,
-    secondaryVideoState,
+    primaryStatus,
+    primaryControls,
+    secondaryStatus,
+    secondaryControls,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -161,14 +168,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     secondaryVideoRef: state.secondaryVideoRef,
     repeatPrimaryRef: state.repeatPrimaryRef,
     repeatSecondaryRef: state.repeatSecondaryRef,
-    primaryVideoState: state.primaryVideoState,
-    secondaryVideoState: state.secondaryVideoState,
+    primaryStatus: state.primaryStatus,
+    primaryControls: state.primaryControls,
+    secondaryStatus: state.secondaryStatus,
+    secondaryControls: state.secondaryControls,
   }));
-
-  const { status: primaryStatus, controls: primaryControls } =
-    primaryVideoState;
-  const { status: secondaryStatus, controls: secondaryControls } =
-    secondaryVideoState;
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
     audioTracksRef: state.audioTracksRef,
@@ -232,31 +236,22 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
   const playerActiveRef = useLatestValue(playerActive);
 
-  const video = getVideoRef(playerActiveRef.current).current;
+  const activeVideoRef = getVideoRef(playerActiveRef.current);
 
   const primaryPlayState = getPlayingState(primaryStatus);
-
   const secondaryPlayState = getPlayingState(secondaryStatus);
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
 
-  const [processedBuffers, setProcessedBuffers] = useState<
-    Map<string, { buffer: ArrayBuffer; url: string }>
-  >(() => new Map());
+  const primaryUrl = clipData.url;
 
-  const processedBuffersRef = useLatestValue(processedBuffers);
+  const [bufferStatus, setBufferStatus] = useState<BufferStatus>({
+    data: null,
+    isValid: false,
+  });
 
-  const [primaryUrl, _] = useState<string>(clipData.url);
-
-  const isValidBufferState = useMemo(() => {
-    const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
-
-    const originalBufferExists = processedBuffers.has(bufferKey);
-    const hasAnyProcessedBuffer = processedBuffers.size > 0;
-
-    return originalBufferExists && hasAnyProcessedBuffer;
-  }, [processedBuffers]);
+  const isValidBufferState = bufferStatus.isValid;
 
   const toggleActivePlayer = useCallback(() => {
     const primary =
@@ -358,18 +353,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     []
   );
 
-  const originalPrimaryUrl = useMemo(() => {
-    const originalBufferData = processedBuffers.get(getOriginalBufferKey());
-    return originalBufferData?.url ?? clipData.url;
-  }, [processedBuffers, clipData.url]);
-
   const adjustOverlayBounds = useCallback(() => {
+    const video = activeVideoRef.current;
     const container = containerRef.current;
     const trace = traceRef.current;
 
     if (!video || !container || !trace) return;
-
-    // video.style.width = `${container.clientWidth}px`;
 
     const { x, y, width, height } = getVideoBoundingBox(video);
 
@@ -408,13 +397,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     let abortController: AbortController | undefined;
 
     const convertUrlToBuffer = async () => {
-      const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
-      if (!clipData.url || processedBuffersRef.current.has(bufferKey)) return;
+      if (!primaryUrl) return;
 
       abortController = new AbortController();
 
       try {
-        const response = await fetch(clipData.url, {
+        const response = await fetch(primaryUrl, {
           signal: abortController.signal,
         });
 
@@ -424,10 +412,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
         const buffer = await response.arrayBuffer();
 
-        setProcessedBuffers((prev) => {
-          const updated = new Map(prev);
-          updated.set(bufferKey, { buffer, url: clipData.url });
-          return updated;
+        setBufferStatus({
+          data: { buffer, url: primaryUrl },
+          isValid: true,
         });
       } catch (error) {
         if ((normalizeError(error).name = "AbortError")) {
@@ -445,7 +432,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         abortController.abort();
       }
     };
-  }, [clipData.url, clipData.metadata.clipId]);
+  }, [primaryUrl, clipData.metadata.clipId]);
 
   useEffect(() => {
     return () => {
@@ -456,16 +443,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   }, [secondaryClip?.url]);
 
   useEffect(() => {
-    return () => {
-      processedBuffersRef.current.forEach(({ url }) => {
-        if (typeof url === "string" && url.startsWith("blob:")) {
-          URL.revokeObjectURL(url);
-        }
-      });
-    };
-  }, []);
-
-  useEffect(() => {
+    const video = activeVideoRef.current;
     if (!video) return;
 
     const handleLoadedMetadata = () => {
@@ -506,7 +484,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     window.addEventListener("resize", adjustOverlayBounds);
 
     return () => {
-      logger.log("Cleaning up video event listeners");
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("error", handleError);
       window.removeEventListener("resize", adjustOverlayBounds);
@@ -540,9 +517,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   ) => {
     // TODO: review video this definety wrong
 
-    const bufferKey = getBufferKey(primaryClipMetaDataRef.current);
-    const bufferData = processedBuffers.get(bufferKey);
-
+    const video = activeVideoRef.current;
+    const bufferData = bufferStatus.data?.buffer;
     if (!video || !primaryClipMetaDataRef.current || !bufferData) return;
 
     setIsExporting(true);
@@ -588,8 +564,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         dualVideo: {
           primaryClip: {
             id: clipData.metadata.clipId,
-            url: secondaryClip ? originalPrimaryUrl : primaryUrl,
-            buffer: bufferData.buffer,
+            url: primaryUrl,
+            buffer: bufferData,
             metadata: clipData.metadata,
             ...primaryClipMetaDataRef.current,
             ...primaryTrimRef.current,
@@ -712,8 +688,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             onClick={() => {
                               if (boundaryTransform) {
                                 addKeyframe({
-                                  time: video?.currentTime
-                                    ? video.currentTime
+                                  time: activeVideoRef.current?.currentTime
+                                    ? activeVideoRef.current.currentTime
                                     : 0,
                                   transform: boundaryTransform,
                                   easing: "ease-in-out",
@@ -774,8 +750,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
 
                     <BoundaryBox
                       screenSize="16:9"
-                      videoWidth={video?.videoWidth}
-                      videoHeight={video?.videoHeight}
+                      videoWidth={activeVideoRef.current?.videoWidth}
+                      videoHeight={activeVideoRef.current?.videoHeight}
                       aspectRatio={boundaryAspectRatio as AspectRatio}
                       visible={boundaryVisible}
                       transform={boundaryTransform!}
@@ -828,58 +804,68 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       className="w-full h-full object-contain rounded-lg"
                                       poster="/thumbnails/video-thumb-2.webp"
                                     />
-                                    <Playback.Root>
-                                      <Playback.Controls className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                          <Playback.PlayToggle
-                                            playing={primaryPlayState.isPlaying}
-                                            onPlayingChange={() =>
-                                              primaryControls.toggle()
-                                            }
-                                          />
-
-                                          <Playback.Volume>
-                                            <Volume.Root
-                                              orientation="horizontal"
-                                              defaultValue={primaryControls.getVolume()}
-                                              onValueChangeAlways={
-                                                primaryControls.setVolume
+                                    <Playback.Root
+                                      isPlaying={primaryPlayState.isPlaying}
+                                    >
+                                      <Playback.Controls>
+                                        <div className="relative h-full w-full flex items-center justify-between">
+                                          <div className="flex items-center gap-3">
+                                            <Playback.PlayToggle
+                                              playing={
+                                                primaryPlayState.isPlaying
                                               }
-                                            >
-                                              <Volume.Controls
-                                                variant="pill"
-                                                className="!p-0 !border-none bg-transparent hover:!glass"
+                                              onPlayingChange={() =>
+                                                primaryControls.toggle()
+                                              }
+                                            />
+
+                                            <Playback.Volume>
+                                              <Volume.Root
+                                                orientation="horizontal"
+                                                defaultValue={primaryControls.getVolume()}
+                                                onValueChangeAlways={
+                                                  primaryControls.setVolume
+                                                }
                                               >
-                                                <Volume.Button
-                                                  size="icon"
-                                                  variant="glass"
-                                                  aria-label="Primary volume"
-                                                />
-                                                <Volume.Slider>
-                                                  <Volume.Slider.Track className="!glass">
-                                                    <Volume.Slider.Range className="bg-white" />
-                                                    <Volume.Slider.Thumb className="bg-white" />
-                                                  </Volume.Slider.Track>
-                                                </Volume.Slider>
-                                              </Volume.Controls>
-                                            </Volume.Root>
-                                          </Playback.Volume>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                          <Playback.LoopToggle
-                                            defaultLoop={
-                                              repeatPrimaryRef.current
-                                            }
-                                            onLoopChangeAlways={(value) => {
-                                              repeatPrimaryRef.current = value;
-                                            }}
-                                          />
-                                          <Playback.RateControl
-                                            defaultRate={primaryControls.getPlaybackRate()}
-                                            onRateChangeAlways={
-                                              primaryControls.setPlaybackRate
-                                            }
-                                          />
+                                                <Volume.Controls
+                                                  variant="pill"
+                                                  className="!p-0 !border-none bg-transparent hover:!glass"
+                                                >
+                                                  <Volume.Button
+                                                    size="icon"
+                                                    variant="glass"
+                                                    aria-label="Primary volume"
+                                                  />
+                                                  <Volume.Slider>
+                                                    <Volume.Slider.Track className="!glass">
+                                                      <Volume.Slider.Range className="bg-white" />
+                                                      <Volume.Slider.Thumb className="bg-white" />
+                                                    </Volume.Slider.Track>
+                                                  </Volume.Slider>
+                                                </Volume.Controls>
+                                              </Volume.Root>
+                                            </Playback.Volume>
+                                          </div>
+                                          <div className="w-full">
+                                            <Playback.Seek />
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                            <Playback.LoopToggle
+                                              defaultLoop={
+                                                repeatPrimaryRef.current
+                                              }
+                                              onLoopChangeAlways={(value) => {
+                                                repeatPrimaryRef.current =
+                                                  value;
+                                              }}
+                                            />
+                                            <Playback.RateControl
+                                              defaultRate={primaryControls.getPlaybackRate()}
+                                              onRateChangeAlways={
+                                                primaryControls.setPlaybackRate
+                                              }
+                                            />
+                                          </div>
                                         </div>
                                       </Playback.Controls>
                                     </Playback.Root>
@@ -911,7 +897,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       poster="/thumbnails/video-thumb-2.webp"
                                     />
                                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%]">
-                                      <Playback.Root>
+                                      <Playback.Root
+                                        isPlaying={secondaryPlayState.isPlaying}
+                                      >
                                         <Playback.Controls className="p-0 !glass">
                                           <Playback.PlayToggle
                                             playing={
@@ -994,6 +982,22 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                 getKeyframe(currentKeyframeId) && (
                                   <>
                                     <div className="space-y-3">
+                                      <div className="space-y-1">
+                                        <Label
+                                          htmlFor="keyframe-name"
+                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                        >
+                                          Name
+                                        </Label>
+                                        <KeyframeNameInput
+                                          id="keyframe-name"
+                                          keyframe={
+                                            getKeyframe(currentKeyframeId)!
+                                          }
+                                          currentKeyframeId={currentKeyframeId}
+                                          updateKeyframe={updateKeyframe}
+                                        />
+                                      </div>
                                       <ScrubbableInput.Root
                                         value={roundToDecimals(
                                           getKeyframe(currentKeyframeId)!
@@ -1233,7 +1237,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                               : null
                           }
                           isPrimaryVideoLoaded={isVideoLoaded}
-                          primaryClip={{ ...clipData, url: originalPrimaryUrl }}
+                          primaryClip={clipData}
                           secondaryClip={secondaryClip}
                           duration={duration}
                           className={classNames.dual}

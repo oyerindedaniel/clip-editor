@@ -22,6 +22,7 @@ interface KeyframeData {
   transform: KeyframeTransform;
   easing: KeyframeEasing;
   color?: (typeof DEFAULT_COLORS)[number];
+  name?: string;
   target: KeyframeTarget;
 }
 

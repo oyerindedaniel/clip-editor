@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Video, Crop, Maximize2, Settings } from "lucide-react";
+import { Crop, Maximize2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,

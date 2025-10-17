@@ -54,6 +54,8 @@ export function useStackedTransition<const K extends string>(
           return;
         }
 
+        if (!el) return;
+
         // EXIT animation: track until it ends
         pendingAnimations.current++;
         setAnimating(true);

@@ -19,7 +19,7 @@ import logger from "@/utils/logger";
 import type { CropMode } from "@/types/app";
 import { CANVAS_RENDERER_SYMBOL, getRendererType } from "@/utils/renderer";
 import { Volume } from "./volume";
-import { VideoSeekBar } from "./video-seek-bar";
+import { Seek } from "./video-seek-bar";
 import { cn } from "@/lib/utils";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
@@ -86,24 +86,16 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     } = props;
 
     const repeatRef = useRef(defaultRepeat);
-
     const startRef = useLatestValue(keyframeBounds.start);
     const endRef = useLatestValue(keyframeBounds.end);
-
-    if (
-      !React.isValidElement(source) ||
-      typeof source.type !== "string" ||
-      source.type !== "video"
-    ) {
-      logger.warn("VideoPreview: `source` must be a <video> React element.");
-      return null;
-    }
-
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const composedRef = useComposedRefs(videoRef, getElementRef(source));
     const duration = keyframeBounds.end - keyframeBounds.start;
 
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-
-    const composedRef = useComposedRefs(videoRef, getElementRef(source));
+    const isValidVideo =
+      React.isValidElement(source) &&
+      typeof source.type === "string" &&
+      source.type === "video";
 
     const rootVideo = useMemo(() => {
       return React.cloneElement(source, {
@@ -112,7 +104,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         preload: source.props.preload ?? "auto",
         playsInline: source.props.playsInline ?? true,
       });
-    }, [source]);
+    }, [source, composedRef]);
 
     const { time, status, controls } = useReactiveVideoTime({
       videoRef,
@@ -179,6 +171,11 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     const rendererType = getRendererType(renderedChild);
     const isChildCanvasRenderer = rendererType === CANVAS_RENDERER_SYMBOL;
 
+    if (!isValidVideo) {
+      logger.warn("VideoPreview: `source` must be a <video> React element.");
+      return null;
+    }
+
     return (
       <div
         ref={forwardedRef}
@@ -226,17 +223,26 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         >
           <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
             <div className="px-4 py-3 space-y-3">
-              <VideoSeekBar
+              <Seek.Root
                 primaryVideoRef={videoRef}
                 primaryTrim={trimData}
                 secondaryTrim={null}
                 isPlaying={playState.isPlaying}
                 onSeek={(timeMs) => controls.seek(timeMs / 1000)}
-                className="w-full"
-              />
+              >
+                <Seek.Content>
+                  <Seek.TimeDisplay />
+                  <Seek.Track>
+                    <Seek.Buffer />
+                    <Seek.Progress />
+                    <Seek.Thumb />
+                  </Seek.Track>
+                  <Seek.Animator />
+                </Seek.Content>
+              </Seek.Root>
 
               <div className="flex items-center justify-center gap-2">
-                <Playback.Root>
+                <Playback.Root isPlaying={playState.isPlaying}>
                   <Playback.Controls>
                     <Playback.PlayToggle
                       defaultPlaying={playState.isPlaying}
@@ -275,5 +281,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     );
   }
 );
+
+VideoPreview.displayName = "VideoPreview";
 
 export default VideoPreview;
