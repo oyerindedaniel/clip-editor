@@ -618,7 +618,7 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
           data-state={state}
           tabIndex={-1}
           className={cn(
-            "fixed bg-surface-primary left-0 top-0 rounded-3xl overflow-hidden shadow-2xl border border-subtle w-[260px] z-50 will-change-transform",
+            "fixed bg-surface-primary left-0 top-0 rounded-3xl overflow-hidden shadow-2xl border border-subtle w-[260px] z-100 will-change-transform",
             "origin-top-left data-[state=open]:animate-box-enter data-[state=closed]:animate-box-exit",
             className
           )}

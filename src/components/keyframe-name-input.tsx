@@ -18,7 +18,8 @@ export default function KeyframeNameInput({
   updateKeyframe,
   ...props
 }: KeyframeNameInputProps) {
-  const [value, setValue] = useState(keyframe?.name || "Keyframe");
+  const name = keyframe?.name || "Keyframe";
+  const [value, setValue] = useState(name);
 
   const debounced = useMemo(
     () =>
@@ -27,6 +28,10 @@ export default function KeyframeNameInput({
       }, 300),
     [currentKeyframeId, updateKeyframe]
   );
+
+  useEffect(() => {
+    setValue(name);
+  }, [name]);
 
   return (
     <Input

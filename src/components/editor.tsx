@@ -678,7 +678,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           cropMode={cropMode}
                           onCropModeChange={setCropMode}
                           padColor={padColor}
-                          onPadColorChange={(c) => setPadColor(c)}
+                          onPadColorChange={(color) => setPadColor(color)}
                         />
 
                         <div className="flex items-center gap-px">
