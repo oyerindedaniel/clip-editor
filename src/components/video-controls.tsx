@@ -37,6 +37,9 @@ interface PlaybackContextValue {
   showFeedback: boolean;
   triggerFeedback: () => void;
   feedbackKey: number;
+
+  isBuffering: boolean;
+  hasError: boolean;
 }
 
 const PlaybackContext = React.createContext<PlaybackContextValue | null>(null);
@@ -117,7 +120,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       timeoutRef.current = setTimeout(() => {
         setShowFeedback(false);
         timeoutRef.current = null;
-      }, 500);
+      }, 5000);
     }, [togglePlay]);
 
     const handleMouseEnter = React.useCallback(() => setHovered(true), []);
@@ -144,6 +147,8 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         feedbackKey,
         videoPlayerId,
         controlsId,
+        isBuffering,
+        hasError,
       }),
       [
         playing,
@@ -159,6 +164,8 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         feedbackKey,
         videoPlayerId,
         controlsId,
+        isBuffering,
+        hasError,
       ]
     );
 
@@ -173,8 +180,8 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
           onClick={triggerFeedback}
           {...props}
         >
-          {isBuffering && <PlaybackBuffer />}
-          {hasError && <PlaybackError />}
+          <PlaybackBuffer />
+          <PlaybackError />
           <PlaybackFeedbackOverlay />
           {children}
         </div>
@@ -185,12 +192,20 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 PlaybackRoot.displayName = "PlaybackRoot";
 
 const PlaybackBuffer = () => {
+  const { isBuffering } = usePlayback();
+
+  if (!isBuffering) return null;
+
   return (
-    <Loader2 className="h-12 w-12 animate-spin glass absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10" />
+    <Loader2 className="h-12 w-12 animate-spin absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10 text-white fill-white/10" />
   );
 };
 
 const PlaybackError = () => {
+  const { hasError } = usePlayback();
+
+  if (!hasError) return null;
+
   return (
     <div className="absolute inset-0 bg-black/80 text-white backdrop-blur-sm flex items-center justify-center z-10">
       <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2 w-[85%]">
@@ -208,9 +223,9 @@ const PlaybackFeedbackOverlay = () => {
 
   const icon = React.useMemo(() => {
     return playing ? (
-      <Pause className="size-12 text-white" />
-    ) : (
       <Play className="size-12 text-white" />
+    ) : (
+      <Pause className="size-12 text-white" />
     );
   }, [playing]);
 
@@ -218,16 +233,10 @@ const PlaybackFeedbackOverlay = () => {
 
   return (
     <div
-      className={cn(
-        "absolute inset-0 flex items-center justify-center pointer-events-none bg-transparent"
-      )}
+      key={feedbackKey} // Forces remount on trigger to restart animation
+      className="glass absolute left-1/2 top-1/2 -translate-1/2 rounded-full p-6 flex items-center justify-center animate-scale-fade"
     >
-      <div
-        key={feedbackKey} // Forces remount on trigger to restart animation
-        className="glass rounded-full p-6 flex items-center justify-center animate-scale-fade"
-      >
-        {icon}
-      </div>
+      {icon}
     </div>
   );
 };
@@ -477,7 +486,7 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
             variant="glass"
             onClick={() => handleSelect(r)}
             className={cn(
-              "text-xs pointer-events-auto",
+              "pointer-events-auto",
               r === rate && "bg-white/20 text-white border-2"
             )}
             aria-label={`Playback speed ${r}x`}

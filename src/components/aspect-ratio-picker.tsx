@@ -122,10 +122,10 @@ const AspectRatioPicker = ({
       >
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-medium text-foreground-default">
+            <h3 className="text-base font-medium text-foreground-default">
               Crop to Aspect Ratio
             </h3>
-            <p className="text-xs text-foreground-subtle">
+            <p className="text-sm md:text-[0.8rem] text-foreground-subtle">
               Screen: {screenSize}
             </p>
           </div>
@@ -138,7 +138,7 @@ const AspectRatioPicker = ({
                 variant={
                   localAspectRatio === ratio.value ? "default" : "outline"
                 }
-                className="w-full text-left block text-xs overflow-hidden border-subtle"
+                className="w-full text-left block overflow-hidden border-subtle"
               >
                 <span className="font-medium mr-2">{ratio.label}</span>
                 <Badge variant="secondary">{ratio.description}</Badge>
@@ -148,7 +148,7 @@ const AspectRatioPicker = ({
 
           {onCropModeChange && (
             <div className="grid gap-2">
-              <div className="text-xs font-medium text-foreground-default">
+              <div className="text-sm md:text-[0.8rem] font-medium text-foreground-default">
                 Crop Mode
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -157,7 +157,7 @@ const AspectRatioPicker = ({
                     key={mode.value}
                     onClick={() => onCropModeChange(mode.value as CropMode)}
                     className={cn(
-                      "flex items-center justify-center gap-1 rounded-3xl p-2 text-xs border",
+                      "flex items-center justify-center gap-1 rounded-3xl p-2 text-sm md:text-[0.8rem] border",
                       cropMode === mode.value
                         ? "bg-primary/20 text-primary border-primary"
                         : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
@@ -175,7 +175,7 @@ const AspectRatioPicker = ({
 
           {onPadColorChange && cropMode === "letterbox" && (
             <div className="grid gap-2">
-              <div className="text-xs font-medium text-foreground-default">
+              <div className="text-sm md:text-[0.8rem] font-medium text-foreground-default">
                 Pad Color
               </div>
               <ColorPalette
@@ -187,7 +187,7 @@ const AspectRatioPicker = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs flex items-center gap-2"
+                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
                 >
                   <span
                     className="h-4 w-4 rounded border"

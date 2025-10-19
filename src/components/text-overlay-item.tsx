@@ -26,6 +26,7 @@ import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import FontSelector from "@/components/font-selector";
 import { AnimatePresence, motion } from "framer-motion";
+import { Label } from "./ui/label";
 
 interface TextOverlayItemProps {
   overlay: TextOverlay;
@@ -59,7 +60,7 @@ const TextOverlayItem = ({
     >
       <div className="flex items-center justify-between px-3 h-10">
         <div className="min-w-0 mr-2">
-          <div className="text-foreground-default text-xs font-medium tracking-wide truncate">
+          <div className="text-foreground-default text-sm md:text-[0.8rem] font-medium tracking-wide truncate">
             {overlay.text || "Text Overlay"}
           </div>
         </div>
@@ -102,9 +103,7 @@ const TextOverlayItem = ({
           >
             <div className="px-3 py-3 space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs text-foreground-subtle">
-                  Text
-                </label>
+                <Label>Text</Label>
                 <Input
                   type="text"
                   value={overlay.text}
@@ -113,15 +112,12 @@ const TextOverlayItem = ({
                       text: e.target.value,
                     })
                   }
-                  className="text-sm"
                   placeholder="Enter text"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs text-foreground-subtle">
-                  Font Family
-                </label>
+                <Label>Font Family</Label>
                 <FontSelector
                   value={overlay.fontFamily}
                   onChange={(font) =>
@@ -131,12 +127,12 @@ const TextOverlayItem = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-foreground-subtle">
+                <Label className="text-sm md:text-[0.8rem] text-foreground-subtle">
                   Opacity:{" "}
                   <span className="font-bold text-foreground-default">
                     {Math.round(overlay.opacity * 100)}%
                   </span>
-                </label>
+                </Label>
                 <input
                   type="range"
                   min="0"
@@ -153,9 +149,7 @@ const TextOverlayItem = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="block text-xs text-foreground-subtle">
-                    Display
-                  </label>
+                  <Label>Display</Label>
                   <Select
                     value={
                       overlay.endTime === duration ? "persistent" : "timed"
@@ -178,9 +172,7 @@ const TextOverlayItem = ({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-xs text-foreground-subtle">
-                    Font size
-                  </label>
+                  <Label>Font size</Label>
                   <Select
                     value={String(overlay.fontSize)}
                     onValueChange={(value) =>
@@ -204,7 +196,9 @@ const TextOverlayItem = ({
               </div>
 
               <div className="space-y-2">
-                <div className="text-xs text-foreground-subtle">Styles</div>
+                <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
+                  Styles
+                </div>
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={() =>
@@ -275,9 +269,7 @@ const TextOverlayItem = ({
 
               <div className="flex flex-col gap-3">
                 <div className="space-y-1.5 w-full">
-                  <label className="block text-xs text-foreground-subtle">
-                    Text color
-                  </label>
+                  <Label>Text color</Label>
                   <ColorPicker
                     color={overlay.color}
                     onChange={(value) =>
@@ -286,9 +278,7 @@ const TextOverlayItem = ({
                   />
                 </div>
                 <div className="space-y-1.5 w-full">
-                  <label className="block text-xs text-foreground-subtle">
-                    Background
-                  </label>
+                  <Label>Background</Label>
                   <ColorPicker
                     color={overlay.backgroundColor}
                     onChange={(value) =>

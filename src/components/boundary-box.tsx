@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { debounce, throttle } from "@/utils/app";
-import { DEFAULT_TRANSFORM } from "@/utils/keyframe";
+import { DEFAULT_TRANSFORM } from "@/utils/transform";
 import { useStableHandler } from "@/hooks/use-stable-handler";
 import { equalTransform } from "@/utils/optimise";
 import {
@@ -17,7 +17,7 @@ import {
   OVERLAY_SCALE_FACTOR,
   MIN_OVERLAY_WIDTH,
 } from "@/utils/aspect-ratios";
-import type { Transform } from "@/utils/keyframe";
+import type { Transform } from "@/utils/transform";
 import { useElementSize } from "@/hooks/use-element-size";
 
 interface BoundaryBoxContextValue {
@@ -323,7 +323,7 @@ export const BoundaryBoxContainer = React.forwardRef<
     <div
       ref={composedRef}
       className={cn(
-        "relative overflow-hidden",
+        "relative overflow-hidden bg-transparent w-full",
         screenSize === "16:9" ? "aspect-video" : "aspect-[9/16]",
         className
       )}
@@ -785,15 +785,12 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
         });
       };
 
-      // const resizeObserver = new ResizeObserver(update);
-      // resizeObserver.observe(containerEl);
       window.addEventListener("resize", update);
 
       return () => {
         if (resizeStateRef.current.rafId)
           cancelAnimationFrame(resizeStateRef.current.rafId);
         window.removeEventListener("resize", update);
-        // resizeObserver.disconnect();
       };
     }, [debouncedUpdateTransform]);
 
@@ -890,7 +887,7 @@ const BoundaryBoxPositioned = React.forwardRef<HTMLDivElement, PositionedProps>(
       });
 
       return () => cancelAnimationFrame(rafId);
-    }, [position, containerRef, overlayRef, setTransform]);
+    }, [position, setTransform]);
 
     React.useLayoutEffect(() => {
       const cleanup = positionOverlay();

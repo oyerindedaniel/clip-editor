@@ -150,37 +150,46 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[475px] max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[575px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Name Your Clip</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="streamerName" className="text-right text-xs">
+            <label
+              htmlFor="streamerName"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Streamer
             </label>
             <Input
               required
               id="streamerName"
               defaultValue=""
-              className="col-span-3 text-xs"
+              className="col-span-3"
               ref={streamerNameRef}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="clipTitle" className="text-right text-xs">
+            <label
+              htmlFor="clipTitle"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Title
             </label>
             <Input
               required
               id="clipTitle"
               defaultValue=""
-              className="col-span-3 text-xs"
+              className="col-span-3"
               ref={clipTitleRef}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="date" className="text-right text-xs">
+            <label
+              htmlFor="date"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Date
             </label>
             <Input
@@ -188,12 +197,15 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
               id="date"
               type="date"
               defaultValue=""
-              className="col-span-3 text-xs"
+              className="col-span-3"
               ref={dateRef}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="time" className="text-right text-xs">
+            <label
+              htmlFor="time"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Time
             </label>
             <Input
@@ -201,13 +213,16 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
               id="time"
               type="time"
               defaultValue=""
-              className="col-span-3 text-xs"
+              className="col-span-3"
               ref={timeRef}
             />
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="resolution" className="text-right text-xs">
+            <label
+              htmlFor="resolution"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Resolution
             </label>
             <Select
@@ -222,11 +237,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             >
               <SelectTrigger
                 id="resolution"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+                className="col-span-3 h-auto px-2 py-1"
               >
                 <SelectValue placeholder="Select resolution" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 {RESOLUTION_OPTIONS.map((res) => (
                   <SelectItem key={res.value} value={res.value}>
                     <div className="flex items-center justify-between w-full">
@@ -242,7 +257,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="fps" className="text-right text-xs">
+            <label
+              htmlFor="fps"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Frame Rate
             </label>
             <Select
@@ -255,13 +273,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 }
               }}
             >
-              <SelectTrigger
-                id="fps"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
-              >
+              <SelectTrigger id="fps" className="col-span-3 h-auto px-2 py-1">
                 <SelectValue placeholder="Select FPS" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 {FPS_OPTIONS.map((f) => (
                   <SelectItem key={f.value} value={String(f.value)}>
                     <div className="flex items-center justify-between w-full">
@@ -277,7 +292,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="bitrate" className="text-right text-xs">
+            <label
+              htmlFor="bitrate"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Bitrate
             </label>
             <Select
@@ -299,11 +317,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             >
               <SelectTrigger
                 id="bitrate"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+                className="col-span-3 h-auto px-2 py-1"
               >
                 <SelectValue placeholder="Select bitrate" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 <SelectItem value="recommended">
                   <div className="flex items-center justify-between w-full">
                     <span>Recommended</span>
@@ -342,7 +360,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
           {bitrate === "custom" && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="customBitrate" className="text-right text-xs">
+              <label
+                htmlFor="customBitrate"
+                className="text-right text-sm md:text-[0.8rem]"
+              >
                 Custom Bitrate (kbps)
               </label>
               <Input
@@ -353,13 +374,16 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                 max="50000"
                 defaultValue={customBitrateKbps}
                 onChange={(e) => setCustomBitrateKbps(parseInt(e.target.value))}
-                className="col-span-3 text-xs"
+                className="col-span-3"
               />
             </div>
           )}
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="format" className="text-right text-xs">
+            <label
+              htmlFor="format"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Format
             </label>
             <Select
@@ -370,11 +394,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             >
               <SelectTrigger
                 id="format"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+                className="col-span-3 h-auto px-2 py-1"
               >
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 {FORMAT_OPTIONS.map((f) => (
                   <SelectItem key={f.value} value={f.value}>
                     <div className="flex items-center justify-between w-full">
@@ -391,7 +415,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
 
           {format === "mov" && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <label className="text-right text-xs" htmlFor="movCompressed">
+              <label
+                className="text-right text-sm md:text-[0.8rem]"
+                htmlFor="movCompressed"
+              >
                 Use compressed audio
               </label>
               <div className="col-span-3 flex items-center gap-2">
@@ -400,7 +427,7 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
                   checked={movCompressed}
                   onCheckedChange={(v: boolean) => setMovCompressed(v)}
                 />
-                <span className="text-[11px] text-foreground/70">
+                <span className="text-[0.8rem] text-foreground/70">
                   {movCompressed
                     ? "AAC (select quality)"
                     : "PCM (uncompressed)"}
@@ -413,7 +440,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             format === "webm" ||
             (format === "mov" && movCompressed)) && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <label className="text-right text-xs" htmlFor="audioQuality">
+              <label
+                className="text-right text-sm md:text-[0.8rem]"
+                htmlFor="audioQuality"
+              >
                 Audio Quality
               </label>
               <Select
@@ -438,11 +468,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
               >
                 <SelectTrigger
                   id="audioQuality"
-                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                  className="col-span-3 h-auto px-2 py-1"
                 >
                   <SelectValue placeholder="Select audio quality" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-210">
                   {format === "mp4" && (
                     <>
                       <SelectItem value="medium">
@@ -533,7 +563,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           )}
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="preset" className="text-right text-xs">
+            <label
+              htmlFor="preset"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               Preset
             </label>
             <Select
@@ -544,11 +577,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             >
               <SelectTrigger
                 id="preset"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+                className="col-span-3 h-auto px-2 py-1"
               >
                 <SelectValue placeholder="Select preset" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 {PRESETS.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
                     <div className="flex items-center justify-between w-full">
@@ -564,7 +597,10 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="crf" className="text-right text-xs">
+            <label
+              htmlFor="crf"
+              className="text-right text-sm md:text-[0.8rem]"
+            >
               CRF
             </label>
             <Select
@@ -575,11 +611,11 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
             >
               <SelectTrigger
                 id="crf"
-                className="col-span-3 h-auto px-2 py-1 text-xs"
+                className="col-span-3 h-auto px-2 py-1 text-sm md:text-[0.8rem]"
               >
                 <SelectValue placeholder="Select CRF" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-210">
                 {CRF_VALUES.map((c) => (
                   <SelectItem key={c.value} value={String(c.value)}>
                     <div className="flex items-center justify-between w-full">

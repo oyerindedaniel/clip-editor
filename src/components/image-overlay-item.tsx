@@ -40,7 +40,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
         <div
           data-overlay-inspector
           className={cn(
-            "group w-full rounded-3xl border text-sm overflow-hidden cursor-pointer",
+            "group w-full rounded-3xl border text-base overflow-hidden cursor-pointer",
             selectedOverlay === overlay.id
               ? "border-primary/60 bg-primary/5"
               : "border-subtle bg-surface-secondary"
@@ -55,7 +55,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs tracking-tight font-medium text-foreground-default truncate">
+              <div className="text-sm md:text-[0.8rem] tracking-tight font-medium text-foreground-default truncate">
                 {overlay.file.name}
               </div>
             </div>
@@ -86,7 +86,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="text-xs tracking-tight font-medium text-foreground-default truncate">
+          <div className="text-sm md:text-[0.8rem] tracking-tight font-medium text-foreground-default truncate">
             {overlay.file.name}
           </div>
           <div className="text-[11px] tracking-wide text-foreground-subtle">

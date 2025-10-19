@@ -59,7 +59,7 @@ export function ColorPalette({
       </PopoverTrigger>
       <PopoverContent
         className={cn(
-          "w-auto p-3 !duration-(--total-duration) z-120",
+          "w-auto p-3 !duration-(--total-duration) z-110",
           "[[data-state=closed][data-popover-aspect-ratio]+[data-radix-popper-content-wrapper]>*]:opacity-0"
         )}
         style={

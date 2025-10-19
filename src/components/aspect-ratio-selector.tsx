@@ -81,7 +81,11 @@ const AspectRatioSelector = ({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" className="text-xs" variant="outline">
+        <Button
+          size="sm"
+          className="text-sm md:text-[0.8rem]"
+          variant="outline"
+        >
           <Settings size={14} className="mr-1" />
           Settings
         </Button>
@@ -89,17 +93,20 @@ const AspectRatioSelector = ({
       <PopoverContent className="w-fit" align="start" side="bottom">
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-medium text-foreground-default">
+            <h3 className="text-base font-medium text-foreground-default">
               Adjust Aspect Ratio
             </h3>
-            <p className="text-xs text-foreground-subtle">
+            <p className="text-sm md:text-[0.8rem] text-foreground-subtle">
               Configure aspect ratio and crop mode
             </p>
           </div>
 
           <div className="grid gap-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="aspectRatio" className="text-right text-xs">
+              <label
+                htmlFor="aspectRatio"
+                className="text-right text-sm md:text-[0.8rem]"
+              >
                 Aspect Ratio
               </label>
               <Select
@@ -110,7 +117,7 @@ const AspectRatioSelector = ({
               >
                 <SelectTrigger
                   id="aspectRatio"
-                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                  className="col-span-3 h-auto px-2 py-1 text-sm md:text-[0.8rem]"
                 >
                   <SelectValue placeholder="Select an aspect ratio" />
                 </SelectTrigger>
@@ -131,7 +138,10 @@ const AspectRatioSelector = ({
 
             {convertAspectRatio !== "original" && (
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="cropMode" className="text-right text-xs">
+                <label
+                  htmlFor="cropMode"
+                  className="text-right text-sm md:text-[0.8rem]"
+                >
                   Crop Mode
                 </label>
                 <div className="col-span-3 grid grid-cols-3 gap-2">
@@ -150,7 +160,7 @@ const AspectRatioSelector = ({
                     >
                       <div className="flex items-center space-x-1.5">
                         {mode.icon}
-                        <span className="text-xs font-medium">
+                        <span className="text-sm md:text-[0.8rem] font-medium">
                           {mode.label}
                         </span>
                       </div>
@@ -162,7 +172,10 @@ const AspectRatioSelector = ({
 
             {convertAspectRatio !== "original" && cropMode === "letterbox" && (
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="padColor" className="text-right text-xs">
+                <label
+                  htmlFor="padColor"
+                  className="text-right text-sm md:text-[0.8rem]"
+                >
                   Pad Color
                 </label>
                 <div className="col-span-3">
@@ -175,7 +188,7 @@ const AspectRatioSelector = ({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-xs flex items-center gap-2"
+                      className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
                     >
                       <span
                         className="h-4 w-4 rounded border"
@@ -189,7 +202,10 @@ const AspectRatioSelector = ({
             )}
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="format" className="text-right text-xs">
+              <label
+                htmlFor="format"
+                className="text-right text-sm md:text-[0.8rem]"
+              >
                 Format
               </label>
               <Select
@@ -200,7 +216,7 @@ const AspectRatioSelector = ({
               >
                 <SelectTrigger
                   id="format"
-                  className="col-span-3 h-auto px-2 py-1 text-xs"
+                  className="col-span-3 h-auto px-2 py-1 text-sm md:text-[0.8rem]"
                 >
                   <SelectValue placeholder="Select format" />
                 </SelectTrigger>

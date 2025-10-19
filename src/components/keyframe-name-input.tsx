@@ -30,10 +30,8 @@ export default function KeyframeNameInput({
   );
 
   useEffect(() => {
-    if (value !== name) {
-      setValue(name);
-    }
-  }, [name, value]);
+    setValue(name);
+  }, [name]);
 
   return (
     <Input

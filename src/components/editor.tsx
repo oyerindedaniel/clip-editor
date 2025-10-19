@@ -78,11 +78,9 @@ import { cn } from "@/lib/utils";
 import { calculateHeight } from "@/utils/aspect-ratios";
 import KeyframeLists from "./keyframe-lists";
 import { AudioContext } from "@/contexts/audio-context";
-import { Playback } from "./video-controls";
-import { getPlayingState } from "@/hooks/app/use-video-controls-core";
-import { Volume } from "./volume";
 import KeyframeNameInput from "./keyframe-name-input";
 import MainMedia from "./main-media";
+import PiPOverlay from "./pip-overlay";
 
 interface Data {
   buffer: ArrayBuffer;
@@ -299,7 +297,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
           () => (
             <div className="w-80 rounded-lg bg-primary shadow-xl p-3 text-foreground-on-accent">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium tracking-tight">
+                <span className="text-sm md:text-[0.8rem] font-medium tracking-tight">
                   {label}
                 </span>
                 <span className="text-[10px] tabular-nums text-foreground-on-accent/80">
@@ -505,7 +503,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     >
   ) => {
     // TODO: review video this definety wrong
-
     const video = activeVideoRef.current;
     const bufferData = bufferStatus.data?.buffer;
     if (!video || !primaryClipMetaDataRef.current || !bufferData) return;
@@ -605,11 +602,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     logger.log("Trimmed primary video from:", startTime, "to:", endTime);
   };
 
-  const settings = useMemo(() => {
-    const { dimensions, ...settings } = primaryClipMetaDataRef.current;
-    return settings as SettingsType;
-  }, []);
-
   const primaryTrimData = primaryTrimRef.current;
 
   const primaryDurationMs =
@@ -621,15 +613,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   const source = useMemo(() => <video src={primaryUrl} />, [primaryUrl]);
 
   return (
-    <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
+    <div className="h-dvh bg-surface-primary text-foreground-default text-base flex flex-col">
       <EditorHeader
         isVideoLoaded={isVideoLoaded}
         isExporting={isExporting}
-        showTrace={showTrace}
         onToggleTrace={toggleTrace}
         onOpenExport={openExportNamingModal}
-        settings={settings}
-        isBufferDownloaded={isValidBufferState}
         onClearTrimData={clearTrimData}
         canClearTrim={canClearTrim}
       />
@@ -729,7 +718,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             ) : (
                               <Clapperboard size={14} />
                             )}
-                            <span className="text-xs">
+                            <span className="text-sm md:text-[0.8rem]">
                               {playerActive === "primary"
                                 ? "Secondary Clip"
                                 : "Primary Clip"}
@@ -769,8 +758,21 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         <>
                           <BoundaryBox.Container
                             ref={containerRef}
-                            className="relative rounded-2xl flex-1 min-w-0 bg-surface-secondary shadow-md"
+                            className="relative rounded-2xl flex-1 min-w-0"
                           >
+                            <PiPOverlay
+                              containerRef={containerRef}
+                              activePlayer={playerActive}
+                            >
+                              <video
+                                src={
+                                  playerActive === "primary"
+                                    ? secondaryClip?.url
+                                    : primaryUrl
+                                }
+                              />
+                            </PiPOverlay>
+
                             <div
                               className={cn(
                                 "relative w-full aspect-video",
@@ -847,7 +849,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       <div className="space-y-1">
                                         <Label
                                           htmlFor="keyframe-name"
-                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                          className="text-sm md:text-[0.8rem] font-medium select-none text-foreground-subtle"
                                         >
                                           Name
                                         </Label>
@@ -960,7 +962,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       <div className="space-y-1">
                                         <Label
                                           htmlFor="keyframe-color"
-                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                          className="text-sm md:text-[0.8rem] font-medium select-none text-foreground-subtle"
                                         >
                                           Color
                                         </Label>
@@ -985,7 +987,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            className="h-7 px-2 text-xs flex items-center gap-2"
+                                            className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
                                           >
                                             <span
                                               className="h-4 w-4 rounded-full border"
@@ -1011,7 +1013,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                       <div className="space-y-1">
                                         <Label
                                           htmlFor="keyframe-easing"
-                                          className="text-xs font-medium select-none text-foreground-subtle"
+                                          className="text-sm md:text-[0.8rem] font-medium select-none text-foreground-subtle"
                                         >
                                           Easing
                                         </Label>
@@ -1026,10 +1028,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             })
                                           }
                                         >
-                                          <SelectTrigger id="keyframe-easing">
+                                          <SelectTrigger id="keyframse-easing">
                                             <SelectValue placeholder="Select easing" />
                                           </SelectTrigger>
-                                          <SelectContent>
+                                          <SelectContent className="z-110">
                                             {KEYFRAME_EASINGS.map((easing) => (
                                               <SelectItem
                                                 key={easing}
@@ -1078,7 +1080,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         ) : (
                           <Smartphone size={14} />
                         )}
-                        <span className="text-xs">
+                        <span className="text-sm md:text-[0.8rem]">
                           {active === "dual" ? "Canvas View" : "Dual View"}
                         </span>
                       </Button>
@@ -1207,7 +1209,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         <EditorPanel.Portal>
           <EditorPanel.Content className="pb-[49px] w-[280px] h-[calc(100dvh-48px)] top-[48px] backdrop-blur-lg overflow-hidden">
             <EditorPanel.Header className="py-2 px-2 bg-background">
-              <kbd className="px-2 py-0.1 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-xs border border-gray-700/50">
+              <kbd className="px-2 py-0.1 bg-surface-tertiary rounded-sm text-foreground-default font-mono text-sm md:text-[0.8rem] border border-gray-700/50">
                 Shift+T
               </kbd>
               <div className="ml-auto flex items-center gap-2">

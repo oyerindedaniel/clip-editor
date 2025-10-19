@@ -38,7 +38,7 @@ const TimelineTooltip = React.forwardRef<HTMLDivElement, TimelineTooltipProps>(
         ref={composedRefs}
         className={cn(
           "absolute left-0 top-0 z-50 pointer-events-none will-change-transform",
-          "bg-surface-secondary text-primary px-3 py-1.5 rounded-xl shadow-lg text-xs font-medium whitespace-nowrap",
+          "bg-surface-secondary text-primary px-3 py-1.5 rounded-xl shadow-lg text-sm md:text-[0.8rem] font-medium whitespace-nowrap",
           className
         )}
         {...props}

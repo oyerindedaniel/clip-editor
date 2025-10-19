@@ -799,7 +799,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   return (
     <div className="flex relative flex-col gap-2 w-full h-[250px]">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-foreground-subtle">🎞️</div>
+        <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
+          🎞️
+        </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleAddMarker}>
             Add Marker ({markerCount}/2)
@@ -886,7 +888,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                 </TooltipTrigger>
 
                 <TooltipContent side="top" className="flex items-center gap-2">
-                  <span className="text-xs">Marker at {markerTime}ms</span>
+                  <span className="text-sm md:text-[0.8rem]">
+                    Marker at {markerTime}ms
+                  </span>
                   <Button
                     variant="destructive"
                     size="icon"

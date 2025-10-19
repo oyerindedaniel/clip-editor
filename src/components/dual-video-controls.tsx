@@ -29,7 +29,6 @@ import type {
   DualVideoClip,
   DualVideoSettings,
   DualVideoLayout,
-  PiPPosition,
   AudioMixMode,
   S3ClipData,
   VideoFormat,
@@ -75,13 +74,6 @@ const layoutOptions = [
     description: "Secondary overlays primary",
     icon: <PictureInPicture size={14} />,
   },
-];
-
-const pipPositionOptions = [
-  { value: "top-left" as PiPPosition, label: "Top Left" },
-  { value: "top-right" as PiPPosition, label: "Top Right" },
-  { value: "bottom-left" as PiPPosition, label: "Bottom Left" },
-  { value: "bottom-right" as PiPPosition, label: "Bottom Right" },
 ];
 
 const audioModeOptions = [
@@ -223,22 +215,6 @@ export default function DualVideoControls({
     [secondaryClip, onSecondaryClipChange]
   );
 
-  const handleOffsetChange = useCallback(
-    (value: number) => {
-      updateSetting("secondaryOffset", value);
-    },
-    [updateSetting]
-  );
-
-  const handlePiPSizeChange = useCallback(
-    (value: number) => {
-      const size = value / 100; // Convert percentage to 0.2-0.4 range
-      const clampedSize = Math.max(0.2, Math.min(0.4, size));
-      updateSetting("pipSize", clampedSize);
-    },
-    [updateSetting]
-  );
-
   if (!secondaryClip) {
     return (
       <div className="flex flex-col gap-3">
@@ -283,7 +259,7 @@ export default function DualVideoControls({
               <div className="flex items-center justify-between">
                 <div className="flex min-w-0 items-center space-x-2">
                   <Video size={14} className="text-foreground-subtle" />
-                  <span className="text-xs font-medium text-foreground-default truncate">
+                  <span className="text-sm md:text-[0.8rem] font-medium text-foreground-default truncate">
                     {primaryClip.metadata.originalFilename || "Primary Clip"}
                   </span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-tertiary text-foreground-subtle">
@@ -300,7 +276,7 @@ export default function DualVideoControls({
           </PopoverTrigger>
           <PopoverContent className="w-64">
             <div className="flex flex-col gap-2">
-              <div className="text-xs tracking-tight font-medium text-foreground-default truncate">
+              <div className="text-sm md:text-[0.8rem] tracking-tight font-medium text-foreground-default truncate">
                 {primaryClip.metadata.originalFilename || "Primary Clip"}
               </div>
               <div className="text-[11px] tracking-wide text-foreground-subtle">
@@ -328,7 +304,7 @@ export default function DualVideoControls({
                 <div className="flex items-center justify-between">
                   <div className="flex min-w-0 items-center space-x-2">
                     <Video size={14} className="text-foreground-subtle" />
-                    <span className="text-xs font-medium text-foreground-default truncate">
+                    <span className="text-sm md:text-[0.8rem] font-medium text-foreground-default truncate">
                       {secondaryClip.metadata.originalFilename ||
                         "Secondary Clip"}
                     </span>
@@ -344,7 +320,7 @@ export default function DualVideoControls({
             </PopoverTrigger>
             <PopoverContent className="w-64">
               <div className="flex flex-col gap-2">
-                <div className="text-xs tracking-tight font-medium text-foreground-default truncate">
+                <div className="text-sm md:text-[0.8rem] tracking-tight font-medium text-foreground-default truncate">
                   {secondaryClip.metadata.originalFilename || "Secondary Clip"}
                 </div>
                 <div className="text-[11px] tracking-wide text-foreground-subtle">
@@ -376,7 +352,7 @@ export default function DualVideoControls({
             >
               <div className="space-y-4 pt-2 border-t border-surface-tertiary">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-foreground-subtle">
+                  <label className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     Layout
                   </label>
                   <Select
@@ -386,7 +362,7 @@ export default function DualVideoControls({
                     }
                     disabled={disabled}
                   >
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger>
                       <SelectValue>
                         {
                           layoutOptions.find(
@@ -401,10 +377,8 @@ export default function DualVideoControls({
                           <div className="flex items-center space-x-2">
                             {option.icon}
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium">
-                                {option.label}
-                              </span>
-                              <span className="text-xs text-foreground-muted">
+                              <span>{option.label}</span>
+                              <span className="text-sm md:text-[0.8rem] text-foreground-muted">
                                 {option.description}
                               </span>
                             </div>
@@ -415,60 +389,8 @@ export default function DualVideoControls({
                   </Select>
                 </div>
 
-                {settings.layout === "pip" && (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-xs text-foreground-subtle">
-                        PiP Position
-                      </label>
-                      <Select
-                        value={settings.pipPosition || "bottom-right"}
-                        onValueChange={(value: PiPPosition) =>
-                          updateSetting("pipPosition", value)
-                        }
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {pipPositionOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <label className="text-xs text-foreground-subtle">
-                        PiP Size:{" "}
-                        <span className="font-bold text-foreground-default">
-                          {Math.round((settings.pipSize || 0.25) * 100)}%
-                        </span>
-                      </label>
-                      <input
-                        type="range"
-                        min="20"
-                        max="40"
-                        value={Math.round((settings.pipSize || 0.25) * 100)}
-                        onChange={(e) =>
-                          handlePiPSizeChange(parseInt(e.target.value))
-                        }
-                        className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
-                        disabled={disabled}
-                      />
-                      <div className="flex justify-between text-xs text-foreground-muted">
-                        <span>20%</span>
-                        <span>40%</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex flex-col gap-3">
-                  <label className="text-xs text-foreground-subtle">
+                  <label className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     Audio Mode
                   </label>
                   <Select
@@ -478,7 +400,7 @@ export default function DualVideoControls({
                     }
                     disabled={disabled}
                   >
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger>
                       <SelectValue>
                         {
                           audioModeOptions.find(
@@ -492,9 +414,7 @@ export default function DualVideoControls({
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex items-center space-x-2">
                             {option.icon}
-                            <span className="text-sm font-medium">
-                              {option.label}
-                            </span>
+                            <span>{option.label}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -506,7 +426,7 @@ export default function DualVideoControls({
                       value={settings.primaryVolume}
                       onValueChange={(v) => updateSetting("primaryVolume", v)}
                     >
-                      <Volume.Label className="text-xs">
+                      <Volume.Label className="text-sm md:text-[0.8rem]">
                         Primary Volume:{" "}
                         <span className="font-bold text-foreground-default">
                           {Math.round(settings.primaryVolume * 100)}%
@@ -527,7 +447,7 @@ export default function DualVideoControls({
                       value={settings.secondaryVolume}
                       onValueChange={(v) => updateSetting("secondaryVolume", v)}
                     >
-                      <Volume.Label className="text-xs">
+                      <Volume.Label className="text-sm md:text-[0.8rem]">
                         Secondary Volume:{" "}
                         <span className="font-bold text-foreground-default">
                           {Math.round((settings.secondaryVolume || 0.6) * 100)}%
@@ -555,7 +475,7 @@ export default function DualVideoControls({
                       />
                       <label
                         htmlFor="normalizeAudio"
-                        className="text-xs text-foreground-subtle"
+                        className="text-sm md:text-[0.8rem] text-foreground-subtle"
                       >
                         Normalize Audio
                       </label>

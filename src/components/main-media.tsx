@@ -30,15 +30,19 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
     const composedRefs = useComposedRefs(videoRef, forwardedRef, setVideoRef);
 
-    const { primaryTrim, secondaryTrim, primaryTrimRef, secondaryTrimRef } =
-      useShallowSelector(ClipContext, function (state) {
-        return {
-          primaryTrim: state.primaryTrim,
-          secondaryTrim: state.secondaryTrim,
-          primaryTrimRef: state.primaryTrimRef,
-          secondaryTrimRef: state.secondaryTrimRef,
-        };
-      });
+    const {
+      primaryTrim,
+      secondaryTrim,
+      primaryTrimRef,
+      secondaryTrimRef,
+      dualVideoSettings: settings,
+    } = useShallowSelector(ClipContext, (state) => ({
+      primaryTrim: state.primaryTrim,
+      secondaryTrim: state.secondaryTrim,
+      primaryTrimRef: state.primaryTrimRef,
+      secondaryTrimRef: state.secondaryTrimRef,
+      dualVideoSettings: state.dualVideoSettings,
+    }));
 
     const { controls, status, buffered, isBuffering, hasError } =
       useConstrainedVideo({
@@ -96,7 +100,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                 >
                   <Volume.Controls
                     variant="pill"
-                    className="!p-0 !border-none bg-transparent hover:!glass"
+                    className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
                   >
                     <Volume.Button
                       size="icon"

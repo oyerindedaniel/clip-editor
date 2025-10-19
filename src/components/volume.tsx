@@ -391,10 +391,7 @@ const VolumeButton = React.forwardRef<HTMLButtonElement, VolumeButtonProps>(
         size={size}
         data-slot="volume-button"
         data-state={state}
-        className={cn(
-          "transition-transform duration-300 data-[state=open]:scale-95 data-[state=closed]:scale-100",
-          className
-        )}
+        className={cn("", className)}
         aria-label={label}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
