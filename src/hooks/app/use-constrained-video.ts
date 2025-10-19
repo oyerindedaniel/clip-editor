@@ -41,7 +41,7 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
     }
 
     const video = videoRef.current;
-    const isPlaying = video && !video.paused && !video.ended;
+    const isPlaying = video && !video.paused;
 
     if (shouldBuffer && isPlaying) {
       setIsBuffering(true);

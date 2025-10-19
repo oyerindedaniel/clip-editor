@@ -25,6 +25,7 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import { Seek } from "./video-seek-bar";
 import { Volume } from "./volume";
 import { Playback } from "./video-controls";
+import { msToSeconds } from "@/utils/video";
 
 interface DualVideoPlayerProps {
   isPrimaryVideoLoaded: boolean;
@@ -64,13 +65,13 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
     const [secondaryBuffered, setSecondaryBuffered] =
       useState<TimeRanges | null>(null);
 
-    const [displayMode, setDisplayMode] = useState<DisplayMode>("split");
     const [isPlaying, setIsPlaying] = useState(false);
     const isPlayingRef = useLatestValue(isPlaying);
-    const [isRepeat, setIsRepeat] = useState(false);
 
     const primaryVideoRef = useRef<HTMLVideoElement>(null);
     const secondaryVideoRef = useRef<HTMLVideoElement>(null);
+
+    const isRepeatRef = useRef(false);
 
     const { setDualVideoRef, secondaryContainerRef } = useShallowSelector(
       OverlaysContext,
@@ -94,7 +95,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
     const secondaryTrimRef = useLatestValue(secondaryTrim);
     const primaryTrimRef = useLatestValue(primaryTrim);
-    const isRepeatRef = useLatestValue(isRepeat);
+
     const isSeekingRef = useRef(false);
     const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
       null
@@ -130,15 +131,16 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
         }
 
         const secondaryElapsed = primaryTimelinePos - secondaryTimelineOffset;
-        const secondaryTime =
-          (secondaryTrim.trimStart + secondaryElapsed) / 1000;
+        const secondaryTime = msToSeconds(
+          secondaryTrim.trimStart + secondaryElapsed
+        );
 
-        const secondaryEndTime = secondaryTrim.trimEnd / 1000;
+        const secondaryEndTime = msToSeconds(secondaryTrim.trimEnd);
         if (secondaryTime > secondaryEndTime) {
           return secondaryEndTime;
         }
 
-        const secondaryStartTime = secondaryTrim.trimStart / 1000;
+        const secondaryStartTime = msToSeconds(secondaryTrim.trimStart);
         return Math.max(secondaryTime, secondaryStartTime);
       },
       []
@@ -151,8 +153,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
         if (!secondary || !secondaryTrim) return;
 
         const expectedTime = calculateSecondaryTime(primaryCurrentTime);
-        const trimStart = secondaryTrim.trimStart / 1000;
-        const trimEnd = secondaryTrim.trimEnd / 1000;
+        const trimStart = msToSeconds(secondaryTrim.trimStart);
+        const trimEnd = msToSeconds(secondaryTrim.trimEnd);
 
         // Secondary shouldn't play yet - pause and position at start
         if (expectedTime === null) {
@@ -198,8 +200,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       if (!secondary || !primary) return;
 
       const expectedTime = calculateSecondaryTime(primary.currentTime);
-      const trimEnd = secondaryTrim.trimEnd / 1000;
-      const trimStart = secondaryTrim.trimStart / 1000;
+      const trimEnd = msToSeconds(secondaryTrim.trimEnd);
+      const trimStart = msToSeconds(secondaryTrim.trimStart);
 
       const shouldBePlaying = expectedTime !== null && expectedTime < trimEnd;
 
@@ -220,6 +222,60 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       }
     }, [calculateSecondaryTime]);
 
+    const play = useCallback(async () => {
+      const primary = primaryVideoRef.current;
+      if (!primary) return;
+
+      if (isPlaying) return;
+
+      setHasPlayIntent(true);
+
+      const trimStart = msToSeconds(primaryTrim.trimStart);
+      const trimEnd = msToSeconds(primaryTrim.trimEnd);
+
+      // Reset primary if outside valid trim range
+      if (primary.currentTime < trimStart || primary.currentTime >= trimEnd) {
+        primary.currentTime = trimStart;
+      }
+
+      try {
+        setIsBuffering(true);
+
+        await primary.play();
+
+        // Small delay to ensure proper audio mix priority
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        if (secondaryTrim) {
+          alignSecondary(primary.currentTime, true);
+        }
+
+        setIsPlaying(true);
+        setIsBuffering(false);
+      } catch (err) {
+        logger.warn("Failed to play primary:", err);
+        setIsPlaying(false);
+        setIsBuffering(false);
+      }
+    }, [isPlaying, primaryTrim, secondaryTrim, alignSecondary]);
+
+    const pause = useCallback(() => {
+      const primary = primaryVideoRef.current;
+      if (!primary) return;
+
+      if (!isPlaying) return;
+
+      setHasPlayIntent(false);
+      primary.pause();
+
+      if (secondaryTrim) {
+        alignSecondary(primary.currentTime, false);
+      }
+
+      setIsPlaying(false);
+      setIsBuffering(false);
+    }, [isPlaying, secondaryTrim, alignSecondary]);
+
     const togglePlay = useCallback(
       async (forcePlay?: boolean) => {
         const primary = primaryVideoRef.current;
@@ -230,8 +286,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
         if (shouldPlay) {
           setHasPlayIntent(true);
 
-          const trimStart = primaryTrim.trimStart / 1000;
-          const trimEnd = primaryTrim.trimEnd / 1000;
+          const trimStart = msToSeconds(primaryTrim.trimStart);
+          const trimEnd = msToSeconds(primaryTrim.trimEnd);
 
           // Reset primary if outside valid trim range
           if (
@@ -284,16 +340,17 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       if (!primary || !primaryTrim) return;
 
       const currentTime = primary.currentTime;
-      const primaryStart = primaryTrim.trimStart / 1000;
-      const primaryEnd = primaryTrim.trimEnd / 1000;
+      const primaryStart = msToSeconds(primaryTrim.trimStart);
+      const primaryEnd = msToSeconds(primaryTrim.trimEnd);
 
       let actualTimelineEnd = primaryEnd;
       let isPrimaryLonger = true;
 
       if (secondaryTrim && secondary) {
-        const secondaryDuration =
-          (secondaryTrim.trimEnd - secondaryTrim.trimStart) / 1000;
-        const secondaryOffset = (secondaryTrim.timelineOffset || 0) / 1000;
+        const secondaryDuration = msToSeconds(
+          secondaryTrim.trimEnd - secondaryTrim.trimStart
+        );
+        const secondaryOffset = msToSeconds(secondaryTrim.timelineOffset || 0);
         const secondaryEnd = secondaryOffset + secondaryDuration;
         const secondaryTimelineEnd = primaryStart + secondaryEnd;
 
@@ -374,8 +431,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       const primaryTrim = primaryTrimRef.current;
 
       const secondaryCurrentTime = secondary.currentTime;
-      const secondaryEnd = secondaryTrim.trimEnd / 1000;
-      const primaryEnd = primaryTrim?.trimEnd / 1000;
+      const secondaryEnd = msToSeconds(secondaryTrim.trimEnd);
+      const primaryEnd = msToSeconds(primaryTrim?.trimEnd);
 
       // Check if secondary reached its end
       if (secondaryCurrentTime >= secondaryEnd - END_TOLERANCE) {
@@ -390,7 +447,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
           setHasPlayIntent(false);
 
           if (isRepeatRef.current) {
-            const primaryStart = primaryTrim?.trimStart / 1000 || 0;
+            const primaryStart = msToSeconds(primaryTrim?.trimStart) || 0;
             primary.currentTime = primaryStart;
             alignSecondary(primaryStart, false);
 
@@ -418,7 +475,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
         if (!primary) return;
 
         const primaryTimeMs = primaryTrim.trimStart + normalizedTimeMs;
-        const primaryTimeSec = primaryTimeMs / 1000;
+        const primaryTimeSec = msToSeconds(primaryTimeMs);
 
         primary.currentTime = primaryTimeSec;
 
@@ -537,7 +594,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       if (!primary) return;
 
       // Reset to start when secondary changes
-      const trimStart = primaryTrim.trimStart / 1000;
+      const trimStart = msToSeconds(primaryTrim.trimStart);
       primary.currentTime = trimStart;
 
       if (secondaryTrim) {
@@ -741,62 +798,6 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       setValidationError(null);
     }, [primaryTrim, secondaryTrim, isPrimaryVideoLoaded, secondaryClip]);
 
-    useEffect(() => {
-      if (secondaryClip && displayMode === "stretch-full") {
-        setDisplayMode("split");
-      }
-    }, [secondaryClip, displayMode]);
-
-    const toggleDisplayMode = () => {
-      setDisplayMode((prev) => {
-        if (!secondaryClip) {
-          if (prev === "split") return "stretch";
-          if (prev === "stretch") return "stretch-full";
-          return "split";
-        }
-        return prev === "split" ? "stretch" : "split";
-      });
-    };
-
-    const getButtonContent = () => {
-      if (!secondaryClip) {
-        if (displayMode === "split") {
-          return (
-            <span className="flex items-center gap-1">
-              <Expand className="w-4 h-4" />
-              Stretch
-            </span>
-          );
-        }
-        if (displayMode === "stretch") {
-          return (
-            <span className="flex items-center gap-1">
-              <Maximize className="w-4 h-4" />
-              Full
-            </span>
-          );
-        }
-        return (
-          <span className="flex items-center gap-1">
-            <SquareStack className="w-4 h-4" />
-            Stack
-          </span>
-        );
-      }
-
-      return displayMode === "split" ? (
-        <span className="flex items-center gap-1">
-          <Expand className="w-4 h-4" />
-          Stretch
-        </span>
-      ) : (
-        <span className="flex items-center gap-1">
-          <SquareStack className="w-4 h-4" />
-          Stack
-        </span>
-      );
-    };
-
     return (
       <div
         ref={forwardedRef}
@@ -805,14 +806,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       >
         <div
           ref={secondaryContainerRef}
-          className="relative flex flex-col items-center aspect-[9/16] w-full justify-center overflow-hidden rounded-lg bg-surface-secondary shadow-md group"
+          className="relative flex flex-col items-center aspect-[9/16] w-full justify-center overflow-hidden rounded-2xl bg-surface-secondary shadow-md group"
         >
           <div
             className={cn(
               "relative overflow-hidden w-full flex h-1/2",
-              displayMode === "split" && !secondaryClip && "items-center h-1/2",
-              displayMode === "split" && secondaryClip && "items-end h-1/2",
-              displayMode === "stretch-full" && !secondaryClip && "!h-full"
+              secondaryClip ? "items-end h-1/2" : "items-center h-1/2"
             )}
           >
             <video
@@ -829,16 +828,13 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               }}
               className={cn(
                 "rounded-none",
-                displayMode === "split" &&
-                  !secondaryClip &&
-                  "object-contain w-full h-full",
-                displayMode === "split" && secondaryClip && "object-contain",
-                displayMode === "stretch" && "object-cover w-full h-full",
-                displayMode === "stretch-full" && "object-cover w-full h-full"
+                secondaryClip
+                  ? "object-contain"
+                  : "object-contain w-full h-full"
               )}
             />
 
-            <div className="absolute bottom-2 left-2 z-10">
+            <div className="absolute bottom-2 left-2 z-20">
               <Volume.Root
                 value={dualVideoSettings.primaryVolume}
                 onValueChange={(v) =>
@@ -860,12 +856,10 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               </Volume.Root>
             </div>
           </div>
-
           {secondaryClip && (
             <div
               className={cn(
-                "relative overflow-hidden h-1/2 w-full flex",
-                displayMode === "split" && "items-start"
+                "relative overflow-hidden h-1/2 w-full flex items-start"
               )}
             >
               <video
@@ -880,14 +874,10 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                     video.volume = dualVideoSettings.secondaryVolume;
                   }
                 }}
-                className={cn(
-                  "rounded-none",
-                  displayMode === "split" && "object-contain",
-                  displayMode === "stretch" && "object-cover w-full h-full"
-                )}
+                className={cn("rounded-none object-contain")}
               />
 
-              <div className="absolute top-2 left-2 z-10">
+              <div className="absolute top-2 left-2 z-20">
                 <Volume.Root
                   value={dualVideoSettings.secondaryVolume}
                   onValueChange={(v) =>
@@ -910,17 +900,14 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               </div>
             </div>
           )}
-
           {secondaryClip && (
             <div className="absolute top-1/2 left-0 right-0 h-px bg-error transform -translate-y-px" />
           )}
-
           {isBuffering && (
             <div className="absolute top-1/2 -translate-y-1/2 z-10">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
           )}
-
           {(hasError || validationError) && (
             <div className="absolute inset-0 bg-black/80 text-white backdrop-blur-sm flex items-center justify-center z-10">
               <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2 w-[85%]">
@@ -931,55 +918,48 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               </div>
             </div>
           )}
-
-          <div
-            className={cn(
-              "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 z-20"
-            )}
+          <Playback.Root
+            playing={isPlaying}
+            onPlayingChange={(shouldPlay) => {
+              if (shouldPlay) {
+                play();
+              } else {
+                pause();
+              }
+            }}
+            isBuffering={isBuffering}
+            hasError={hasError}
           >
-            <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur-sm">
-              <div className="px-4 py-3 space-y-3">
-                <Seek.Root
-                  primaryVideoRef={primaryVideoRef}
-                  primaryTrim={primaryTrim}
-                  secondaryTrim={secondaryClip ? secondaryTrim : null}
-                  primaryBuffered={primaryBuffered}
-                  secondaryBuffered={secondaryBuffered}
-                  isPlaying={isPlaying}
-                  onSeek={handleSeek}
-                >
-                  <Seek.Content>
-                    <Seek.TimeDisplay />
-                    <Seek.Track>
-                      <Seek.Buffer />
-                      <Seek.Progress />
-                      <Seek.Thumb />
-                    </Seek.Track>
-                    <Seek.Animator />
-                  </Seek.Content>
-                </Seek.Root>
-                <div className="flex items-center justify-center gap-2">
-                  <Playback.Root
-                    playing={isPlaying}
-                    onPlayingChange={() => togglePlay()}
-                  >
-                    <Playback.Controls>
-                      <Playback.PlayToggle />
-                      <Playback.LoopToggle
-                        loop={isRepeat}
-                        onLoopChange={setIsRepeat}
-                      />
-                      {/* <Playback.RateControl
-                        rate={ratePrimary}
-                        onRateChange={setRatePrimary}
-                        orientation="vertical"
-                      /> */}
-                    </Playback.Controls>
-                  </Playback.Root>
-                </div>
-              </div>
-            </div>
-          </div>
+            <Playback.Controls className="px-4">
+              <Playback.PlayToggle />
+              <Playback.LoopToggle
+                defaultLoop={isRepeatRef.current}
+                onLoopChangeAlways={(value) => {
+                  isRepeatRef.current = value;
+                }}
+              />
+
+              <Seek.Root
+                primaryVideoRef={primaryVideoRef}
+                primaryTrim={primaryTrim}
+                secondaryTrim={secondaryClip ? secondaryTrim : null}
+                primaryBuffered={primaryBuffered}
+                secondaryBuffered={secondaryBuffered}
+                isPlaying={isPlaying}
+                onSeek={handleSeek}
+              >
+                <Seek.Content>
+                  <Seek.TimeDisplay className="absolute top-1/2 -translate-y-1/2 right-4" />
+                  <Seek.Track className="-translate-y-full absolute top-0 w-[85%] left-1/2 -translate-x-1/2">
+                    <Seek.Buffer />
+                    <Seek.Progress />
+                    <Seek.Thumb />
+                  </Seek.Track>
+                  <Seek.Animator />
+                </Seek.Content>
+              </Seek.Root>
+            </Playback.Controls>
+          </Playback.Root>
 
           <div
             className={cn(
@@ -987,12 +967,6 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
             )}
           />
         </div>
-
-        {/* <div className="flex gap-2 items-center">
-          <Button size="sm" variant="outline" onClick={toggleDisplayMode}>
-            {getButtonContent()}
-          </Button>
-        </div> */}
 
         <PersistentOverlays duration={duration} isDualVideo />
       </div>

@@ -217,44 +217,36 @@
   @keyframes expand-width {
     0% {
       clip-path: inset(0 calc(var(--end) - var(--start)) 0 0 round 9999px);
-      opacity: 1;
     }
     100% {
       clip-path: inset(0 0 0 0 round 9999px);
-      opacity: 1;
     }
   }
 
   @keyframes collapse-width {
     0% {
       clip-path: inset(0 0 0 0 round 9999px);
-      opacity: 1;
     }
     100% {
       clip-path: inset(0 calc(var(--end) - var(--start)) 0 0 round 9999px);
-      opacity: 1;
     }
   }
 
   @keyframes expand-height {
     0% {
       clip-path: inset(calc(var(--end) - var(--start)) 0 0 0 round 9999px);
-      opacity: 1;
     }
     100% {
       clip-path: inset(0 0 0 0 round 9999px);
-      opacity: 1;
     }
   }
 
   @keyframes collapse-height {
     0% {
       clip-path: inset(0 0 0 0 round 9999px);
-      opacity: 1;
     }
     100% {
       clip-path: inset(calc(var(--end) - var(--start)) 0 0 0 round 9999px);
-      opacity: 1;
     }
   }
 

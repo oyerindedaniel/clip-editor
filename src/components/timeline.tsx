@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useLayoutEffect,
   memo,
+  useEffect,
 } from "react";
 import { GripVertical } from "lucide-react";
 import { useScale } from "@/hooks/app/use-scale";
@@ -25,6 +26,7 @@ import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { TimelineTooltip } from "./timeline-tooltip";
 import InfoTooltip from "./info-tooltip";
 import { Scissors } from "lucide-react";
+import { msToSecondsRate } from "@/utils/timeline-utils";
 
 interface TimelineProps {
   duration: number;
@@ -41,9 +43,14 @@ const Timeline: React.FC<TimelineProps> = ({
   frames,
   keyframes,
 }) => {
-  const { setPrimaryTrim } = useShallowSelector(ClipContext, (state) => ({
-    setPrimaryTrim: state.setPrimaryTrim,
-  }));
+  const { primaryTrim, primaryTrimRef, setPrimaryTrim } = useShallowSelector(
+    ClipContext,
+    (state) => ({
+      primaryTrim: state.primaryTrim,
+      primaryTrimRef: state.primaryTrimRef,
+      setPrimaryTrim: state.setPrimaryTrim,
+    })
+  );
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -56,7 +63,13 @@ const Timeline: React.FC<TimelineProps> = ({
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const rafIdRef = useRef<number | null>(null);
-  const trimValuesRef = useRef({ start: 0, end: duration });
+
+  const trimValuesRef = useRef({
+    start: primaryTrim.trimStart,
+    end: primaryTrim.trimEnd || duration,
+  });
+
+  const trimOverlayRef = React.useRef<HTMLDivElement>(null);
 
   const FIXED_PX_PER_SECOND = 50;
   const HANDLE_WIDTH = 12;
@@ -81,13 +94,12 @@ const Timeline: React.FC<TimelineProps> = ({
     tooltipRef,
     scrollContainerRef,
     edgeThreshold: EDGE_THRESHOLD,
-    offsetY: 30,
   });
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  const pxPerSecond = pxPerMs * 1000; // in px
+  const pxPerSecond = msToSecondsRate(pxPerMs);
   const maxContentWidth = duration * pxPerMs;
 
   const drawRuler = useCallback(() => {
@@ -123,7 +135,6 @@ const Timeline: React.FC<TimelineProps> = ({
     rafIdRef.current = requestAnimationFrame(() => {
       drawRuler();
       renderBlock();
-      renderStrip();
 
       if (spacerRef.current) spacerRef.current.style.height = "90px"; // ruler + track
 
@@ -131,25 +142,58 @@ const Timeline: React.FC<TimelineProps> = ({
       const right = rightHandleRef.current;
 
       if (left && right) {
-        const rightPos = Math.max(pxPerSecond, maxContentWidth);
-        left.style.left = "0px";
+        const leftPos = Math.max(
+          0,
+          msToPx(primaryTrimRef.current.trimStart, pxPerMs)
+        );
+        const rightPos = Math.max(
+          pxPerSecond,
+          msToPx(primaryTrimRef.current.trimEnd, pxPerMs) || maxContentWidth
+        );
+
+        left.style.left = `${leftPos}px`;
         right.style.left = `${rightPos}px`;
-        trimValuesRef.current.start = 0;
-        trimValuesRef.current.end = duration;
+        trimValuesRef.current.start = primaryTrimRef.current.trimStart;
+        trimValuesRef.current.end = primaryTrimRef.current.trimEnd || duration;
       }
     });
 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [
-    duration,
-    drawRuler,
-    renderBlock,
-    renderStrip,
-    pxPerSecond,
-    maxContentWidth,
-  ]);
+  }, [duration, drawRuler, renderBlock, pxPerSecond, maxContentWidth, pxPerMs]);
+
+  useEffect(() => {
+    renderStrip();
+  }, [renderStrip]);
+
+  useEffect(() => {
+    const { trimStart, trimEnd } = primaryTrim;
+    const { start, end } = trimValuesRef.current;
+
+    if (trimStart === start && trimEnd === end) return;
+
+    trimValuesRef.current = { start: trimStart, end: trimEnd };
+
+    const leftEl = leftHandleRef.current;
+    const rightEl = rightHandleRef.current;
+    const overlayEl = trimOverlayRef.current;
+
+    if (!leftEl || !rightEl || !overlayEl) return;
+
+    const leftPos = Math.max(0, msToPx(trimStart, pxPerMs));
+    const rightPos = Math.max(
+      pxPerSecond,
+      msToPx(trimEnd, pxPerMs) || maxContentWidth
+    );
+
+    leftEl.style.left = `${leftPos}px`;
+    rightEl.style.left = `${rightPos}px`;
+
+    const overlayWidth = Math.max(0, msToPx(trimEnd - trimStart, pxPerMs));
+    overlayEl.style.left = `${leftPos}px`;
+    overlayEl.style.width = `${overlayWidth}px`;
+  }, [primaryTrim, pxPerMs, pxPerSecond, maxContentWidth]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, handleType: Dir) => {
@@ -335,6 +379,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
               {!isDragging && (
                 <div
+                  ref={trimOverlayRef}
                   className="absolute top-0 bottom-0 pointer-events-none"
                   style={{
                     left: `${msToPx(trimValuesRef.current.start, pxPerMs)}px`,

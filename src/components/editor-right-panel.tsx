@@ -10,7 +10,7 @@ import { FileUpload } from "./ui/file-upload";
 import AudioItemContainer from "@/components/audio-item";
 import type { S3ClipData } from "@/types/app";
 import { AudioContext } from "@/contexts/audio-context";
-import { formatTime } from "@/utils/app";
+import { formatTime, getStorageKey } from "@/utils/app";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
@@ -21,7 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { KeyframeContext } from "@/contexts/keyframe-context";
-import KeyframePanelList from "@/components/keyframe-panel-lists";
+import KeyframePanelLists from "@/components/keyframe-panel-lists";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -29,14 +29,30 @@ interface EditorRightPanelProps {
   clipData: S3ClipData;
 }
 
-const STORAGE_KEY = "zinc:lastActiveSections";
+const STORAGE_KEY = getStorageKey("lastActiveSections");
 
 export function EditorRightPanel({
   isVideoLoaded,
   duration,
   clipData,
 }: EditorRightPanelProps) {
-  const [activeSections, setActiveSections] = useState<string[]>(["clips"]);
+  const [activeSections, setActiveSections] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return ["clips"];
+    }
+
+    try {
+      const saved = localStorage.getItem(getStorageKey("lastActiveSections"));
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    return ["clips"];
+  });
 
   const { addAudioTrack } = useShallowSelector(AudioContext, (state) => ({
     addAudioTrack: state.addAudioTrack,
@@ -57,18 +73,6 @@ export function EditorRightPanel({
       setCurrentKeyframeId: state.setCurrentKeyframeId,
       setKeyframes: state.setKeyframes,
     }));
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as string[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setActiveSections(parsed);
-        }
-      } catch {}
-    }
-  }, []);
 
   const handleImageFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,7 +214,7 @@ export function EditorRightPanel({
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <KeyframePanelList
+            <KeyframePanelLists
               keyframes={keyframes}
               currentKeyframeId={currentKeyframeId}
               onKeyframeSelect={(id) => setCurrentKeyframeId(id)}

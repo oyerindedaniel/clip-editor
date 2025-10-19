@@ -7,7 +7,6 @@ import { Playback } from "./video-controls";
 import { Volume } from "./volume";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import { AlertTriangle, Loader2 } from "lucide-react";
 import { msToSeconds } from "@/utils/video";
 
 // Component for 16:9 main media
@@ -23,6 +22,9 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
     { mediaUrl, playerType: mediaType, setVideoRef },
     forwardedRef
   ) {
+    const videoPlayerId = React.useId();
+    const controlsId = React.useId();
+
     const repeatRef = React.useRef(false);
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
 
@@ -59,6 +61,9 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
     return (
       <>
         <video
+          id={videoPlayerId}
+          aria-label="Video player"
+          aria-describedby={controlsId}
           src={mediaUrl}
           ref={composedRefs}
           controls={false}
@@ -77,24 +82,9 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
             }
           }}
           playingStatus={status}
+          isBuffering={isBuffering}
+          hasError={hasError}
         >
-          {isBuffering && (
-            <div className="absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10">
-              <Loader2 className="h-12 w-12 animate-spin glass" />
-            </div>
-          )}
-
-          {hasError && (
-            <div className="absolute inset-0 bg-black/80 text-white backdrop-blur-sm flex items-center justify-center z-10">
-              <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2 w-[85%]">
-                <AlertTriangle className="size-12 text-error mb-px" />
-                <div className="text-base font-semibold tracking-tight">
-                  Video failed to load
-                </div>
-              </div>
-            </div>
-          )}
-
           <Playback.Controls className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Playback.PlayToggle />

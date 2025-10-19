@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useState,
   useMemo,
+  useLayoutEffect,
 } from "react";
 import { Redo2, Scissors, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,10 @@ import type { KeyframeData } from "@/utils/keyframe";
 import { Keyframe } from "./keyframe";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { TimelineTooltip } from "./timeline-tooltip";
+import { getStorageKey } from "@/utils/app";
+import { filterKeyframesByTarget } from "@/utils/keyframe";
+import { msToSeconds } from "@/utils/video";
+import { msToSecondsRate } from "@/utils/timeline-utils";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -42,6 +47,7 @@ interface DualVideoTracksProps {
   primaryPreviewFrames?: string[];
   secondaryPreviewFrames?: string[];
   keyframes?: KeyframeData[];
+  videoId?: string;
 }
 
 type HistoryAction = "init" | "mark" | "cut";
@@ -64,6 +70,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryPreviewFrames,
   secondaryPreviewFrames,
   keyframes,
+  videoId,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -76,10 +83,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const spacerRef = useRef<HTMLDivElement | null>(null);
 
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-  const { updateTooltip, lastTooltipState } = useTimelineTooltip({
-    tooltipRef,
-    scrollContainerRef,
-  });
+  const [showTooltip, setShowTooltip] = useState(false);
 
   const [trimStart, setTrimStart] = useState<number | null>(null);
   const [trimEnd, setTrimEnd] = useState<number | null>(null);
@@ -92,14 +96,34 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const markerCount = markers.length;
 
-  const [editHistory, setEditHistory] = useState<Array<HistoryState>>([
-    {
-      trimStart: null,
-      trimEnd: null,
-      secondaryDurationMs,
-      action: "init",
-    },
-  ]);
+  const [editHistory, setEditHistory] = useState<Array<HistoryState>>(() => {
+    const defaultState: Array<HistoryState> = [
+      {
+        trimStart: null,
+        trimEnd: null,
+        secondaryDurationMs,
+        action: "init",
+      },
+    ];
+
+    if (!videoId || typeof window === "undefined") {
+      return defaultState;
+    }
+
+    try {
+      const storageKey = getStorageKey(`${videoId}:dual-video-history`);
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Array<HistoryState>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    return defaultState;
+  });
+
   const editHistoryRef = useLatestValue(editHistory);
 
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -111,14 +135,20 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     ? currentState.secondaryDurationMs
     : secondaryDurationMs;
 
+  const primaryKeyframes = useMemo(() => {
+    return keyframes ? filterKeyframesByTarget(keyframes, "primary") : [];
+  }, [keyframes]);
+
+  const secondaryKeyframes = useMemo(() => {
+    return keyframes ? filterKeyframesByTarget(keyframes, "secondary") : [];
+  }, [keyframes]);
+
   const currentOffsetRef = useRef<number>(initialOffsetMs);
   const draggingSecondaryRef = useRef<boolean>(false);
   const draggingPlayheadRef = useRef<boolean>(false);
 
   const rafIdRef = useRef<number | null>(null);
   const moveRafIdRef = useRef<number | null>(null);
-
-  const [showTooltip, setShowTooltip] = useState(false);
 
   const primaryStripInitialized = useRef(false);
 
@@ -136,12 +166,18 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     fixedPxPerSecond: FIXED_PX_PER_SECOND,
   });
 
-  const pxPerSecond = pxPerMs * 1000; // in px
+  const pxPerSecond = msToSecondsRate(pxPerMs);
 
   const { handleAutoScroll, startAutoScroll, stopAutoScroll } = useAutoScroll({
     edgeThreshold: EDGE_THRESHOLD,
     maxScrollSpeed: 10,
     acceleration: 1.2,
+  });
+
+  const { updateTooltip, lastTooltipState } = useTimelineTooltip({
+    tooltipRef,
+    scrollContainerRef,
+    edgeThreshold: EDGE_THRESHOLD,
   });
 
   const getVisualState = useCallback((state: HistoryState) => {
@@ -261,7 +297,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
   }, [primaryDurationMs, pxPerMs]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     currentOffsetRef.current = initialOffsetMs;
 
     rafIdRef.current = requestAnimationFrame(() => {
@@ -297,6 +333,18 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const saveHistoryToStorage = useCallback(
+    (history: Array<HistoryState>) => {
+      if (!videoId) return;
+
+      try {
+        const storageKey = getStorageKey(`${videoId}:dual-video-history`);
+        localStorage.setItem(storageKey, JSON.stringify(history));
+      } catch {}
+    },
+    [videoId]
+  );
+
   const addToHistory = useCallback(
     (newState: HistoryState) => {
       setEditHistory((prev) => {
@@ -306,10 +354,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           updated.length > MAX_HISTORY ? updated.slice(-MAX_HISTORY) : updated;
 
         setHistoryIndex(finalHistory.length - 1);
+        saveHistoryToStorage(finalHistory);
+
         return finalHistory;
       });
     },
-    [historyIndex]
+    [historyIndex, saveHistoryToStorage]
   );
 
   const applyHistoryState = useCallback(
@@ -364,9 +414,10 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           stateToApply.action === "cut";
 
         applyHistoryState(stateToApply, needsRender);
+        saveHistoryToStorage(editHistory);
       }
     }
-  }, [editHistory, applyHistoryState, onCutSecondaryAt]);
+  }, [editHistory, applyHistoryState, onCutSecondaryAt, saveHistoryToStorage]);
 
   const handleRedo = useCallback(() => {
     let newIndex: number | null = null;
@@ -403,9 +454,10 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           stateToApply.action === "cut";
 
         applyHistoryState(stateToApply, needsRender);
+        saveHistoryToStorage(editHistory);
       }
     }
-  }, [editHistory, applyHistoryState, onCutSecondaryAt]);
+  }, [editHistory, applyHistoryState, onCutSecondaryAt, saveHistoryToStorage]);
 
   const handleAddMarker = useCallback(() => {
     if (!containerRef.current || !playheadRef.current) return;
@@ -477,6 +529,11 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const onSecondaryMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-keyframe-marker]")) {
+        return;
+      }
+
       e.preventDefault();
       const scrollContainer = scrollContainerRef.current;
       const container = containerRef.current;
@@ -793,7 +850,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           ref={containerRef}
           className="relative min-w-full"
           style={{
-            width: `${(maxDurationMs / 1000) * pxPerSecond}px`,
+            width: `${msToSeconds(maxDurationMs) * pxPerSecond}px`,
           }}
         >
           <div ref={spacerRef} />
@@ -862,6 +919,16 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                 ref={primaryStripRef}
                 className="absolute inset-0 flex items-stretch"
               />
+
+              {primaryKeyframes.map((kf) => (
+                <Keyframe.Marker
+                  key={kf.id}
+                  keyframeId={kf.id}
+                  scrollRef={scrollContainerRef!}
+                  pxPerMs={pxPerMs}
+                  edgeThreshold={EDGE_THRESHOLD}
+                />
+              ))}
             </div>
           </div>
 
@@ -882,6 +949,17 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                 ref={secondaryStripRef}
                 className="absolute inset-0 flex items-stretch"
               />
+
+              {secondaryKeyframes.map((kf) => (
+                <Keyframe.Marker
+                  key={kf.id}
+                  keyframeId={kf.id}
+                  scrollRef={scrollContainerRef!}
+                  pxPerMs={pxPerMs}
+                  edgeThreshold={EDGE_THRESHOLD}
+                />
+              ))}
+
               {trimStart !== null && trimEnd !== null && (
                 <div
                   className="absolute top-0 bottom-0 pointer-events-none"

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, Repeat } from "lucide-react";
+import { Play, Pause, Repeat, Loader2, AlertTriangle } from "lucide-react";
 import { Volume } from "@/components/volume";
 import {
   Tooltip,
@@ -30,7 +30,9 @@ interface PlaybackContextValue {
   playToggleId: string;
   loopToggleId: string;
   rateControlId: string;
-  controlsRegionId: string;
+  controlsId: string;
+  videoPlayerId?: string;
+  controlledControlsId?: string;
 
   showFeedback: boolean;
   triggerFeedback: () => void;
@@ -54,6 +56,12 @@ interface PlaybackRootProps {
   onPlayingChange?: (playing: boolean) => void;
   onPlayingChangeAlways?: (playing: boolean) => void;
   playingStatus?: PlayingStatus;
+
+  videoPlayerId?: string;
+  controlsId?: string;
+
+  isBuffering: boolean;
+  hasError: boolean;
 }
 
 const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
@@ -65,6 +73,10 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       onPlayingChange,
       onPlayingChangeAlways,
       playingStatus = "idle",
+      videoPlayerId,
+      controlsId: controlledControlsId,
+      isBuffering = false,
+      hasError = false,
       ...props
     },
     _
@@ -86,7 +98,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
     const playToggleId = React.useId();
     const loopToggleId = React.useId();
     const rateControlId = React.useId();
-    const controlsRegionId = React.useId();
+    const controlsId = React.useId();
 
     const togglePlay = React.useCallback(() => {
       setPlaying((prev) => !prev);
@@ -126,10 +138,12 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         playToggleId,
         loopToggleId,
         rateControlId,
-        controlsRegionId,
+        controlledControlsId,
         showFeedback,
         triggerFeedback,
         feedbackKey,
+        videoPlayerId,
+        controlsId,
       }),
       [
         playing,
@@ -139,10 +153,12 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         playToggleId,
         loopToggleId,
         rateControlId,
-        controlsRegionId,
+        controlledControlsId,
         showFeedback,
         triggerFeedback,
         feedbackKey,
+        videoPlayerId,
+        controlsId,
       ]
     );
 
@@ -155,10 +171,10 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           onClick={triggerFeedback}
-          role="region"
-          aria-label="Video player"
           {...props}
         >
+          {isBuffering && <PlaybackBuffer />}
+          {hasError && <PlaybackError />}
           <PlaybackFeedbackOverlay />
           {children}
         </div>
@@ -168,7 +184,26 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 );
 PlaybackRoot.displayName = "PlaybackRoot";
 
-const PlaybackFeedbackOverlay: React.FC = () => {
+const PlaybackBuffer = () => {
+  return (
+    <Loader2 className="h-12 w-12 animate-spin glass absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10" />
+  );
+};
+
+const PlaybackError = () => {
+  return (
+    <div className="absolute inset-0 bg-black/80 text-white backdrop-blur-sm flex items-center justify-center z-10">
+      <div className="text-center text-foreground-default p-4 flex flex-col items-center gap-2 w-[85%]">
+        <AlertTriangle className="size-12 text-error mb-px" />
+        <div className="text-base font-semibold tracking-tight">
+          Video failed to load
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PlaybackFeedbackOverlay = () => {
   const { showFeedback, feedbackKey, playing } = usePlayback();
 
   const icon = React.useMemo(() => {
@@ -203,16 +238,20 @@ const PlaybackControls = React.forwardRef<
   HTMLDivElement,
   PlaybackControlsProps
 >(({ className, children, ...props }, ref) => {
-  const { playing, hovered, controlsRegionId } = usePlayback();
+  const { playing, hovered, controlledControlsId, controlsId, videoPlayerId } =
+    usePlayback();
 
   if (playing && !hovered) return null;
+
+  const _controlsId = controlledControlsId || controlsId;
 
   return (
     <div
       ref={ref}
-      id={controlsRegionId}
+      id={_controlsId}
       role="group"
       aria-label="Video controls"
+      aria-controls={videoPlayerId}
       onClick={(e) => e.stopPropagation()}
       className={cn(
         "flex items-center gap-2 border-none z-20",
@@ -511,14 +550,14 @@ const PlaybackSeek = React.forwardRef<HTMLDivElement, PlaybackSeekProps>(
   (props, _) => {
     return (
       <Seek.Root {...props}>
-        <Seek.Content>
+        <Seek.Content className="flex items-center w-fit mx-auto">
           {/* This is absolute to the Playback.Controls */}
           <Seek.Track className="-translate-y-full absolute top-0 w-[95%] left-1/2 -translate-x-1/2">
             <Seek.Buffer />
             <Seek.Progress />
             <Seek.Thumb />
           </Seek.Track>
-          <Seek.TimeDisplay className="ml-3" />
+          <Seek.TimeDisplay className="absolute left-1/2 top-1/2 -translate-1/2" />
           <Seek.Animator />
         </Seek.Content>
       </Seek.Root>

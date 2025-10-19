@@ -1,7 +1,12 @@
 import { getClip } from "@/services/aws-service";
 import ClipEditor from "@/components/editor-container";
+import { ClipProvider } from "@/contexts/clip-context";
+import { KeyframeProvider } from "@/contexts/keyframe-context";
+import { AudioProvider } from "@/contexts/audio-context";
+import { OverlaysProvider } from "@/contexts/overlays-context";
 import logger from "@/utils/logger";
 import { Metadata } from "next";
+import { msToSeconds } from "@/utils/video";
 
 interface EditPageProps {
   params: {
@@ -20,7 +25,7 @@ export async function generateMetadata({
 
     const { clipId, streamerName, clipDurationMs } = metadata;
 
-    const totalSec = Math.floor(clipDurationMs / 1000);
+    const totalSec = Math.floor(msToSeconds(clipDurationMs));
     const min = Math.floor(totalSec / 60);
     const sec = totalSec % 60;
     const durationStr = `${min}:${sec.toString().padStart(2, "0")}`;
@@ -46,7 +51,17 @@ export const dynamic = "force-dynamic";
 async function ClipEditorWrapper({ videoId }: { videoId: string }) {
   try {
     const clipData = await getClip(videoId);
-    return <ClipEditor clipData={clipData} />;
+    return (
+      <ClipProvider videoId={videoId}>
+        <AudioProvider>
+          <KeyframeProvider>
+            <OverlaysProvider>
+              <ClipEditor clipData={clipData} />
+            </OverlaysProvider>
+          </KeyframeProvider>
+        </AudioProvider>
+      </ClipProvider>
+    );
   } catch (error) {
     logger.error("Failed to load clip:", error);
     return (

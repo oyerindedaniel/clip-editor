@@ -19,7 +19,7 @@ import {
 } from "@/utils/video";
 import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_CLIP_METADATA } from "@/constants/app";
+import { DEFAULT_CLIP_METADATA, DEFAULT_COLORS } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import TimelineSkeleton from "@/components/timeline-skeleton";
 import ExportNamingDialog from "./export-naming-dialog";
@@ -151,6 +151,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef,
     primaryVideoRef,
     secondaryVideoRef,
+    clearTrimData,
+    canClearTrim,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -161,6 +163,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef: state.getVideoRef,
     primaryVideoRef: state.primaryVideoRef,
     secondaryVideoRef: state.secondaryVideoRef,
+    clearTrimData: state.clearTrimData,
+    canClearTrim: state.canClearTrim,
   }));
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
@@ -626,6 +630,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenExport={openExportNamingModal}
         settings={settings}
         isBufferDownloaded={isValidBufferState}
+        onClearTrimData={clearTrimData}
+        canClearTrim={canClearTrim}
       />
 
       <div className="flex-1 min-h-0">
@@ -678,7 +684,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                     : 0,
                                   transform: boundaryTransform,
                                   easing: "ease-in-out",
-                                  color: "#22c55e",
+                                  color: DEFAULT_COLORS[2],
                                   target:
                                     playerActive === "secondary"
                                       ? "secondary"
@@ -763,7 +769,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         <>
                           <BoundaryBox.Container
                             ref={containerRef}
-                            className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md"
+                            className="relative rounded-2xl flex-1 min-w-0 bg-surface-secondary shadow-md"
                           >
                             <div
                               className={cn(
@@ -964,7 +970,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             currentKeyframeId
                                               ? getKeyframe(currentKeyframeId)
                                                   ?.color
-                                              : "#22c55e"
+                                              : DEFAULT_COLORS[2]
                                           }
                                           onChange={(color: Color) => {
                                             if (currentKeyframeId) {
@@ -982,21 +988,21 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             className="h-7 px-2 text-xs flex items-center gap-2"
                                           >
                                             <span
-                                              className="h-4 w-4 rounded border"
+                                              className="h-4 w-4 rounded-full border"
                                               style={{
                                                 backgroundColor:
                                                   currentKeyframeId
                                                     ? getKeyframe(
                                                         currentKeyframeId
                                                       )?.color
-                                                    : "#22c55e",
+                                                    : DEFAULT_COLORS[2],
                                               }}
                                             />
                                             <span>
                                               {currentKeyframeId
                                                 ? getKeyframe(currentKeyframeId)
                                                     ?.color
-                                                : "#22c55e"}
+                                                : DEFAULT_COLORS[2]}
                                             </span>
                                           </Button>
                                         </ColorPalette>
@@ -1020,10 +1026,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             })
                                           }
                                         >
-                                          <SelectTrigger
-                                            id="keyframe-easing"
-                                            className=""
-                                          >
+                                          <SelectTrigger id="keyframe-easing">
                                             <SelectValue placeholder="Select easing" />
                                           </SelectTrigger>
                                           <SelectContent>
@@ -1059,7 +1062,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     </BoundaryBox>
                   </div>
 
-                  <div className="self-end flex flex-col gap-2">
+                  <div className="lg:self-end flex flex-col gap-2">
                     {keyframes && !!keyframes.length && (
                       <Button
                         size="sm"
@@ -1167,6 +1170,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         }));
                       }}
                       keyframes={keyframes}
+                      videoId={clipData.metadata.clipId}
                     />
                   ) : isVideoLoaded ? (
                     <Timeline

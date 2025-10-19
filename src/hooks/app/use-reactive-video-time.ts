@@ -17,6 +17,9 @@ export interface UseReactiveVideoTimeOptions {
 interface ReactiveVideoState {
   time: number;
   status: PlayingStatus;
+  isBuffering: boolean;
+  hasError: boolean;
+  buffered: TimeRanges | null;
 }
 
 export interface ReactiveVideoControls {
@@ -42,11 +45,19 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     notify: () => void;
     rafId: number | null;
     startLoop: () => void;
+    bufferingTimeout: ReturnType<typeof setTimeout> | null;
   }>({
-    state: { time: trimStartRef.current ?? 0, status: "idle" },
+    state: {
+      time: trimStartRef.current ?? 0,
+      status: "idle",
+      isBuffering: false,
+      hasError: false,
+      buffered: null,
+    },
     notify: () => {},
     rafId: null,
     startLoop: () => {},
+    bufferingTimeout: null,
   });
 
   const subscribe = useCallback(
@@ -59,14 +70,66 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
 
       const updateState = (
         current: number,
-        status: ReactiveVideoState["status"]
+        status: ReactiveVideoState["status"],
+        partial?: Partial<Omit<ReactiveVideoState, "time" | "status">>
       ) => {
         const prev = storeRef.current.state;
-        if (prev.time !== current || prev.status !== status) {
-          storeRef.current.state = { time: current, status };
+        const next = {
+          time: current,
+          status,
+          isBuffering: partial?.isBuffering ?? prev.isBuffering,
+          hasError: partial?.hasError ?? prev.hasError,
+          buffered: partial?.buffered ?? prev.buffered,
+        };
+
+        if (
+          prev.time !== next.time ||
+          prev.status !== next.status ||
+          prev.isBuffering !== next.isBuffering ||
+          prev.hasError !== next.hasError ||
+          prev.buffered !== next.buffered
+        ) {
+          storeRef.current.state = next;
           storeRef.current.notify();
           onTimeChange?.(current);
           if (prev.status !== status) onPlayingChange?.(status);
+        }
+      };
+
+      const setBufferingState = (shouldBuffer: boolean) => {
+        if (storeRef.current.bufferingTimeout) {
+          clearTimeout(storeRef.current.bufferingTimeout);
+          storeRef.current.bufferingTimeout = null;
+        }
+
+        const isPlaying = video && !video.paused;
+
+        if (shouldBuffer && isPlaying) {
+          updateState(
+            storeRef.current.state.time,
+            storeRef.current.state.status,
+            {
+              isBuffering: true,
+            }
+          );
+        } else if (!isPlaying) {
+          updateState(
+            storeRef.current.state.time,
+            storeRef.current.state.status,
+            {
+              isBuffering: false,
+            }
+          );
+        } else {
+          storeRef.current.bufferingTimeout = setTimeout(() => {
+            updateState(
+              storeRef.current.state.time,
+              storeRef.current.state.status,
+              {
+                isBuffering: false,
+              }
+            );
+          }, 200);
         }
       };
 
@@ -122,6 +185,39 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
 
       storeRef.current.startLoop = startLoop;
 
+      const handleProgress = () => {
+        updateState(
+          storeRef.current.state.time,
+          storeRef.current.state.status,
+          {
+            buffered: video.buffered,
+          }
+        );
+      };
+
+      const handleWaiting = () => setBufferingState(true);
+      const handleCanPlay = () => setBufferingState(false);
+      const handleCanPlayThrough = () => setBufferingState(false);
+      const handleStalled = () => setBufferingState(true);
+
+      const handleError = () => {
+        updateState(
+          storeRef.current.state.time,
+          storeRef.current.state.status,
+          {
+            hasError: true,
+            isBuffering: false,
+          }
+        );
+      };
+
+      video.addEventListener("waiting", handleWaiting);
+      video.addEventListener("canplay", handleCanPlay);
+      video.addEventListener("canplaythrough", handleCanPlayThrough);
+      video.addEventListener("stalled", handleStalled);
+      video.addEventListener("error", handleError);
+      video.addEventListener("progress", handleProgress);
+
       const initialCurrent = Math.max(
         video.currentTime,
         trimStartRef.current ?? 0
@@ -134,7 +230,7 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
       } else {
         initialStatus = video.paused ? "paused" : "playing";
       }
-      updateState(initialCurrent, initialStatus);
+      updateState(initialCurrent, initialStatus, { buffered: video.buffered });
 
       if (playing && !video.paused) {
         startLoop();
@@ -146,6 +242,16 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
           cancelAnimationFrame(storeRef.current.rafId);
           storeRef.current.rafId = null;
         }
+        if (storeRef.current.bufferingTimeout) {
+          clearTimeout(storeRef.current.bufferingTimeout);
+          storeRef.current.bufferingTimeout = null;
+        }
+        video.removeEventListener("waiting", handleWaiting);
+        video.removeEventListener("canplay", handleCanPlay);
+        video.removeEventListener("canplaythrough", handleCanPlayThrough);
+        video.removeEventListener("stalled", handleStalled);
+        video.removeEventListener("error", handleError);
+        video.removeEventListener("progress", handleProgress);
       };
     },
     [playing, onTimeChange, onPlayingChange]
@@ -155,6 +261,9 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
   const getServerSnapshot = () => ({
     time: trimStartRef.current ?? 0,
     status: "idle" as const,
+    isBuffering: false,
+    hasError: false,
+    buffered: null,
   });
 
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

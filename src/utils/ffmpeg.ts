@@ -13,6 +13,7 @@ import type {
 import { EXPORT_BITRATE_MAP } from "@/constants/app";
 import { WorkerType } from "@/types/app";
 import logger from "./logger";
+import { msToSeconds } from "./video";
 
 let ffmpeg: FFmpeg | null = null;
 
@@ -178,9 +179,10 @@ export async function processClipForExport(
     const clonedExportInput = primaryClip.buffer.slice(0);
     await ffmpeg.writeFile(inputFileName, new Uint8Array(clonedExportInput));
 
-    const primaryDuration =
-      (primaryClip.trimEnd - primaryClip.trimStart) / 1000;
-    const primaryStartSeconds = primaryClip.trimStart / 1000;
+    const primaryDuration = msToSeconds(
+      primaryClip.trimEnd - primaryClip.trimStart
+    );
+    const primaryStartSeconds = msToSeconds(primaryClip.trimStart);
 
     const args: string[] = [
       "-ss",
