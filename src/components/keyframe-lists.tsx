@@ -13,6 +13,7 @@ import { ListChecks, Search, FileX } from "lucide-react";
 import type { KeyframeData } from "@/utils/keyframe";
 import { Input } from "@/components/ui/input";
 import { useFilteredKeyframes } from "@/hooks/app/use-filtered-keyframes";
+import { DEFAULT_COLORS } from "@/constants/app";
 
 interface KeyframeListsProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframes: KeyframeData[];
@@ -151,7 +152,8 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
                     className="h-3 w-3 rounded-full border bg-(--color)"
                     style={
                       {
-                        "--color": (keyframe.color || "#22c55e") as string,
+                        "--color": (keyframe.color ||
+                          DEFAULT_COLORS[2]) as string,
                       } as React.CSSProperties
                     }
                   />

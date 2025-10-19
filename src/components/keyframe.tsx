@@ -15,6 +15,7 @@ import type { Color } from "./color-palette";
 import { getScrollState } from "@/utils/timeline-utils";
 import { HitArea } from "./hit-area";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
+import { msToSeconds, secondsToMs } from "@/utils/video";
 
 export type KeyframeBounds = { start: number; end: number };
 
@@ -264,7 +265,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     });
 
     // keyframe.time is stored in seconds; convert to milliseconds for layout math
-    const keyframeTimeMs = keyframe ? keyframe.time * 1000 : 0;
+    const keyframeTimeMs = keyframe ? secondsToMs(keyframe.time) : 0;
     const left = keyframeTimeMs * pxPerMs;
 
     React.useLayoutEffect(() => {
@@ -274,6 +275,8 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
     const handlePointerDown = React.useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+
         if (!keyframe || !scrollEl) return;
 
         const marker = markerRef.current;
@@ -320,7 +323,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
           updateTooltip(
             newLeftPx - scrollLeft,
-            `${(newTimeMs / 1000).toFixed(2)}s`
+            `${msToSeconds(newTimeMs).toFixed(2)}s`
           );
 
           dragTimeRef.current = newTimeMs;
@@ -371,7 +374,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
               moved.current = true;
               updateTooltip(
                 newLeftPx - scrollLeft,
-                `${(newTimeMs / 1000).toFixed(2)}s`
+                `${msToSeconds(newTimeMs).toFixed(2)}s`
               );
             }
           });
@@ -393,7 +396,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
           if (!moved.current) return;
 
-          const newTimeSec = Math.max(0, dragTimeRef.current / 1000);
+          const newTimeSec = Math.max(0, msToSeconds(dragTimeRef.current));
           updateKeyframe(keyframeId, { time: newTimeSec });
         };
 
@@ -416,6 +419,8 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const handleClick = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.defaultPrevented) return;
+        e.stopPropagation();
+
         if (moved.current) return;
         setCurrentKeyframeId(keyframeId);
       },
@@ -426,6 +431,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       <>
         <div
           ref={composedRef}
+          data-keyframe-marker="true"
           className={cn(
             "absolute top-0 bottom-0 flex flex-col items-center cursor-ew-resize z-10 will-change-transform",
             className
@@ -618,7 +624,7 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
           data-state={state}
           tabIndex={-1}
           className={cn(
-            "fixed bg-surface-primary left-0 top-0 rounded-3xl overflow-hidden shadow-2xl border border-subtle w-[260px] z-50 will-change-transform",
+            "fixed bg-surface-primary left-0 top-0 rounded-3xl overflow-hidden shadow-2xl border border-subtle w-[260px] z-100 will-change-transform",
             "origin-top-left data-[state=open]:animate-box-enter data-[state=closed]:animate-box-exit",
             className
           )}

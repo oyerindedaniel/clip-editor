@@ -252,6 +252,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
           return;
         }
 
+        if (!el) return;
+
         setAnimationState("exiting");
 
         const onEnd = () => {
@@ -298,8 +300,8 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
                 "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
               variant !== "default" &&
                 (orientation === "horizontal"
-                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_200ms_linear_forwards]"
-                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_200ms_linear_forwards]"),
+                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
+                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]"),
               className
             )}
             style={{
@@ -462,6 +464,7 @@ const VolumeSliderTrack = React.forwardRef<
       onPointerDown(event);
       if (event.defaultPrevented) return;
     }
+
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio =
       orientation === "horizontal"
@@ -476,11 +479,7 @@ const VolumeSliderTrack = React.forwardRef<
     <HitArea variant={orientation === "horizontal" ? "y" : "x"}>
       <div
         ref={composedRefs}
-        role="slider"
-        tabIndex={0}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-orientation={orientation}
+        tabIndex={-1}
         className={cn(
           "relative bg-surface-tertiary rounded",
           orientation === "horizontal"
@@ -496,6 +495,7 @@ const VolumeSliderTrack = React.forwardRef<
     </HitArea>
   );
 });
+
 VolumeSliderTrack.displayName = "VolumeSliderTrack";
 
 const VolumeSliderRange = React.forwardRef<
@@ -587,10 +587,12 @@ const VolumeSliderThumb = React.forwardRef<
     document.addEventListener("pointerup", handleUp);
   };
 
+  const to100 = (value: number): number => value * 100;
+
   const offset =
     orientation === "horizontal"
-      ? `${percent * 100}%`
-      : `${(1 - percent) * 100}%`;
+      ? `${to100(percent)}%`
+      : `${to100(1 - percent)}%`;
 
   return (
     <HitArea buffer={8} variant="all">
@@ -599,9 +601,11 @@ const VolumeSliderThumb = React.forwardRef<
         ref={composedRefs}
         role="slider"
         tabIndex={0}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={volume}
+        aria-valuemin={to100(min)}
+        aria-valuemax={to100(max)}
+        aria-valuenow={to100(volume)}
+        aria-valuetext={`${to100(volume)}% volume`}
+        aria-label="Volume"
         aria-orientation={orientation}
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}

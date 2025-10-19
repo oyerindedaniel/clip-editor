@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { FileX, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type { KeyframeData } from "@/utils/keyframe";
 import { Input } from "@/components/ui/input";
 import { KeyframeList, KeyframeListEmpty } from "./keyframe-lists";

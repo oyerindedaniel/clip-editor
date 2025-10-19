@@ -143,6 +143,10 @@ function msToSeconds(ms: number): number {
   return ms / 1000;
 }
 
+function secondsToMs(seconds: number): number {
+  return seconds * 1000;
+}
+
 function getVisibleOverlays(overlays: Overlay[], currentTimeMs: number) {
   return overlays.filter(
     (overlay) =>
@@ -205,6 +209,7 @@ export {
   getFormatFromSrc,
   getVisibleOverlays,
   msToSeconds,
+  secondsToMs,
   getBufferKey,
   getOriginalBufferKey,
   calculateAspectRatioScale,

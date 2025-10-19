@@ -274,20 +274,9 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // useEffect(() => {
-  //   const handleGlobalMouseDown = (ev: MouseEvent) => {
+  //   const handleMouseDown = (ev: MouseEvent) => {
   //     const target = ev.target as Node | null;
   //     if (!target) return;
-
-  //     if (
-  //       target instanceof HTMLElement &&
-  //       target.closest("[data-overlay-inspector]")
-  //     ) {
-  //       return;
-  //     }
-
-  //     if (target instanceof HTMLElement && target.closest("[data-portal]")) {
-  //       return;
-  //     }
 
   //     for (const element of textOverlayRefs.current.values()) {
   //       if (element && element.contains(target)) return;
@@ -299,9 +288,9 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   //     setSelectedOverlay(null);
   //   };
 
-  //   document.addEventListener("mousedown", handleGlobalMouseDown, true);
+  //   document.addEventListener("mousedown", handleMouseDown, true);
   //   return () => {
-  //     document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+  //     document.removeEventListener("mousedown", handleMouseDown, true);
   //   };
   // }, []);
 

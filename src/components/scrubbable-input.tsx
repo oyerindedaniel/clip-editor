@@ -220,7 +220,7 @@ export const Field = React.forwardRef<
   React.ComponentRef<typeof Input>,
   ScrubbableInputFieldProps
 >(({ className, ...props }, ref) => {
-  const { value, setValue, disabled } = useScrubbableInputContext();
+  const { value, setValue, disabled, min, max } = useScrubbableInputContext();
   const composedRef = useComposedRefs(ref);
   const [displayValue, setDisplayValue] = React.useState(String(value));
   const isCleared = React.useRef(false);
@@ -274,6 +274,8 @@ export const Field = React.forwardRef<
       ref={composedRef}
       type="number"
       inputMode="numeric"
+      min={min}
+      max={max}
       value={displayValue}
       onChange={handleChange}
       onFocus={handleFocus}

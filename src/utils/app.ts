@@ -119,6 +119,10 @@ function roundToDecimals(value: number, decimals: number = 3): number {
   return Math.round(value * power) / power;
 }
 
+function getStorageKey(suffix: string): string {
+  return `zinc:${suffix}`;
+}
+
 export {
   debounce,
   throttle,
@@ -126,4 +130,5 @@ export {
   formatDurationDisplay,
   formatTime,
   roundToDecimals,
+  getStorageKey,
 };

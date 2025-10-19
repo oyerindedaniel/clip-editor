@@ -19,7 +19,7 @@ import {
 } from "@/utils/video";
 import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_CLIP_METADATA } from "@/constants/app";
+import { DEFAULT_CLIP_METADATA, DEFAULT_COLORS } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import TimelineSkeleton from "@/components/timeline-skeleton";
 import ExportNamingDialog from "./export-naming-dialog";
@@ -82,6 +82,7 @@ import { Playback } from "./video-controls";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 import { Volume } from "./volume";
 import KeyframeNameInput from "./keyframe-name-input";
+import MainMedia from "./main-media";
 
 interface Data {
   buffer: ArrayBuffer;
@@ -150,12 +151,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef,
     primaryVideoRef,
     secondaryVideoRef,
-    repeatPrimaryRef,
-    repeatSecondaryRef,
-    primaryStatus,
-    primaryControls,
-    secondaryStatus,
-    secondaryControls,
+    clearTrimData,
+    canClearTrim,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -166,12 +163,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef: state.getVideoRef,
     primaryVideoRef: state.primaryVideoRef,
     secondaryVideoRef: state.secondaryVideoRef,
-    repeatPrimaryRef: state.repeatPrimaryRef,
-    repeatSecondaryRef: state.repeatSecondaryRef,
-    primaryStatus: state.primaryStatus,
-    primaryControls: state.primaryControls,
-    secondaryStatus: state.secondaryStatus,
-    secondaryControls: state.secondaryControls,
+    clearTrimData: state.clearTrimData,
+    canClearTrim: state.canClearTrim,
   }));
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
@@ -235,11 +228,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
   });
 
   const playerActiveRef = useLatestValue(playerActive);
-
   const activeVideoRef = getVideoRef(playerActiveRef.current);
-
-  const primaryPlayState = getPlayingState(primaryStatus);
-  const secondaryPlayState = getPlayingState(secondaryStatus);
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -641,6 +630,8 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         onOpenExport={openExportNamingModal}
         settings={settings}
         isBufferDownloaded={isValidBufferState}
+        onClearTrimData={clearTrimData}
+        canClearTrim={canClearTrim}
       />
 
       <div className="flex-1 min-h-0">
@@ -678,7 +669,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           cropMode={cropMode}
                           onCropModeChange={setCropMode}
                           padColor={padColor}
-                          onPadColorChange={(c) => setPadColor(c)}
+                          onPadColorChange={(color) => setPadColor(color)}
                         />
 
                         <div className="flex items-center gap-px">
@@ -693,7 +684,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                     : 0,
                                   transform: boundaryTransform,
                                   easing: "ease-in-out",
-                                  color: "#22c55e",
+                                  color: DEFAULT_COLORS[2],
                                   target:
                                     playerActive === "secondary"
                                       ? "secondary"
@@ -763,6 +754,11 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           });
                         }
                       }}
+                      currentKeyframe={
+                        currentKeyframeId
+                          ? getKeyframe(currentKeyframeId)
+                          : undefined
+                      }
                     >
                       {({
                         updatePosition,
@@ -773,7 +769,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         <>
                           <BoundaryBox.Container
                             ref={containerRef}
-                            className="relative rounded-lg flex-1 min-w-0 bg-surface-secondary shadow-md"
+                            className="relative rounded-2xl flex-1 min-w-0 bg-surface-secondary shadow-md"
                           >
                             <div
                               className={cn(
@@ -790,85 +786,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                   style={playerStyles.primary}
                                 >
                                   <div className="relative w-full aspect-video">
-                                    <video
-                                      src={primaryUrl}
-                                      ref={(el) => {
-                                        primaryVideoRef.current = el;
-                                        if (playerActive === "primary") {
-                                          setVideoRef(el);
-                                        }
-                                      }}
-                                      controls={false}
-                                      playsInline
-                                      muted={false}
-                                      className="w-full h-full object-contain rounded-lg"
-                                      poster="/thumbnails/video-thumb-2.webp"
+                                    <MainMedia
+                                      ref={primaryVideoRef}
+                                      mediaUrl={primaryUrl}
+                                      playerType="primary"
+                                      setVideoRef={setVideoRef}
                                     />
-                                    <Playback.Root
-                                      isPlaying={primaryPlayState.isPlaying}
-                                    >
-                                      <Playback.Controls>
-                                        <div className="relative h-full w-full flex items-center justify-between">
-                                          <div className="flex items-center gap-3">
-                                            <Playback.PlayToggle
-                                              playing={
-                                                primaryPlayState.isPlaying
-                                              }
-                                              onPlayingChange={() =>
-                                                primaryControls.toggle()
-                                              }
-                                            />
-
-                                            <Playback.Volume>
-                                              <Volume.Root
-                                                orientation="horizontal"
-                                                defaultValue={primaryControls.getVolume()}
-                                                onValueChangeAlways={
-                                                  primaryControls.setVolume
-                                                }
-                                              >
-                                                <Volume.Controls
-                                                  variant="pill"
-                                                  className="!p-0 !border-none bg-transparent hover:!glass"
-                                                >
-                                                  <Volume.Button
-                                                    size="icon"
-                                                    variant="glass"
-                                                    aria-label="Primary volume"
-                                                  />
-                                                  <Volume.Slider>
-                                                    <Volume.Slider.Track className="!glass">
-                                                      <Volume.Slider.Range className="bg-white" />
-                                                      <Volume.Slider.Thumb className="bg-white" />
-                                                    </Volume.Slider.Track>
-                                                  </Volume.Slider>
-                                                </Volume.Controls>
-                                              </Volume.Root>
-                                            </Playback.Volume>
-                                          </div>
-                                          <div className="w-full">
-                                            <Playback.Seek />
-                                          </div>
-                                          <div className="flex items-center gap-3">
-                                            <Playback.LoopToggle
-                                              defaultLoop={
-                                                repeatPrimaryRef.current
-                                              }
-                                              onLoopChangeAlways={(value) => {
-                                                repeatPrimaryRef.current =
-                                                  value;
-                                              }}
-                                            />
-                                            <Playback.RateControl
-                                              defaultRate={primaryControls.getPlaybackRate()}
-                                              onRateChangeAlways={
-                                                primaryControls.setPlaybackRate
-                                              }
-                                            />
-                                          </div>
-                                        </div>
-                                      </Playback.Controls>
-                                    </Playback.Root>
                                   </div>
                                 </div>
                               )}
@@ -882,73 +805,12 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                   style={playerStyles.secondary}
                                 >
                                   <div className="relative w-full aspect-video">
-                                    <video
-                                      src={secondaryClip.url}
-                                      ref={(el) => {
-                                        secondaryVideoRef.current = el;
-                                        if (playerActive === "secondary") {
-                                          setVideoRef(el);
-                                        }
-                                      }}
-                                      controls={false}
-                                      playsInline
-                                      muted={false}
-                                      className="w-full h-full object-contain rounded-lg"
-                                      poster="/thumbnails/video-thumb-2.webp"
+                                    <MainMedia
+                                      ref={secondaryVideoRef}
+                                      mediaUrl={secondaryClip.url}
+                                      playerType="secondary"
+                                      setVideoRef={setVideoRef}
                                     />
-                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[65%]">
-                                      <Playback.Root
-                                        isPlaying={secondaryPlayState.isPlaying}
-                                      >
-                                        <Playback.Controls className="p-0 !glass">
-                                          <Playback.PlayToggle
-                                            playing={
-                                              secondaryPlayState.isPlaying
-                                            }
-                                            onPlayingChange={() =>
-                                              secondaryControls.toggle()
-                                            }
-                                          />
-                                          <Playback.Volume>
-                                            <Volume.Root
-                                              orientation="vertical"
-                                              defaultValue={secondaryControls.getVolume()}
-                                              onValueChangeAlways={
-                                                secondaryControls.setVolume
-                                              }
-                                            >
-                                              <Volume.Controls
-                                                variant="pill"
-                                                className="!p-0 !border-none bg-transparent hover:!glass"
-                                              >
-                                                <Volume.Button aria-label="Primary volume" />
-                                                <Volume.Slider>
-                                                  <Volume.Slider.Track className="!glass">
-                                                    <Volume.Slider.Range className="bg-white" />
-                                                    <Volume.Slider.Thumb className="bg-white" />
-                                                  </Volume.Slider.Track>
-                                                </Volume.Slider>
-                                              </Volume.Controls>
-                                            </Volume.Root>
-                                          </Playback.Volume>
-                                          <Playback.LoopToggle
-                                            defaultLoop={
-                                              repeatSecondaryRef.current
-                                            }
-                                            onLoopChangeAlways={(value) => {
-                                              repeatSecondaryRef.current =
-                                                value;
-                                            }}
-                                          />
-                                          <Playback.RateControl
-                                            defaultRate={secondaryControls.getPlaybackRate()}
-                                            onRateChangeAlways={
-                                              secondaryControls.setPlaybackRate
-                                            }
-                                          />
-                                        </Playback.Controls>
-                                      </Playback.Root>
-                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -1108,7 +970,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             currentKeyframeId
                                               ? getKeyframe(currentKeyframeId)
                                                   ?.color
-                                              : "#22c55e"
+                                              : DEFAULT_COLORS[2]
                                           }
                                           onChange={(color: Color) => {
                                             if (currentKeyframeId) {
@@ -1126,21 +988,21 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             className="h-7 px-2 text-xs flex items-center gap-2"
                                           >
                                             <span
-                                              className="h-4 w-4 rounded border"
+                                              className="h-4 w-4 rounded-full border"
                                               style={{
                                                 backgroundColor:
                                                   currentKeyframeId
                                                     ? getKeyframe(
                                                         currentKeyframeId
                                                       )?.color
-                                                    : "#22c55e",
+                                                    : DEFAULT_COLORS[2],
                                               }}
                                             />
                                             <span>
                                               {currentKeyframeId
                                                 ? getKeyframe(currentKeyframeId)
                                                     ?.color
-                                                : "#22c55e"}
+                                                : DEFAULT_COLORS[2]}
                                             </span>
                                           </Button>
                                         </ColorPalette>
@@ -1164,10 +1026,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             })
                                           }
                                         >
-                                          <SelectTrigger
-                                            id="keyframe-easing"
-                                            className=""
-                                          >
+                                          <SelectTrigger id="keyframe-easing">
                                             <SelectValue placeholder="Select easing" />
                                           </SelectTrigger>
                                           <SelectContent>
@@ -1203,7 +1062,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                     </BoundaryBox>
                   </div>
 
-                  <div className="self-end flex flex-col gap-2">
+                  <div className="lg:self-end flex flex-col gap-2">
                     {keyframes && !!keyframes.length && (
                       <Button
                         size="sm"
@@ -1273,6 +1132,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                 aspectRatio: boundaryAspectRatio ?? "9:16",
                                 width: canvasSizeRef.current.width,
                               })}
+                              color={padColor}
                             />
                           )}
                         </VideoPreview>
@@ -1310,6 +1170,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         }));
                       }}
                       keyframes={keyframes}
+                      videoId={clipData.metadata.clipId}
                     />
                   ) : isVideoLoaded ? (
                     <Timeline

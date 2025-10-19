@@ -150,3 +150,11 @@ export function msToPx(ms: number, pxPerMs: number) {
 export function pxToMs(px: number, pxPerMs: number) {
   return px / pxPerMs;
 }
+
+export function msToSecondsRate(ratePxPerMs: number) {
+  return ratePxPerMs * 1000;
+}
+
+export function secondsToMsRate(ratePxPerSecond: number) {
+  return ratePxPerSecond / 1000;
+}

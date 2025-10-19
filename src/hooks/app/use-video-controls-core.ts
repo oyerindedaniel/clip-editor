@@ -4,7 +4,6 @@ export interface BuildVideoControlsOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   trimStartRef: React.RefObject<number>;
   trimEndRef: React.RefObject<number>;
-  repeatRef?: React.RefObject<boolean>;
   // For reactive hooks that need to update store state
   updateStoreTime?: (time: number) => void;
   notifyStore?: () => void;
@@ -31,7 +30,6 @@ export function useBuildVideoControls(
     videoRef,
     trimStartRef,
     trimEndRef,
-    repeatRef,
     updateStoreTime,
     notifyStore,
     startLoop,
@@ -52,6 +50,8 @@ export function useBuildVideoControls(
       play: () => {
         const video = videoRef.current;
         if (!video) return;
+        if (!video.paused) return;
+
         ensureTrimStart();
         video.play().catch(() => {});
         startLoop?.();
@@ -60,6 +60,8 @@ export function useBuildVideoControls(
       pause: () => {
         const video = videoRef.current;
         if (!video) return;
+        if (video.paused) return;
+
         video.pause();
       },
 

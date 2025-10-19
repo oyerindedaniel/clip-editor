@@ -5,10 +5,6 @@ export function useVideoRefs() {
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Playback state (refs)
-  const repeatPrimaryRef = useRef(false);
-  const repeatSecondaryRef = useRef(false);
-
   // Helper to select video element
   const getVideoRef = useMemo(
     () => (player: "primary" | "secondary") =>
@@ -19,8 +15,6 @@ export function useVideoRefs() {
   return {
     primaryVideoRef,
     secondaryVideoRef,
-    repeatPrimaryRef,
-    repeatSecondaryRef,
     getVideoRef,
   };
 }
