@@ -21,6 +21,7 @@ import { useVideoRefs } from "@/hooks/app/use-video-refs";
 import { getStorageKey } from "@/utils/app";
 import logger from "@/utils/logger";
 import { msToSeconds, secondsToMs } from "@/utils/video";
+import { DEFAULT_TRANSFORM } from "@/utils/transform";
 
 type DualVideoContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
@@ -70,9 +71,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       normalizeAudio: true,
       primaryVolume: 0.8,
       secondaryVolume: 0.6,
-      pipPosition: "bottom-right",
-      pipSize: 0.25,
-      secondaryOffset: 0,
+      pip: DEFAULT_TRANSFORM,
     }
   );
 

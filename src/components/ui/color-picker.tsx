@@ -22,7 +22,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-lg bg-surface-secondary px-2 py-1 text-xs"
+          className="flex w-full items-center gap-2 rounded-lg bg-surface-secondary px-2 py-1 text-sm md:text-[0.8rem]"
         >
           <span
             className="inline-block h-4 w-4 rounded-sm bg-(--bg)"
@@ -36,7 +36,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             color={color}
             onChange={onChange}
             prefixed
-            className="flex-1 rounded-3xl bg-surface-secondary px-2 py-1 text-xs text-foreground-default"
+            className="flex-1 rounded-3xl bg-surface-secondary px-2 py-1 text-sm md:text-[0.8rem] text-foreground-default"
             onClick={(e) => e.stopPropagation()}
             onFocus={() => setOpen(true)}
           />

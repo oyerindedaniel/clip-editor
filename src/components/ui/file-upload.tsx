@@ -148,7 +148,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-xs tracking-wide font-medium text-foreground-default truncate">
+            <div className="text-sm md:text-[0.8rem] tracking-wide font-medium text-foreground-default truncate">
               {addLabel}
             </div>
           </div>

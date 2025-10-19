@@ -1,5 +1,6 @@
 import { AspectRatioValue } from "@/components/aspect-ratio-selector";
 import type { Color } from "@/components/color-palette";
+import type { Transform } from "@/utils/transform";
 
 /**
  * Represents a marked clip segment in the recording.
@@ -136,11 +137,6 @@ export interface ClipMetadata extends Settings {
 }
 
 export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
-export type PiPPosition =
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
 export type AudioMixMode = "primary" | "secondary" | "mixed";
 
 export interface DualVideoSettings {
@@ -150,10 +146,7 @@ export interface DualVideoSettings {
   primaryVolume: number;
   secondaryVolume: number;
   // Picture-in-Picture specific settings
-  pipPosition?: PiPPosition;
-  pipSize?: number; // 0.2 to 0.4 (20% to 40% of container width)
-  // Time synchronization
-  secondaryOffset?: number; // milliseconds, positive = delay secondary, negative = advance secondary
+  pip?: Transform;
 }
 
 export interface DualVideoClip {

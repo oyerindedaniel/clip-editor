@@ -76,7 +76,7 @@ export const KeyframeLists: React.FC<KeyframeListsProps> = ({
               />
               <span
                 className={cn(
-                  "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted text-xs transition-all duration-200",
+                  "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted text-sm md:text-[0.8rem] transition-all duration-200",
                   isSearchActive
                     ? "opacity-0 -translate-x-2"
                     : "opacity-100 translate-x-0"
@@ -157,7 +157,7 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
                       } as React.CSSProperties
                     }
                   />
-                  <span className="text-xs font-medium tracking-tight text-foreground-default">
+                  <span className="text-sm md:text-[0.8rem] font-medium tracking-tight text-foreground-default">
                     {keyframe.time.toFixed(1)}s
                   </span>
                   <span className="ml-auto text-[10px] text-foreground-muted">
@@ -200,10 +200,10 @@ export const KeyframeListEmpty: React.FC = () => {
       </div>
 
       <div className="text-center">
-        <div className="text-sm font-medium text-foreground-default mb-1">
+        <div className="text-base font-medium text-foreground-default mb-1">
           No results found
         </div>
-        <div className="text-xs text-foreground-muted">
+        <div className="text-sm md:text-[0.8rem] text-foreground-muted">
           Try a different search term
         </div>
       </div>

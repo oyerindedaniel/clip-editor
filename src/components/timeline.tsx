@@ -343,10 +343,10 @@ const Timeline: React.FC<TimelineProps> = ({
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="text-xs text-foreground-subtle">
+          <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
             <Scissors size={14} />
           </div>
-          <div className="text-xs text-foreground-muted">
+          <div className="text-sm md:text-[0.8rem] text-foreground-muted">
             Drag handles to trim
           </div>
         </div>

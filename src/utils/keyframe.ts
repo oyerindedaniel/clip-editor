@@ -1,16 +1,7 @@
 import { DEFAULT_COLORS } from "@/constants/app";
+import type { Transform } from "./transform";
 
-interface KeyframeTransform {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  scale: number;
-  normX: number;
-  normY: number;
-}
-
-type Transform = KeyframeTransform;
+type KeyframeTransform = Transform;
 
 type KeyframeEasing = (typeof KEYFRAME_EASINGS)[number];
 
@@ -26,7 +17,7 @@ interface KeyframeData {
   target: KeyframeTarget;
 }
 
-const KEYFRAME_EASINGS = Object.freeze([
+export const KEYFRAME_EASINGS = Object.freeze([
   "linear",
   "ease-in",
   "ease-out",
@@ -34,16 +25,6 @@ const KEYFRAME_EASINGS = Object.freeze([
   "ease-in-cubic",
   "ease-out-cubic",
 ] as const);
-
-const DEFAULT_TRANSFORM: Transform = Object.freeze({
-  x: 0,
-  y: 0,
-  width: 0,
-  height: 0,
-  scale: 1,
-  normX: 0,
-  normY: 0,
-});
 
 export function getEasingFunction(
   name?: KeyframeEasing
@@ -75,8 +56,6 @@ export type {
   KeyframeEasing,
   KeyframeTarget,
 };
-
-export { KEYFRAME_EASINGS, DEFAULT_TRANSFORM };
 
 export type SortOrder = "asc" | "desc";
 

@@ -34,6 +34,7 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
   );
   const [hasError, setHasError] = useState(false);
   const lastStatus = useRef<PlayingStatus>("idle");
+  const isLoopingRef = useRef(false);
 
   const setBufferingState = useCallback((shouldBuffer: boolean) => {
     if (bufferingTimeoutRef.current) {
@@ -85,10 +86,12 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
 
       if (current >= trimEnd) {
         if (repeat) {
+          isLoopingRef.current = true;
           video.currentTime = trimStart;
           video.play().catch(() => {});
           updateStatus("playing");
         } else {
+          isLoopingRef.current = false;
           video.pause();
           video.currentTime = trimStart;
           updateStatus("ended");
@@ -96,9 +99,17 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
       }
     };
 
-    const handlePlay = () => updateStatus("playing");
+    const handlePlay = () => {
+      isLoopingRef.current = false;
+      updateStatus("playing");
+    };
 
     const handlePause = () => {
+      // Ignore pause events when we're intentionally looping
+      if (isLoopingRef.current) {
+        return;
+      }
+
       const current = video.currentTime;
       const trimEnd = trimEndRef.current ?? video.duration ?? 0;
       if (current < trimEnd && lastStatus.current !== "ended") {
@@ -145,6 +156,10 @@ export function useConstrainedVideo(opts: UseConstrainedVideoOptions) {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
+
+      if (bufferingTimeoutRef.current) {
+        clearTimeout(bufferingTimeoutRef.current);
+      }
     };
   }, [updateStatus]);
 

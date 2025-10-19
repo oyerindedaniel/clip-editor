@@ -132,8 +132,8 @@ export function EditorRightPanel({
                 },
               ].map((clip) => (
                 <div key={clip.id}>
-                  <div className="font-medium text-foreground-default text-sm">{`Clip ${clip.id}`}</div>
-                  <div className="text-xs text-foreground-subtle">
+                  <div className="font-medium text-foreground-default text-base">{`Clip ${clip.id}`}</div>
+                  <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     {formatTime(clip.endTime - clip.startTime)}
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export function EditorRightPanel({
               <div className="flex items-center justify-between">
                 <Button
                   onClick={() => addTextOverlay(0, duration)}
-                  className="h-8 px-2 text-xs"
+                  className="h-8 px-2 text-sm md:text-[0.8rem]"
                   variant="outline"
                   size="sm"
                 >

@@ -7,7 +7,7 @@ const TimelineSkeleton: React.FC = () => {
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-foreground-subtle">
+        <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
           <Scissors size={14} />
         </div>
         <div className="flex items-center gap-2">

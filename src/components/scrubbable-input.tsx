@@ -180,7 +180,7 @@ export const LabelElement = React.forwardRef<
     <Label
       ref={ref}
       className={cn(
-        "text-xs font-medium select-none text-foreground-subtle",
+        "font-medium select-none text-foreground-subtle",
         disabled && "opacity-50 pointer-events-none",
         className
       )}
@@ -285,7 +285,7 @@ export const Field = React.forwardRef<
       className={cn(
         "rounded-none bg-transparent border-none shadow-none bg-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
         "text-foreground-default placeholder:text-foreground-muted",
-        "w-max text-left text-sm",
+        "w-max text-left",
         className
       )}
       {...props}
@@ -302,7 +302,7 @@ export const Unit = React.forwardRef<HTMLSpanElement, ScrubbableInputUnitProps>(
     <span
       ref={ref}
       className={cn(
-        "text-foreground-default/80 text-xs font-medium select-none rounded-r-3xl inline-flex items-center justify-center h-8 w-12",
+        "text-foreground-default/80 text-sm md:text-[0.8rem] font-medium select-none rounded-r-3xl inline-flex items-center justify-center h-8 w-12",
         className
       )}
       {...props}

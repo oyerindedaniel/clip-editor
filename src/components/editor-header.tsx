@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Download, Crosshair, RotateCcw } from "lucide-react";
-import AspectRatioSelector from "./aspect-ratio-selector";
-import { Settings } from "@/types/app";
 import {
   Tooltip,
   TooltipContent,
@@ -16,11 +14,8 @@ import {
 interface EditorHeaderProps {
   isVideoLoaded: boolean;
   isExporting: boolean;
-  showTrace: boolean;
   onToggleTrace: () => void;
   onOpenExport: () => void;
-  settings: Settings;
-  isBufferDownloaded: boolean;
   onClearTrimData: () => void;
   canClearTrim: boolean;
 }
@@ -28,11 +23,8 @@ interface EditorHeaderProps {
 export const EditorHeader: React.FC<EditorHeaderProps> = ({
   isVideoLoaded,
   isExporting,
-  showTrace,
   onToggleTrace,
   onOpenExport,
-  settings,
-  isBufferDownloaded,
   onClearTrimData,
   canClearTrim,
 }) => {
@@ -54,7 +46,6 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
             <Button
-              className="text-xs"
               variant="outline"
               size="sm"
               disabled={!isVideoLoaded}
@@ -67,7 +58,6 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  className="text-xs"
                   variant="outline"
                   size="sm"
                   disabled={!isVideoLoaded || !canClearTrim}
@@ -85,20 +75,12 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
                 </p>
               </TooltipContent>
             </Tooltip>
-
-            {/* <AspectRatioSelector
-              settings={settings}
-              onSettingsApplied={onSettingsApplied}
-              isBufferDownloaded={isBufferDownloaded}
-              isExporting={isExporting}
-            /> */}
           </div>
 
           <Button
             onClick={onOpenExport}
             disabled={isExporting || !isVideoLoaded}
             size="sm"
-            className="text-xs bg-primary text-foreground-on-accent hover:bg-primary-hover"
           >
             <Download size={14} className="mr-2" />
             Export

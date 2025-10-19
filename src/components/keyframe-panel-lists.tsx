@@ -31,7 +31,9 @@ export const KeyframePanelLists: React.FC<KeyframePanelListsProps> = ({
 
   if (!keyframes?.length) {
     return (
-      <div className="text-xs text-foreground-muted">No keyframes yet.</div>
+      <div className="text-sm md:text-[0.8rem] text-foreground-muted">
+        No keyframes yet.
+      </div>
     );
   }
 
@@ -53,7 +55,7 @@ export const KeyframePanelLists: React.FC<KeyframePanelListsProps> = ({
           />
           <span
             className={cn(
-              "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted text-xs transition-all duration-200",
+              "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted text-sm md:text-[0.8rem] transition-all duration-200",
               isSearchActive
                 ? "opacity-0 -translate-x-2"
                 : "opacity-100 translate-x-0"

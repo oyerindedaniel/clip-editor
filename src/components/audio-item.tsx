@@ -36,7 +36,7 @@ const AudioItem: React.FC<AudioItemProps> = ({
               <div className="h-7 w-7 rounded-xl border border-subtle bg-surface-tertiary flex items-center justify-center">
                 <Music size={14} className="text-foreground-muted" />
               </div>
-              <div className="text-xs tracking-wide font-medium text-foreground-default truncate">
+              <div className="text-sm md:text-[0.8rem] tracking-wide font-medium text-foreground-default truncate">
                 {track.name}
               </div>
             </div>
@@ -81,7 +81,7 @@ const AudioItem: React.FC<AudioItemProps> = ({
                       startTime: parseInt(e.target.value) * 1000,
                     })
                   }
-                  className="px-2 py-1 text-xs"
+                  className="px-2 py-1 text-sm md:text-[0.8rem]"
                 />
               </div>
               <div>
@@ -98,7 +98,7 @@ const AudioItem: React.FC<AudioItemProps> = ({
                       endTime: parseInt(e.target.value) * 1000,
                     })
                   }
-                  className="px-2 py-1 text-xs"
+                  className="px-2 py-1 text-sm md:text-[0.8rem]"
                 />
               </div>
             </div>
@@ -107,7 +107,7 @@ const AudioItem: React.FC<AudioItemProps> = ({
       </PopoverTrigger>
       <PopoverContent className="w-64">
         <div className="flex flex-col gap-1">
-          <div className="text-xs tracking-tight font-medium text-foreground-default truncate">
+          <div className="text-sm md:text-[0.8rem] tracking-tight font-medium text-foreground-default truncate">
             {track.name}
           </div>
           <div className="text-[11px] tracking-wide text-foreground-subtle">
