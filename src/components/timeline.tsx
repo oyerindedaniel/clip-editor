@@ -342,13 +342,11 @@ const Timeline: React.FC<TimelineProps> = ({
   return (
     <div className="flex relative flex-col gap-2 w-full h-[150px]">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
+        <div className="flex items-center gap-2 text-sm md:text-[0.8rem] text-foreground-subtle">
+          <div>
             <Scissors size={14} />
           </div>
-          <div className="text-sm md:text-[0.8rem] text-foreground-muted">
-            Drag handles to trim
-          </div>
+          <div>Drag handles to trim</div>
         </div>
         <InfoTooltip content="Drag the left and right handles to set the start and end points of your trimmed video. The minimum duration is 1 second." />
       </div>

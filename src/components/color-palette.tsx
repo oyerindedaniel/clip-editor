@@ -53,7 +53,9 @@ export function ColorPalette({
       <PopoverTrigger
         id={id}
         asChild
-        className="bg-surface-tertiary text-foreground-subtle hover:bg-surface-hover border-gray-700/50 w-fit"
+        className={cn(
+          "bg-surface-secondary text-foreground-default border-2 border-subtle w-fit"
+        )}
       >
         {children}
       </PopoverTrigger>

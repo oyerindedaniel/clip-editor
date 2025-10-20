@@ -88,7 +88,7 @@ export const Content = React.forwardRef<
       ref={ref}
       className={cn(
         "flex h-full gap-2 select-none touch-none overflow-hidden rounded-3xl",
-        "bg-surface-secondary border-2 border-subtle",
+        "bg-surface-secondary text-foreground-default border-2 border-subtle",
         "focus-within:border-primary focus-within:bg-surface-secondary/80",
         disabled && "opacity-50 pointer-events-none",
         className
@@ -283,9 +283,9 @@ export const Field = React.forwardRef<
       disabled={disabled}
       autoComplete="off"
       className={cn(
-        "rounded-none bg-transparent border-none shadow-none bg-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
+        "rounded-none bg-transparent border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
         "text-foreground-default placeholder:text-foreground-muted",
-        "w-max text-left",
+        "w-full text-left",
         className
       )}
       {...props}

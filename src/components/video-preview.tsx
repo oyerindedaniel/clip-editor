@@ -91,6 +91,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     const endRef = useLatestValue(keyframeBounds.end);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const composedRef = useComposedRefs(videoRef, getElementRef(source));
+
     const duration = keyframeBounds.end - keyframeBounds.start;
 
     const isValidVideo =

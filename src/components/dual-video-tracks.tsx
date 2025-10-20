@@ -8,7 +8,7 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from "react";
-import { Redo2, Scissors, Undo2, X } from "lucide-react";
+import { Redo2, Scissors, Undo2, X, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useScale } from "@/hooks/app/use-scale";
@@ -800,7 +800,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     <div className="flex relative flex-col gap-2 w-full h-[250px]">
       <div className="flex items-center justify-between">
         <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
-          🎞️
+          <Film size={14} />
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleAddMarker}>
@@ -889,7 +889,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
                 <TooltipContent side="top" className="flex items-center gap-2">
                   <span className="text-sm md:text-[0.8rem]">
-                    Marker at {markerTime}ms
+                    Marker at {msToSeconds(markerTime).toFixed(1)}s
                   </span>
                   <Button
                     variant="destructive"

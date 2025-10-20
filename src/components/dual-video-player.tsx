@@ -7,13 +7,7 @@ import React, {
   useState,
   forwardRef,
 } from "react";
-import {
-  Expand,
-  Maximize,
-  SquareStack,
-  Loader2,
-  AlertTriangle,
-} from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { S3ClipData, DualVideoClip } from "@/types/app";
 import { useShallowSelector } from "react-shallow-store";

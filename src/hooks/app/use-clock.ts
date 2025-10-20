@@ -17,7 +17,7 @@ type ControlAction =
   | "toggleRepeat"
   | "togglePlay";
 
-export type Control =
+export type ClockControl =
   | { action: Exclude<ControlAction, "seek" | "setSpeed"> }
   | { action: "seek"; time: number }
   | { action: "setSpeed"; speed: number };
@@ -33,6 +33,12 @@ class ClockStore {
   private lastTimestamp: number | null;
   private repeat: boolean;
   private subscribers: Set<Subscriber>;
+  private cachedSnapshot: {
+    time: number;
+    status: PlayingStatus;
+    duration: number;
+    repeat: boolean;
+  } | null;
 
   constructor(initialDuration: number) {
     this.duration = Math.max(0, initialDuration);
@@ -43,6 +49,7 @@ class ClockStore {
     this.lastTimestamp = null;
     this.repeat = false;
     this.subscribers = new Set();
+    this.cachedSnapshot = null;
   }
 
   getSnapshot(): {
@@ -51,12 +58,21 @@ class ClockStore {
     duration: number;
     repeat: boolean;
   } {
-    return {
-      time: this.time,
-      status: this.status,
-      duration: this.duration,
-      repeat: this.repeat,
-    };
+    if (
+      !this.cachedSnapshot ||
+      this.cachedSnapshot.time !== this.time ||
+      this.cachedSnapshot.status !== this.status ||
+      this.cachedSnapshot.duration !== this.duration ||
+      this.cachedSnapshot.repeat !== this.repeat
+    ) {
+      this.cachedSnapshot = {
+        time: this.time,
+        status: this.status,
+        duration: this.duration,
+        repeat: this.repeat,
+      };
+    }
+    return this.cachedSnapshot;
   }
 
   subscribe(fn: Subscriber): () => void {
@@ -117,7 +133,7 @@ class ClockStore {
     }
   }
 
-  dispatch(action: Control): void {
+  dispatch(action: ClockControl): void {
     switch (action.action) {
       case "play":
         if (this.status === "ended") this.time = 0;

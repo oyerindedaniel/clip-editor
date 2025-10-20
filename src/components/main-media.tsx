@@ -73,77 +73,84 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
           controls={false}
           playsInline
           muted={false}
-          className="w-full h-full object-contain rounded-lg"
+          className="w-full h-full object-contain rounded-lg bg-surface-secondary"
           poster="/thumbnails/video-thumb-2.webp"
         />
-        <Playback.Root
-          defaultPlaying={playState.isPlaying}
-          onPlayingChangeAlways={(shouldPlay) => {
-            if (shouldPlay) {
-              controls.play();
-            } else {
-              controls.pause();
-            }
-          }}
-          playingStatus={status}
-          isBuffering={isBuffering}
-          hasError={hasError}
-        >
-          <Playback.Controls className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Playback.PlayToggle />
-              <Playback.Volume>
-                <Volume.Root
-                  orientation="horizontal"
-                  defaultValue={controls.getVolume()}
-                  onValueChangeAlways={controls.setVolume}
-                >
-                  <Volume.Controls
-                    variant="pill"
-                    className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
+
+        {settings.layout === "pip" ? (
+          <></>
+        ) : (
+          <Playback.Root
+            defaultPlaying={playState.isPlaying}
+            onPlayingChangeAlways={(shouldPlay) => {
+              if (shouldPlay) {
+                controls.play();
+              } else {
+                controls.pause();
+              }
+            }}
+            playingStatus={status}
+            isBuffering={isBuffering}
+            hasError={hasError}
+          >
+            <Playback.Controls className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Playback.PlayToggle />
+                <Playback.Volume>
+                  <Volume.Root
+                    orientation="horizontal"
+                    defaultValue={controls.getVolume()}
+                    onValueChangeAlways={controls.setVolume}
                   >
-                    <Volume.Button
-                      size="icon"
-                      variant="glass"
-                      aria-label="Primary volume"
-                    />
-                    <Volume.Slider>
-                      <Volume.Slider.Track className="!glass">
-                        <Volume.Slider.Range className="bg-white" />
-                        <Volume.Slider.Thumb className="bg-white" />
-                      </Volume.Slider.Track>
-                    </Volume.Slider>
-                  </Volume.Controls>
-                </Volume.Root>
-              </Playback.Volume>
-            </div>
-            <div className="w-full">
-              <Playback.Seek
-                primaryVideoRef={videoRef}
-                primaryTrim={
-                  mediaType === "primary" ? primaryTrim : secondaryTrim
-                }
-                secondaryTrim={null}
-                primaryBuffered={buffered}
-                secondaryBuffered={null}
-                isPlaying={playState.isPlaying}
-                onSeek={controls.seek}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Playback.LoopToggle
-                defaultLoop={repeatRef.current}
-                onLoopChangeAlways={(value) => {
-                  repeatRef.current = value;
-                }}
-              />
-              <Playback.RateControl
-                defaultRate={controls.getPlaybackRate()}
-                onRateChangeAlways={controls.setPlaybackRate}
-              />
-            </div>
-          </Playback.Controls>
-        </Playback.Root>
+                    <Volume.Controls
+                      variant="pill"
+                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
+                    >
+                      <Volume.Button
+                        size="icon"
+                        variant="glass"
+                        aria-label="Primary volume"
+                      />
+                      <Volume.Slider>
+                        <Volume.Slider.Track className="!glass">
+                          <Volume.Slider.Range className="bg-white" />
+                          <Volume.Slider.Thumb className="bg-white" />
+                        </Volume.Slider.Track>
+                      </Volume.Slider>
+                    </Volume.Controls>
+                  </Volume.Root>
+                </Playback.Volume>
+              </div>
+
+              <div className="w-full">
+                <Playback.Seek
+                  primaryVideoRef={videoRef}
+                  primaryTrim={
+                    mediaType === "primary" ? primaryTrim : secondaryTrim
+                  }
+                  secondaryTrim={null}
+                  primaryBuffered={buffered}
+                  secondaryBuffered={null}
+                  isPlaying={playState.isPlaying}
+                  onSeek={controls.seek}
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Playback.LoopToggle
+                  defaultLoop={repeatRef.current}
+                  onLoopChangeAlways={(value) => {
+                    repeatRef.current = value;
+                  }}
+                />
+                <Playback.RateControl
+                  defaultRate={controls.getPlaybackRate()}
+                  onRateChangeAlways={controls.setPlaybackRate}
+                />
+              </div>
+            </Playback.Controls>
+          </Playback.Root>
+        )}
       </>
     );
   }

@@ -81,11 +81,7 @@ const AspectRatioSelector = ({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          size="sm"
-          className="text-sm md:text-[0.8rem]"
-          variant="outline"
-        >
+        <Button size="sm" variant="outline">
           <Settings size={14} className="mr-1" />
           Settings
         </Button>
@@ -115,10 +111,7 @@ const AspectRatioSelector = ({
                   setConvertAspectRatio(val as AspectRatioValue)
                 }
               >
-                <SelectTrigger
-                  id="aspectRatio"
-                  className="col-span-3 h-auto px-2 py-1 text-sm md:text-[0.8rem]"
-                >
+                <SelectTrigger id="aspectRatio" className="col-span-3">
                   <SelectValue placeholder="Select an aspect ratio" />
                 </SelectTrigger>
                 <SelectContent>
@@ -188,7 +181,7 @@ const AspectRatioSelector = ({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
+                      className="h-7 px-2 flex items-center gap-2"
                     >
                       <span
                         className="h-4 w-4 rounded border"

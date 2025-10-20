@@ -187,7 +187,7 @@ const AspectRatioPicker = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
+                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2 bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-1 border-subtle"
                 >
                   <span
                     className="h-4 w-4 rounded border"

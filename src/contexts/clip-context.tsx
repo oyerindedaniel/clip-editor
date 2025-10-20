@@ -23,7 +23,7 @@ import logger from "@/utils/logger";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import { DEFAULT_TRANSFORM } from "@/utils/transform";
 
-type DualVideoContextValue = {
+type ClipContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
   setSecondaryClip: React.Dispatch<
     React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
@@ -51,8 +51,9 @@ type StoredTrimData = {
 
 type TrimUpdater = TrimData | ((prev: TrimData) => TrimData);
 
-export const ClipContext =
-  createContext<StoreApi<DualVideoContextValue> | null>(null);
+export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
+  null
+);
 
 interface ClipProviderProps {
   children: ReactNode;
@@ -199,7 +200,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (primaryDuration === 0 && secondaryDuration === 0) return false;
 
     const primaryDefault = isDefaultTrim(primaryTrim, primaryDuration);
-    const secondaryDefault = isDefaultTrim(secondaryTrim, secondaryDuration);
+    const secondaryDefault = secondaryEl
+      ? isDefaultTrim(secondaryTrim, secondaryDuration)
+      : true;
 
     // only allow clear if something actually changed
     return !(primaryDefault && secondaryDefault);
@@ -238,7 +241,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     [primaryTrim, secondaryTrim, evaluateCanClearTrim]
   );
 
-  const contextValue = useMemo<DualVideoContextValue>(
+  const contextValue = useMemo<ClipContextValue>(
     () => ({
       secondaryClip,
       setSecondaryClip,
@@ -277,10 +280,10 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     ]
   );
 
-  const dualVideoStore = useContextStore(contextValue);
+  const clipVideoStore = useContextStore(contextValue);
 
   return (
-    <ClipContext.Provider value={dualVideoStore}>
+    <ClipContext.Provider value={clipVideoStore}>
       {children}
     </ClipContext.Provider>
   );
