@@ -2,7 +2,6 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, type AspectRatio } from "@/utils/aspect-ratios";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import { Volume } from "./volume";
 
 const DEFAULT_PIP_WIDTH = 240;
 const DEFAULT_PIP_HEIGHT = 135;

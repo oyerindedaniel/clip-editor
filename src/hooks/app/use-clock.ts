@@ -75,7 +75,7 @@ class ClockStore {
         status: this.status,
         duration: this.duration,
         repeat: this.repeat,
-        speed: this.speed, // ADD THIS
+        speed: this.speed,
       };
     }
     return this.cachedSnapshot;
