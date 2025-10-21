@@ -340,7 +340,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const timelineWidth = `${duration * rawPxPerMs}px`;
 
   return (
-    <div className="flex relative flex-col gap-2 w-full h-[150px]">
+    <div className="flex relative flex-col gap-2 w-full h-[150px] p-4 md:p-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm md:text-[0.8rem] text-foreground-subtle">
           <div>

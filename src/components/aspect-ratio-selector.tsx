@@ -89,7 +89,7 @@ const AspectRatioSelector = ({
       <PopoverContent className="w-fit" align="start" side="bottom">
         <div className="space-y-3">
           <div>
-            <h3 className="text-base font-medium text-foreground-default">
+            <h3 className="text-sm font-medium text-foreground-default">
               Adjust Aspect Ratio
             </h3>
             <p className="text-sm md:text-[0.8rem] text-foreground-subtle">

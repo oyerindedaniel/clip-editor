@@ -389,6 +389,17 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
       }
     }, [open, onPointerDownOutside, onOpenChange, triggerRef]);
 
+    useEffect(() => {
+      if (open) {
+        const originalStyle = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        return () => {
+          document.body.style.overflow = originalStyle;
+        };
+      }
+    }, [open]);
+
     if (!shouldRender && !forceMount) return null;
 
     const state = getState(animationState);

@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface EditorHeaderProps {
   isVideoLoaded: boolean;
@@ -28,6 +29,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   onClearTrimData,
   canClearTrim,
 }) => {
+  const isMd = useMediaQuery("(min-width: 768px)");
+
   return (
     <div className="sticky top-0 z-50 w-full bg-surface-primary border-default border-b">
       <div className="flex relative items-center justify-between px-5 py-2">
@@ -47,11 +50,11 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
-              size="sm"
+              size={isMd ? "sm" : "icon"}
               disabled={!isVideoLoaded}
               onClick={onToggleTrace}
             >
-              <Crosshair size={14} className="md:mr-1" />
+              <Crosshair size={14} className={isMd ? "md:mr-1" : ""} />
               <span className="hidden md:inline-block">Trace</span>
             </Button>
 
@@ -59,11 +62,11 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size={isMd ? "sm" : "icon"}
                   disabled={!isVideoLoaded || !canClearTrim}
                   onClick={onClearTrimData}
                 >
-                  <RotateCcw size={14} className="md:mr-1" />
+                  <RotateCcw size={14} className={isMd ? "md:mr-1" : ""} />
                   <span className="hidden md:inline-block">Clear Trim</span>
                 </Button>
               </TooltipTrigger>

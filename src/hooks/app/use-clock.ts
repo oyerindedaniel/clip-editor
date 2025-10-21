@@ -14,13 +14,15 @@ type ControlAction =
   | "seek"
   | "setSpeed"
   | "stop"
+  | "setRepeat"
   | "toggleRepeat"
   | "togglePlay";
 
 export type ClockControl =
-  | { action: Exclude<ControlAction, "seek" | "setSpeed"> }
+  | { action: Exclude<ControlAction, "seek" | "setSpeed" | "setRepeat"> }
   | { action: "seek"; time: number }
-  | { action: "setSpeed"; speed: number };
+  | { action: "setSpeed"; speed: number }
+  | { action: "setRepeat"; repeat: boolean };
 
 type Subscriber = () => void;
 
@@ -38,6 +40,7 @@ class ClockStore {
     status: PlayingStatus;
     duration: number;
     repeat: boolean;
+    speed: number;
   } | null;
 
   constructor(initialDuration: number) {
@@ -57,19 +60,22 @@ class ClockStore {
     status: PlayingStatus;
     duration: number;
     repeat: boolean;
+    speed: number;
   } {
     if (
       !this.cachedSnapshot ||
       this.cachedSnapshot.time !== this.time ||
       this.cachedSnapshot.status !== this.status ||
       this.cachedSnapshot.duration !== this.duration ||
-      this.cachedSnapshot.repeat !== this.repeat
+      this.cachedSnapshot.repeat !== this.repeat ||
+      this.cachedSnapshot.speed !== this.speed
     ) {
       this.cachedSnapshot = {
         time: this.time,
         status: this.status,
         duration: this.duration,
         repeat: this.repeat,
+        speed: this.speed, // ADD THIS
       };
     }
     return this.cachedSnapshot;
@@ -175,13 +181,21 @@ class ClockStore {
         break;
 
       case "setSpeed":
-        if (action.speed > 0) this.speed = action.speed;
+        if (action.speed > 0) {
+          this.speed = action.speed;
+          this.notify();
+        }
         break;
 
       case "stop":
         this.stopRaf();
         this.time = this.duration;
         this.status = "ended";
+        this.notify();
+        break;
+
+      case "setRepeat":
+        this.repeat = action.repeat;
         this.notify();
         break;
 
@@ -199,6 +213,20 @@ class ClockStore {
       this.status = "ended";
       this.stopRaf();
     }
+    this.notify();
+  }
+
+  setStatus(newStatus: PlayingStatus): void {
+    if (this.status === newStatus) return;
+
+    this.status = newStatus;
+
+    if (newStatus === "playing") {
+      this.startRaf();
+    } else {
+      this.stopRaf();
+    }
+
     this.notify();
   }
 }
@@ -221,12 +249,13 @@ export function useClock(duration: number) {
       status: "idle" as PlayingStatus,
       duration,
       repeat: false,
+      speed: 1,
     }),
     [duration]
   );
 
   const state = useSyncExternalStore(subscribe, getSnapshot, serverSnapshot);
-  const { time, status, repeat } = state;
+  const { time, status, repeat, speed } = state;
 
   const play = useCallback(
     () => storeRef.current.dispatch({ action: "play" }),
@@ -261,6 +290,17 @@ export function useClock(duration: number) {
     []
   );
 
+  const setRepeat = useCallback(
+    (r: boolean) =>
+      storeRef.current.dispatch({ action: "setRepeat", repeat: r }),
+    []
+  );
+
+  const setStatus = useCallback(
+    (status: PlayingStatus) => storeRef.current.setStatus(status),
+    []
+  );
+
   const controls = useMemo(
     () => ({
       play,
@@ -271,12 +311,25 @@ export function useClock(duration: number) {
       seek,
       setSpeed,
       toggleRepeat,
+      setRepeat,
+      setStatus,
     }),
-    [play, pause, togglePlay, reset, stop, seek, setSpeed, toggleRepeat]
+    [
+      play,
+      pause,
+      togglePlay,
+      reset,
+      stop,
+      seek,
+      setSpeed,
+      toggleRepeat,
+      setRepeat,
+      setStatus,
+    ]
   );
 
   return useMemo(
-    () => ({ time, status, duration: state.duration, repeat, controls }),
-    [time, status, state.duration, repeat, controls]
+    () => ({ time, status, duration: state.duration, repeat, speed, controls }),
+    [time, status, state.duration, repeat, speed, controls]
   );
 }

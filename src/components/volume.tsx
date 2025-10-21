@@ -119,7 +119,6 @@ function VolumeRoot({
   return (
     <VolumeContext.Provider value={ctx}>
       <div
-        className="space-x-2 space-y-2"
         onPointerEnter={() => setHovering(true)}
         onPointerLeave={() => setHovering(false)}
       >
@@ -285,41 +284,41 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
           variant,
         }}
       >
-        <HitArea buffer={30} variant={orientation === "horizontal" ? "r" : "t"}>
-          <div
-            ref={composedRefs}
-            data-state={state}
-            className={cn(
-              "relative flex gap-2",
-              orientation === "horizontal"
-                ? "flex-row items-center justify-center"
-                : "flex-col items-center justify-center [&>[data-slot=volume-button]]:order-2",
-              variant === "pill" &&
-                "bg-surface-secondary/70 w-fit backdrop-blur-sm rounded-full p-1",
-              variant === "soft" &&
-                "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
-              variant !== "default" &&
-                (orientation === "horizontal"
-                  ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
-                  : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]"),
-              className
-            )}
-            style={{
-              ...style,
-              ...({
-                "--start":
-                  startRef.current === 0
-                    ? "fit-content"
-                    : `${startRef.current}px`,
-                "--end":
-                  endRef.current === 0 ? "fit-content" : `${endRef.current}px`,
-              } as React.CSSProperties),
-            }}
-            {...props}
-          >
-            {children}
-          </div>
-        </HitArea>
+        {/* <HitArea buffer={30} variant={orientation === "horizontal" ? "r" : "t"}> */}
+        <div
+          ref={composedRefs}
+          data-state={state}
+          className={cn(
+            "relative flex gap-2",
+            orientation === "horizontal"
+              ? "flex-row items-center justify-center"
+              : "flex-col items-center justify-center [&>[data-slot=volume-button]]:order-2",
+            variant === "pill" &&
+              "bg-surface-secondary/70 w-fit backdrop-blur-sm rounded-full p-1",
+            variant === "soft" &&
+              "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
+            variant !== "default" &&
+              (orientation === "horizontal"
+                ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"
+                : "data-[state=open]:animate-[expand-height_250ms_linear_forwards] data-[state=closed]:animate-[collapse-height_250ms_linear_forwards]"),
+            className
+          )}
+          style={{
+            ...style,
+            ...({
+              "--start":
+                startRef.current === 0
+                  ? "fit-content"
+                  : `${startRef.current}px`,
+              "--end":
+                endRef.current === 0 ? "fit-content" : `${endRef.current}px`,
+            } as React.CSSProperties),
+          }}
+          {...props}
+        >
+          {children}
+        </div>
+        {/* </HitArea> */}
       </ControlsContext.Provider>
     );
   }

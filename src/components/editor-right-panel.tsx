@@ -132,7 +132,7 @@ export function EditorRightPanel({
                 },
               ].map((clip) => (
                 <div key={clip.id}>
-                  <div className="font-medium text-foreground-default text-base">{`Clip ${clip.id}`}</div>
+                  <div className="font-medium text-foreground-default text-sm">{`Clip ${clip.id}`}</div>
                   <div className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     {formatTime(clip.endTime - clip.startTime)}
                   </div>

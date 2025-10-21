@@ -217,7 +217,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         frames: primaryPreviewFrames,
         container: primaryStripRef.current,
       });
-      primaryStripInitialized.current = true;
+
+      if (!!primaryPreviewFrames?.length)
+        primaryStripInitialized.current = true;
     }
 
     const state = editHistoryRef.current[historyIndexRef.current];
@@ -309,7 +311,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [initialOffsetMs, renderBlocks, renderStrips, renderRuler]);
+  }, [initialOffsetMs, renderBlocks, renderRuler]);
 
   useEffect(() => {
     renderStrips();

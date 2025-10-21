@@ -8,9 +8,10 @@ import { Volume } from "./volume";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { msToSeconds } from "@/utils/video";
+import { useDualVideoSync } from "@/hooks/app/use-dual-video-sync";
+import { DualClockContext } from "@/contexts/dual-clock-context";
 
 // Component for 16:9 main media
-
 interface MainMediaProps {
   mediaUrl: string;
   setVideoRef: (element: HTMLVideoElement | null) => void;
@@ -44,9 +45,33 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
       dualVideoSettings: state.dualVideoSettings,
     }));
 
+    const { clock, primaryVideoRef, secondaryVideoRef } = useShallowSelector(
+      DualClockContext,
+      (state) => ({
+        clock: state.clock,
+        primaryVideoRef: state.primaryVideoRef,
+        secondaryVideoRef: state.secondaryVideoRef,
+      })
+    );
+
+    const {
+      controls: dualVideoControls,
+      primaryBuffered,
+      secondaryBuffered,
+      isBuffering: isBufferingDualVideo,
+      hasError: hasErrorDualVideo,
+    } = useDualVideoSync({
+      clock,
+      primaryVideoRef,
+      secondaryVideoRef,
+      primaryTrim,
+      secondaryTrim,
+      enabled: settings.layout === "pip",
+    });
+
     const { controls, status, buffered, isBuffering, hasError } =
       useConstrainedVideo({
-        videoRef: videoRef,
+        videoRef,
         trimStartRef: useLatestValue(
           mediaType === "primary"
             ? msToSeconds(primaryTrimRef.current.trimStart) ?? 0
@@ -73,12 +98,77 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
           controls={false}
           playsInline
           muted={false}
-          className="w-full h-full object-contain rounded-lg bg-surface-secondary"
+          className="w-full h-full object-contain bg-surface-secondary"
           poster="/thumbnails/video-thumb-2.webp"
         />
 
         {settings.layout === "pip" ? (
-          <></>
+          <Playback.Root
+            defaultPlaying={clock.status === "playing"}
+            onPlayingChangeAlways={(shouldPlay) => {
+              if (shouldPlay) {
+                dualVideoControls.play();
+              } else {
+                dualVideoControls.pause();
+              }
+            }}
+            playingStatus={clock.status}
+            isBuffering={isBufferingDualVideo}
+            hasError={hasErrorDualVideo}
+          >
+            <Playback.Controls className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Playback.PlayToggle />
+                <Playback.Volume>
+                  <Volume.Root
+                    orientation="horizontal"
+                    defaultValue={controls.getVolume()}
+                    onValueChangeAlways={controls.setVolume}
+                  >
+                    <Volume.Controls
+                      variant="pill"
+                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
+                    >
+                      <Volume.Button
+                        size="icon"
+                        variant="glass"
+                        aria-label="Primary volume"
+                      />
+                      <Volume.Slider>
+                        <Volume.Slider.Track className="!glass">
+                          <Volume.Slider.Range className="bg-white" />
+                          <Volume.Slider.Thumb className="bg-white" />
+                        </Volume.Slider.Track>
+                      </Volume.Slider>
+                    </Volume.Controls>
+                  </Volume.Root>
+                </Playback.Volume>
+              </div>
+
+              <div className="w-full">
+                <Playback.Seek
+                  primaryVideoRef={primaryVideoRef}
+                  secondaryVideoRef={secondaryVideoRef}
+                  primaryTrim={primaryTrim}
+                  secondaryTrim={secondaryTrim}
+                  primaryBuffered={primaryBuffered}
+                  secondaryBuffered={secondaryBuffered}
+                  isPlaying={clock.status === "playing"}
+                  onSeek={dualVideoControls.seek}
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Playback.LoopToggle
+                  defaultLoop={clock.repeat}
+                  onLoopChangeAlways={dualVideoControls.toggleRepeat}
+                />
+                <Playback.RateControl
+                  defaultRate={clock.speed}
+                  onRateChangeAlways={dualVideoControls.setPlayback}
+                />
+              </div>
+            </Playback.Controls>
+          </Playback.Root>
         ) : (
           <Playback.Root
             defaultPlaying={playState.isPlaying}

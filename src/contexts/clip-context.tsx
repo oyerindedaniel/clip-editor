@@ -40,6 +40,11 @@ type ClipContextValue = {
   getVideoRef: ReturnType<typeof useVideoRefs>["getVideoRef"];
   primaryVideoRef: ReturnType<typeof useVideoRefs>["primaryVideoRef"];
   secondaryVideoRef: ReturnType<typeof useVideoRefs>["secondaryVideoRef"];
+  primaryDualVideoRef: ReturnType<typeof useVideoRefs>["primaryDualVideoRef"];
+  secondaryDualVideoRef: ReturnType<
+    typeof useVideoRefs
+  >["secondaryDualVideoRef"];
+  pipVideoRef: ReturnType<typeof useVideoRefs>["pipVideoRef"];
   clearTrimData: () => void;
   canClearTrim: boolean;
 };
@@ -50,6 +55,15 @@ type StoredTrimData = {
 };
 
 type TrimUpdater = TrimData | ((prev: TrimData) => TrimData);
+
+export const DEFAULT_DUAL_VIDEO_SETTINGS = {
+  layout: "vertical-letterbox",
+  primaryAudio: "primary",
+  normalizeAudio: true,
+  primaryVolume: 0.8,
+  secondaryVolume: 0.6,
+  pip: DEFAULT_TRANSFORM,
+} as const;
 
 export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
   null
@@ -66,14 +80,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   >(null);
 
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
-    {
-      layout: "vertical-letterbox",
-      primaryAudio: "primary",
-      normalizeAudio: true,
-      primaryVolume: 0.8,
-      secondaryVolume: 0.6,
-      pip: DEFAULT_TRANSFORM,
-    }
+    DEFAULT_DUAL_VIDEO_SETTINGS
   );
 
   const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
@@ -121,7 +128,14 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
 
-  const { getVideoRef, primaryVideoRef, secondaryVideoRef } = useVideoRefs();
+  const {
+    getVideoRef,
+    primaryVideoRef,
+    secondaryVideoRef,
+    primaryDualVideoRef,
+    secondaryDualVideoRef,
+    pipVideoRef,
+  } = useVideoRefs();
 
   const saveTrimDataToStorage = (primary: TrimData, secondary: TrimData) => {
     if (!videoId) return;
@@ -257,6 +271,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       getVideoRef,
       primaryVideoRef,
       secondaryVideoRef,
+      primaryDualVideoRef,
+      secondaryDualVideoRef,
+      pipVideoRef,
       clearTrimData,
       canClearTrim,
     }),

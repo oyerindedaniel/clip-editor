@@ -43,6 +43,7 @@ import {
   DEFAULT_COLOR,
   DEFAULT_CROP_MODE,
 } from "@/constants/app";
+import { DEFAULT_DUAL_VIDEO_SETTINGS } from "@/contexts/clip-context";
 import {
   Popover,
   PopoverContent,
@@ -206,15 +207,6 @@ export default function DualVideoControls({
     [settings, onSettingsChange]
   );
 
-  const updateSecondaryClip = useCallback(
-    (updates: Partial<DualVideoClip>) => {
-      if (secondaryClip) {
-        onSecondaryClipChange({ ...secondaryClip, ...updates });
-      }
-    },
-    [secondaryClip, onSecondaryClipChange]
-  );
-
   if (!secondaryClip) {
     return (
       <div className="flex flex-col gap-3">
@@ -245,7 +237,10 @@ export default function DualVideoControls({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => onSecondaryClipChange(null)}
+            onClick={() => {
+              onSecondaryClipChange(null);
+              onSettingsChange(DEFAULT_DUAL_VIDEO_SETTINGS);
+            }}
           >
             <Trash2 size={14} className="text-error" />
           </Button>

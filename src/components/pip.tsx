@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, type AspectRatio } from "@/utils/aspect-ratios";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
+import { Volume } from "./volume";
 
 const DEFAULT_PIP_WIDTH = 240;
 const DEFAULT_PIP_HEIGHT = 135;
@@ -130,25 +131,6 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
       setPosition(newPosition);
       onPositionChange?.(newPosition);
     }, []);
-
-    const clampPosition = React.useCallback(
-      (x: number, y: number, width: number, height: number) => {
-        const container = containerRef.current;
-        if (!container) return { x, y, width, height };
-
-        const rect = container.getBoundingClientRect();
-        const maxX = rect.width - width;
-        const maxY = rect.height - height;
-
-        return {
-          x: Math.max(0, Math.min(x, maxX)),
-          y: Math.max(0, Math.min(y, maxY)),
-          width: Math.min(width, rect.width),
-          height: Math.min(height, rect.height),
-        };
-      },
-      []
-    );
 
     const handleDragStart = React.useCallback(
       (e: React.MouseEvent) => {
@@ -377,7 +359,7 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
         ref={composedRefs}
         className={cn(
           "absolute will-change-transform pointer-events-auto z-20",
-          "border-2 border-white/80 rounded-lg overflow-hidden",
+          "border-2 rounded-lg",
           "backdrop-blur-sm bg-black/10"
         )}
       >

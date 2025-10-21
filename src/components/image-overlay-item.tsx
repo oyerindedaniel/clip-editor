@@ -40,7 +40,7 @@ const ImageOverlayItem: React.FC<ImageOverlayItemProps> = ({
         <div
           data-overlay-inspector
           className={cn(
-            "group w-full rounded-3xl border text-base overflow-hidden cursor-pointer",
+            "group w-full rounded-3xl border text-sm overflow-hidden cursor-pointer",
             selectedOverlay === overlay.id
               ? "border-primary/60 bg-primary/5"
               : "border-subtle bg-surface-secondary"

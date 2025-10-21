@@ -145,7 +145,7 @@ export function useStackedTransition<const K extends string>(
   }, [duration, keys, internalActive, defaultActive]);
 
   const parentClassName =
-    "relative rounded-2xl [perspective:1200px] [perspective-origin:center_center] overflow-hidden";
+    "relative [perspective:1200px] [perspective-origin:center_center] overflow-hidden";
 
   return {
     refs,

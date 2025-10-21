@@ -122,7 +122,7 @@ const AspectRatioPicker = ({
       >
         <div className="space-y-3">
           <div>
-            <h3 className="text-base font-medium text-foreground-default">
+            <h3 className="text-sm font-medium text-foreground-default">
               Crop to Aspect Ratio
             </h3>
             <p className="text-sm md:text-[0.8rem] text-foreground-subtle">
@@ -185,9 +185,9 @@ const AspectRatioPicker = ({
               >
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="tertiary"
                   size="sm"
-                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2 bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-1 border-subtle"
+                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2 border-1 border-subtle"
                 >
                   <span
                     className="h-4 w-4 rounded border"

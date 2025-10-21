@@ -5,6 +5,11 @@ export function useVideoRefs() {
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const primaryDualVideoRef = useRef<HTMLVideoElement | null>(null);
+  const secondaryDualVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
+
   // Helper to select video element
   const getVideoRef = useMemo(
     () => (player: "primary" | "secondary") =>
@@ -15,6 +20,9 @@ export function useVideoRefs() {
   return {
     primaryVideoRef,
     secondaryVideoRef,
+    primaryDualVideoRef,
+    secondaryDualVideoRef,
+    pipVideoRef,
     getVideoRef,
   };
 }
