@@ -6,7 +6,6 @@ import type {
   ClipExportData,
   ClipMetadata,
   S3ClipData as ClipData,
-  Settings as SettingsType,
 } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
@@ -81,6 +80,7 @@ import { AudioContext } from "@/contexts/audio-context";
 import KeyframeNameInput from "./keyframe-name-input";
 import MainMedia from "./main-media";
 import PiPOverlay from "./pip-overlay";
+import { DualClockProvider } from "@/contexts/dual-clock-context";
 
 interface Data {
   buffer: ArrayBuffer;
@@ -149,6 +149,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef,
     primaryVideoRef,
     secondaryVideoRef,
+    primaryDualVideoRef,
+    secondaryDualVideoRef,
+    pipVideoRef,
     clearTrimData,
     canClearTrim,
   } = useShallowSelector(ClipContext, (state) => ({
@@ -161,6 +164,9 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     getVideoRef: state.getVideoRef,
     primaryVideoRef: state.primaryVideoRef,
     secondaryVideoRef: state.secondaryVideoRef,
+    primaryDualVideoRef: state.primaryDualVideoRef,
+    secondaryDualVideoRef: state.secondaryDualVideoRef,
+    pipVideoRef: state.pipVideoRef,
     clearTrimData: state.clearTrimData,
     canClearTrim: state.canClearTrim,
   }));
@@ -610,10 +616,14 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       ? primaryTrimData.trimEnd - primaryTrimData.trimStart
       : duration;
 
+  const secondaryDurationMs = secondaryClip?.metadata.clipDurationMs ?? 0;
+
+  const maxDurationMs = Math.max(primaryDurationMs, secondaryDurationMs);
+
   const source = useMemo(() => <video src={primaryUrl} />, [primaryUrl]);
 
   return (
-    <div className="h-dvh bg-surface-primary text-foreground-default text-base flex flex-col">
+    <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
         isVideoLoaded={isVideoLoaded}
         isExporting={isExporting}
@@ -624,7 +634,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
       />
 
       <div className="flex-1 min-h-0">
-        <div className="h-full flex flex-col p-4 space-y-4 max-w-6xl mx-auto">
+        <div className="h-full flex flex-col md:p-4 space-y-4 max-w-6xl mx-auto">
           <Keyframe.Root
             maxTime={duration}
             keyframes={controlledKeyframes}
@@ -718,7 +728,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                             ) : (
                               <Clapperboard size={14} />
                             )}
-                            <span className="text-sm md:text-[0.8rem]">
+                            <span>
                               {playerActive === "primary"
                                 ? "Secondary Clip"
                                 : "Primary Clip"}
@@ -758,65 +768,73 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         <>
                           <BoundaryBox.Container
                             ref={containerRef}
-                            className="relative rounded-2xl flex-1 min-w-0"
+                            className="relative flex-1 min-w-0"
                           >
-                            <PiPOverlay
-                              containerRef={containerRef}
-                              activePlayer={playerActive}
+                            <DualClockProvider
+                              duration={maxDurationMs}
+                              primaryVideoRef={
+                                playerActive === "primary"
+                                  ? primaryVideoRef
+                                  : secondaryVideoRef
+                              }
+                              secondaryVideoRef={pipVideoRef}
                             >
-                              <video
-                                src={
-                                  playerActive === "primary"
-                                    ? secondaryClip?.url
-                                    : primaryUrl
-                                }
-                              />
-                            </PiPOverlay>
-
-                            <div
-                              className={cn(
-                                "relative w-full aspect-video",
-                                playerParentClassName
-                              )}
-                            >
-                              {playerPresent.primary && (
-                                <div
-                                  ref={
-                                    playerRefs.primary as React.Ref<HTMLDivElement>
+                              <PiPOverlay containerRef={containerRef}>
+                                <video
+                                  ref={pipVideoRef}
+                                  src={
+                                    playerActive === "primary"
+                                      ? secondaryClip?.url
+                                      : primaryUrl
                                   }
-                                  className={playerClassNames.primary}
-                                  style={playerStyles.primary}
-                                >
-                                  <div className="relative w-full aspect-video">
-                                    <MainMedia
-                                      ref={primaryVideoRef}
-                                      mediaUrl={primaryUrl}
-                                      playerType="primary"
-                                      setVideoRef={setVideoRef}
-                                    />
-                                  </div>
-                                </div>
-                              )}
+                                />
+                              </PiPOverlay>
 
-                              {playerPresent.secondary && secondaryClip && (
-                                <div
-                                  ref={
-                                    playerRefs.secondary as React.Ref<HTMLDivElement>
-                                  }
-                                  className={playerClassNames.secondary}
-                                  style={playerStyles.secondary}
-                                >
-                                  <div className="relative w-full aspect-video">
-                                    <MainMedia
-                                      ref={secondaryVideoRef}
-                                      mediaUrl={secondaryClip.url}
-                                      playerType="secondary"
-                                      setVideoRef={setVideoRef}
-                                    />
+                              <div
+                                className={cn(
+                                  "relative w-full aspect-video",
+                                  playerParentClassName
+                                )}
+                              >
+                                {playerPresent.primary && (
+                                  <div
+                                    ref={
+                                      playerRefs.primary as React.Ref<HTMLDivElement>
+                                    }
+                                    className={playerClassNames.primary}
+                                    style={playerStyles.primary}
+                                  >
+                                    <div className="relative w-full aspect-video">
+                                      <MainMedia
+                                        ref={primaryVideoRef}
+                                        mediaUrl={primaryUrl}
+                                        playerType="primary"
+                                        setVideoRef={setVideoRef}
+                                      />
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
+                                )}
+
+                                {playerPresent.secondary && secondaryClip && (
+                                  <div
+                                    ref={
+                                      playerRefs.secondary as React.Ref<HTMLDivElement>
+                                    }
+                                    className={playerClassNames.secondary}
+                                    style={playerStyles.secondary}
+                                  >
+                                    <div className="relative w-full aspect-video">
+                                      <MainMedia
+                                        ref={secondaryVideoRef}
+                                        mediaUrl={secondaryClip.url}
+                                        playerType="secondary"
+                                        setVideoRef={setVideoRef}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </DualClockProvider>
 
                             <div ref={traceRef} />
                             <PersistentOverlays duration={duration} />
@@ -987,7 +1005,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2"
+                                            className="h-7 px-2 flex items-center gap-2 font-mono"
                                           >
                                             <span
                                               className="h-4 w-4 rounded-full border"
@@ -1028,7 +1046,10 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                                             })
                                           }
                                         >
-                                          <SelectTrigger id="keyframse-easing">
+                                          <SelectTrigger
+                                            id="keyframse-easing"
+                                            className="border-2"
+                                          >
                                             <SelectValue placeholder="Select easing" />
                                           </SelectTrigger>
                                           <SelectContent className="z-110">
@@ -1080,7 +1101,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                         ) : (
                           <Smartphone size={14} />
                         )}
-                        <span className="text-sm md:text-[0.8rem]">
+                        <span>
                           {active === "dual" ? "Canvas View" : "Dual View"}
                         </span>
                       </Button>
@@ -1091,19 +1112,24 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                       className={cn("aspect-[9/16] w-[260px]", parentClassName)}
                     >
                       {present.dual && (
-                        <DualVideoPlayer
-                          ref={
-                            keyframes?.length
-                              ? (refs.dual as React.Ref<HTMLDivElement>)
-                              : null
-                          }
-                          isPrimaryVideoLoaded={isVideoLoaded}
-                          primaryClip={clipData}
-                          secondaryClip={secondaryClip}
-                          duration={duration}
-                          className={classNames.dual}
-                          style={styles.dual}
-                        />
+                        <DualClockProvider
+                          duration={maxDurationMs}
+                          primaryVideoRef={primaryDualVideoRef}
+                          secondaryVideoRef={secondaryDualVideoRef}
+                        >
+                          <DualVideoPlayer
+                            ref={
+                              keyframes?.length
+                                ? (refs.dual as React.Ref<HTMLDivElement>)
+                                : null
+                            }
+                            primaryClip={clipData}
+                            secondaryClip={secondaryClip}
+                            duration={duration}
+                            className={classNames.dual}
+                            style={styles.dual}
+                          />
+                        </DualClockProvider>
                       )}
 
                       {present.renderer && (
@@ -1147,9 +1173,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                   {secondaryClip ? (
                     <DualVideoTracks
                       primaryDurationMs={primaryDurationMs}
-                      secondaryDurationMs={
-                        secondaryClip.metadata.clipDurationMs
-                      }
+                      secondaryDurationMs={secondaryDurationMs}
                       initialOffsetMs={0}
                       primaryPreviewFrames={primaryFrames}
                       secondaryPreviewFrames={secondaryFrames}

@@ -23,7 +23,7 @@ import logger from "@/utils/logger";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import { DEFAULT_TRANSFORM } from "@/utils/transform";
 
-type DualVideoContextValue = {
+type ClipContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
   setSecondaryClip: React.Dispatch<
     React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
@@ -40,6 +40,11 @@ type DualVideoContextValue = {
   getVideoRef: ReturnType<typeof useVideoRefs>["getVideoRef"];
   primaryVideoRef: ReturnType<typeof useVideoRefs>["primaryVideoRef"];
   secondaryVideoRef: ReturnType<typeof useVideoRefs>["secondaryVideoRef"];
+  primaryDualVideoRef: ReturnType<typeof useVideoRefs>["primaryDualVideoRef"];
+  secondaryDualVideoRef: ReturnType<
+    typeof useVideoRefs
+  >["secondaryDualVideoRef"];
+  pipVideoRef: ReturnType<typeof useVideoRefs>["pipVideoRef"];
   clearTrimData: () => void;
   canClearTrim: boolean;
 };
@@ -51,8 +56,18 @@ type StoredTrimData = {
 
 type TrimUpdater = TrimData | ((prev: TrimData) => TrimData);
 
-export const ClipContext =
-  createContext<StoreApi<DualVideoContextValue> | null>(null);
+export const DEFAULT_DUAL_VIDEO_SETTINGS = {
+  layout: "vertical-letterbox",
+  primaryAudio: "primary",
+  normalizeAudio: true,
+  primaryVolume: 0.8,
+  secondaryVolume: 0.6,
+  pip: DEFAULT_TRANSFORM,
+} as const;
+
+export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
+  null
+);
 
 interface ClipProviderProps {
   children: ReactNode;
@@ -65,14 +80,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   >(null);
 
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
-    {
-      layout: "vertical-letterbox",
-      primaryAudio: "primary",
-      normalizeAudio: true,
-      primaryVolume: 0.8,
-      secondaryVolume: 0.6,
-      pip: DEFAULT_TRANSFORM,
-    }
+    DEFAULT_DUAL_VIDEO_SETTINGS
   );
 
   const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
@@ -120,7 +128,14 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
 
-  const { getVideoRef, primaryVideoRef, secondaryVideoRef } = useVideoRefs();
+  const {
+    getVideoRef,
+    primaryVideoRef,
+    secondaryVideoRef,
+    primaryDualVideoRef,
+    secondaryDualVideoRef,
+    pipVideoRef,
+  } = useVideoRefs();
 
   const saveTrimDataToStorage = (primary: TrimData, secondary: TrimData) => {
     if (!videoId) return;
@@ -199,7 +214,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (primaryDuration === 0 && secondaryDuration === 0) return false;
 
     const primaryDefault = isDefaultTrim(primaryTrim, primaryDuration);
-    const secondaryDefault = isDefaultTrim(secondaryTrim, secondaryDuration);
+    const secondaryDefault = secondaryEl
+      ? isDefaultTrim(secondaryTrim, secondaryDuration)
+      : true;
 
     // only allow clear if something actually changed
     return !(primaryDefault && secondaryDefault);
@@ -238,7 +255,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     [primaryTrim, secondaryTrim, evaluateCanClearTrim]
   );
 
-  const contextValue = useMemo<DualVideoContextValue>(
+  const contextValue = useMemo<ClipContextValue>(
     () => ({
       secondaryClip,
       setSecondaryClip,
@@ -254,6 +271,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       getVideoRef,
       primaryVideoRef,
       secondaryVideoRef,
+      primaryDualVideoRef,
+      secondaryDualVideoRef,
+      pipVideoRef,
       clearTrimData,
       canClearTrim,
     }),
@@ -277,10 +297,10 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     ]
   );
 
-  const dualVideoStore = useContextStore(contextValue);
+  const clipVideoStore = useContextStore(contextValue);
 
   return (
-    <ClipContext.Provider value={dualVideoStore}>
+    <ClipContext.Provider value={clipVideoStore}>
       {children}
     </ClipContext.Provider>
   );
