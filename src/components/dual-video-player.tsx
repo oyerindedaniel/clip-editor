@@ -12,6 +12,10 @@ import { Volume } from "./volume";
 import { Playback } from "./video-controls";
 import { useDualVideoSync } from "@/hooks/app/use-dual-video-sync";
 import { DualClockContext } from "@/contexts/dual-clock-context";
+import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
+import { useLatestValue } from "@/hooks/use-latest-value";
+import { msToSeconds } from "@/utils/video";
+import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 
 interface DualVideoPlayerProps {
   primaryClip: S3ClipData;
@@ -26,6 +30,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
     { primaryClip, secondaryClip, duration, className, style },
     forwardedRef
   ) => {
+    const repeatRef = React.useRef(false);
+
     const { setDualVideoRef, secondaryContainerRef } = useShallowSelector(
       OverlaysContext,
       (state) => ({
@@ -54,6 +60,16 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
         secondaryVideoRef: state.secondaryVideoRef,
       })
     );
+
+    const { controls, status, buffered, isBuffering, hasError } =
+      useConstrainedVideo({
+        videoRef: primaryVideoRef,
+        trimStartRef: useLatestValue(msToSeconds(primaryTrim.trimStart) ?? 0),
+        trimEndRef: useLatestValue(msToSeconds(primaryTrim.trimEnd) ?? 0),
+        repeatRef,
+      });
+
+    const playState = getPlayingState(status);
 
     const {
       controls: dualVideoControls,
@@ -179,37 +195,89 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
             <div className="absolute top-1/2 left-0 right-0 h-px bg-error transform -translate-y-px" />
           )}
 
-          <Playback.Root
-            playing={clock.status === "playing"}
-            onPlayingChange={(shouldPlay) => {
-              if (shouldPlay) {
-                dualVideoControls.play();
-              } else {
-                dualVideoControls.pause();
-              }
-            }}
-            isBuffering={isBufferingDualVideo}
-            hasError={hasErrorDualVideo}
-          >
-            <Playback.Controls className="px-4">
-              <Playback.PlayToggle />
-              <Playback.LoopToggle
-                defaultLoop={clock.repeat}
-                onLoopChangeAlways={clock.controls.toggleRepeat}
-              />
+          {secondaryClip ? (
+            <Playback.Root
+              playing={clock.status === "playing"}
+              onPlayingChange={(shouldPlay) => {
+                if (shouldPlay) {
+                  dualVideoControls.play();
+                } else {
+                  dualVideoControls.pause();
+                }
+              }}
+              playingStatus={clock.status}
+              isBuffering={isBufferingDualVideo}
+              hasError={hasErrorDualVideo}
+            >
+              <Playback.Controls className="px-4">
+                <Playback.PlayToggle />
+                <Playback.LoopToggle
+                  defaultLoop={clock.repeat}
+                  onLoopChangeAlways={clock.controls.toggleRepeat}
+                />
 
+                <Seek.Root
+                  primaryVideoRef={primaryVideoRef}
+                  primaryTrim={primaryTrim}
+                  secondaryTrim={secondaryTrim}
+                  primaryBuffered={primaryBuffered}
+                  secondaryBuffered={secondaryBuffered}
+                  isPlaying={clock.status === "playing"}
+                  onSeek={dualVideoControls.seek}
+                >
+                  <Seek.Content>
+                    <Seek.TimeDisplay className="absolute top-1/2 -translate-y-1/2 right-4" />
+                    <Seek.Track className="-translate-y-full absolute top-0 w-[85%] left-1/2 -translate-x-1/2">
+                      <Seek.Buffer />
+                      <Seek.Progress />
+                      <Seek.Thumb />
+                    </Seek.Track>
+                    <Seek.Animator />
+                  </Seek.Content>
+                </Seek.Root>
+              </Playback.Controls>
+            </Playback.Root>
+          ) : (
+            <Playback.Root
+              playing={playState.isPlaying}
+              onPlayingChange={(shouldPlay) => {
+                if (shouldPlay) {
+                  controls.play();
+                } else {
+                  controls.pause();
+                }
+              }}
+              playingStatus={status}
+              isBuffering={isBuffering}
+              hasError={hasError}
+            >
+              <Playback.Controls className="flex items-center justify-between pt-8 px-4">
+                <div className="flex items-center gap-2">
+                  <Playback.PlayToggle />
+                  <Playback.LoopToggle
+                    defaultLoop={repeatRef.current}
+                    onLoopChangeAlways={(value) => {
+                      repeatRef.current = value;
+                    }}
+                  />
+                </div>
+                <Playback.RateControl
+                  defaultRate={controls.getPlaybackRate()}
+                  onRateChangeAlways={controls.setPlaybackRate}
+                />
+              </Playback.Controls>
               <Seek.Root
                 primaryVideoRef={primaryVideoRef}
                 primaryTrim={primaryTrim}
-                secondaryTrim={secondaryClip ? secondaryTrim : null}
-                primaryBuffered={primaryBuffered}
-                secondaryBuffered={secondaryBuffered}
-                isPlaying={clock.status === "playing"}
-                onSeek={dualVideoControls.seek}
+                secondaryTrim={null}
+                primaryBuffered={buffered}
+                secondaryBuffered={null}
+                isPlaying={playState.isPlaying}
+                onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
               >
                 <Seek.Content>
-                  <Seek.TimeDisplay className="absolute top-1/2 -translate-y-1/2 right-4" />
-                  <Seek.Track className="-translate-y-full absolute top-0 w-[85%] left-1/2 -translate-x-1/2">
+                  <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
+                  <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2 z-30">
                     <Seek.Buffer />
                     <Seek.Progress />
                     <Seek.Thumb />
@@ -217,8 +285,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   <Seek.Animator />
                 </Seek.Content>
               </Seek.Root>
-            </Playback.Controls>
-          </Playback.Root>
+            </Playback.Root>
+          )}
 
           <div
             className={cn(
