@@ -112,8 +112,6 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         clearTimeout(timeoutRef.current);
       }
 
-      console.log("in here now tap");
-
       togglePlay();
 
       setFeedbackKey((prev) => prev + 1);
