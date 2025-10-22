@@ -1,3 +1,4 @@
+import { msToSeconds } from "@/utils/video";
 import { useMemo } from "react";
 
 export interface BuildVideoControlsOptions {
@@ -77,6 +78,7 @@ export function useBuildVideoControls(
         }
       },
 
+      // time in seconds
       seek: (time: number) => {
         const video = videoRef.current;
         if (!video) return;

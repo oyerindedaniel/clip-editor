@@ -222,7 +222,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   primaryBuffered={buffered}
                   secondaryBuffered={null}
                   isPlaying={playState.isPlaying}
-                  onSeek={controls.seek}
+                  onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
                 />
               </div>
 

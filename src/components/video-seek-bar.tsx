@@ -283,6 +283,7 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         aria-describedby={`${currentTimeId} ${durationId}`}
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        onClick={(e) => e.stopPropagation()}
         {...props}
       >
         <div>{children}</div>

@@ -233,7 +233,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
             isBuffering={isBuffering}
             hasError={hasError}
           >
-            <Playback.Controls className="flex items-center justify-between px-2">
+            <Playback.Controls className="flex items-center justify-between px-4">
               <div className="flex items-center gap-3">
                 <Playback.PlayToggle />
                 <Playback.LoopToggle
