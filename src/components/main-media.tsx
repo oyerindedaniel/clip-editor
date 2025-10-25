@@ -34,21 +34,16 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
     const {
       primaryTrim,
       secondaryTrim,
-      primaryTrimRef,
-      secondaryTrimRef,
       dualVideoSettings: settings,
     } = useShallowSelector(ClipContext, (state) => ({
       primaryTrim: state.primaryTrim,
       secondaryTrim: state.secondaryTrim,
-      primaryTrimRef: state.primaryTrimRef,
-      secondaryTrimRef: state.secondaryTrimRef,
       dualVideoSettings: state.dualVideoSettings,
     }));
 
-    const { clock, primaryVideoRef, secondaryVideoRef } = useShallowSelector(
+    const { primaryVideoRef, secondaryVideoRef } = useShallowSelector(
       DualClockContext,
       (state) => ({
-        clock: state.clock,
         primaryVideoRef: state.primaryVideoRef,
         secondaryVideoRef: state.secondaryVideoRef,
       })
@@ -60,8 +55,10 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
       secondaryBuffered,
       isBuffering: isBufferingDualVideo,
       hasError: hasErrorDualVideo,
+      status: dualStatus,
+      playbackRate: dualPlaybackRate,
+      repeat: dualRepeat,
     } = useDualVideoSync({
-      clock,
       primaryVideoRef,
       secondaryVideoRef,
       primaryTrim,
@@ -74,13 +71,13 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
         videoRef,
         trimStartRef: useLatestValue(
           mediaType === "primary"
-            ? msToSeconds(primaryTrimRef.current.trimStart) ?? 0
-            : msToSeconds(secondaryTrimRef.current.trimStart) ?? 0
+            ? msToSeconds(primaryTrim.trimStart) ?? 0
+            : msToSeconds(secondaryTrim.trimStart) ?? 0
         ),
         trimEndRef: useLatestValue(
           mediaType === "primary"
-            ? msToSeconds(primaryTrimRef.current.trimEnd) ?? 0
-            : msToSeconds(secondaryTrimRef.current.trimEnd) ?? 0
+            ? msToSeconds(primaryTrim.trimEnd) ?? 0
+            : msToSeconds(secondaryTrim.trimEnd) ?? 0
         ),
         repeatRef,
       });
@@ -104,7 +101,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
         {settings.layout === "pip" ? (
           <Playback.Root
-            defaultPlaying={clock.status === "playing"}
+            defaultPlaying={dualStatus === "playing"}
             onPlayingChangeAlways={(shouldPlay) => {
               if (shouldPlay) {
                 dualVideoControls.play();
@@ -112,7 +109,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                 dualVideoControls.pause();
               }
             }}
-            playingStatus={clock.status}
+            playingStatus={dualStatus}
             isBuffering={isBufferingDualVideo}
             hasError={hasErrorDualVideo}
           >
@@ -153,17 +150,17 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   secondaryTrim={secondaryTrim}
                   primaryBuffered={primaryBuffered}
                   secondaryBuffered={secondaryBuffered}
-                  isPlaying={clock.status === "playing"}
+                  isPlaying={dualStatus === "playing"}
                   onSeek={dualVideoControls.seek}
                 />
               </div>
               <div className="flex items-center gap-3">
                 <Playback.LoopToggle
-                  defaultLoop={clock.repeat}
+                  defaultLoop={dualRepeat}
                   onLoopChangeAlways={dualVideoControls.toggleRepeat}
                 />
                 <Playback.RateControl
-                  defaultRate={clock.speed}
+                  defaultRate={dualPlaybackRate}
                   onRateChangeAlways={dualVideoControls.setPlayback}
                 />
               </div>
@@ -201,7 +198,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                         variant="glass"
                         aria-label="Primary volume"
                       />
-                      <Volume.Slider>
+                      <Volume.Slider className="w-16">
                         <Volume.Slider.Track className="!glass">
                           <Volume.Slider.Range className="bg-white" />
                           <Volume.Slider.Thumb className="bg-white" />

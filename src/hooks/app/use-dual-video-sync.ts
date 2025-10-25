@@ -1,33 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useClock } from "@/hooks/app/use-clock";
 import type { TrimData } from "@/types/app";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useStableHandler } from "../use-stable-handler";
 import { normalizeError } from "@/utils/error-utils";
-import { useLatestValue } from "../use-latest-value";
+import { PlayingStatus } from "./use-video-controls-core";
 
 type UseDualVideoSyncArgs = {
-  clock: ReturnType<typeof useClock>;
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
   secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
   primaryTrim: TrimData;
   secondaryTrim: TrimData;
-  onRender?: (timelineMs: number) => void;
+  onTimeUpdate?: (timelineMs: number) => void;
   enabled?: boolean;
 };
 
 /**
  * Keeps two trimmed videos in sync along a unified timeline.
+ * Uses requestVideoFrameCallback for frame-perfect synchronization.
  */
 export function useDualVideoSync(args: UseDualVideoSyncArgs) {
   const {
-    clock,
     primaryVideoRef,
     secondaryVideoRef,
     primaryTrim,
     secondaryTrim,
-    onRender,
+    onTimeUpdate,
     enabled = false,
   } = args;
 
@@ -35,8 +33,6 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
   const WAITING_DEBOUNCE_MS = 300; // Only treat as stalled after 300ms of waiting
 
   type StalledState = { primary: boolean; secondary: boolean };
-
-  const clockRef = useLatestValue(clock);
 
   const primaryMetaRef = useRef<VideoFrameCallbackMetadata | null>(null);
   const secondaryMetaRef = useRef<VideoFrameCallbackMetadata | null>(null);
@@ -53,7 +49,8 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
   });
   const isPlayingRef = useRef(false);
   const isSeekingRef = useRef(false);
-  const lastClockSeekRef = useRef<number>(0);
+  const repeatRef = useRef(false);
+  const playbackRateRef = useRef(1);
 
   const lastFrameRef = useRef<number | null>(null);
   const fpsEstimateRef = useRef<number | null>(null);
@@ -68,6 +65,8 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
   );
 
   const [hasError, setHasError] = useState(false);
+  const [status, setStatus] = useState<PlayingStatus>("idle");
+  const [currentTimelineMs, setCurrentTimelineMs] = useState(0);
 
   const [primaryBuffered, setPrimaryBuffered] = useState<TimeRanges | null>(
     null
@@ -126,6 +125,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       (primaryTrim.trimEnd - primaryTrim.trimStart),
     [primaryTrim]
   );
+
   const secondaryEndTimelineMs = useCallback(
     () =>
       secondaryTrim.timelineOffset +
@@ -139,14 +139,13 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     [primaryEndTimelineMs, secondaryEndTimelineMs]
   );
 
-  /** PerformSeek */
+  /** Perform seek operation on both videos */
   const performSeek = useCallback(
     (targetMs: number) => {
-      const clampedMs = Math.max(0, targetMs);
+      const clampedMs = Math.max(0, Math.min(targetMs, maxEndTimelineMs()));
 
       isSeekingRef.current = true;
-      lastClockSeekRef.current = clampedMs;
-      clock.controls.seek(clampedMs);
+      setCurrentTimelineMs(clampedMs);
 
       if (enabled) {
         const primary = primaryVideoRef.current;
@@ -177,7 +176,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         isSeekingRef.current = false;
       });
     },
-    [enabled, clock, primaryTrim, secondaryTrim]
+    [enabled, primaryTrim, secondaryTrim, maxEndTimelineMs]
   );
 
   /** Pause all playback */
@@ -186,9 +185,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     const secondary = secondaryVideoRef.current;
 
     isPlayingRef.current = false;
-    if (clock.status === "playing") {
-      clock.controls.pause();
-    }
+    setStatus("paused");
 
     try {
       if (primary && !primary.paused) {
@@ -204,7 +201,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     } catch (err) {
       logger.warn("Secondary pause failed:", err);
     }
-  }, [clock]);
+  }, []);
 
   const stablePauseAll = useStableHandler(pauseAll);
 
@@ -248,6 +245,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
 
   /**
    * Render frame if both videos are properly aligned.
+   * This is called from requestVideoFrameCallback and handles the core synchronization logic.
    */
   const renderIfAligned = useCallback(
     (
@@ -269,14 +267,25 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         timelineFromMediaTime(secondaryMeta?.mediaTime ?? 0, secondaryTrim) >=
         secondaryEndTimelineMs();
 
+      // When secondary video's frame callback fires, only process if primary has already finished its segment.
+      // This prevents secondary from driving the timeline while primary is still the active video.
       if (fromSecondary && !primaryEnded) return;
+
+      // When primary video's frame callback fires and primary has finished, only continue if secondary is still playing.
+      // This transfers timeline control to secondary video so it can finish its remaining segment.
       if (!fromSecondary && primaryEnded && !secondaryEnded) return;
 
+      // When both videos have completed their respective trimmed segments, no synchronization is needed.
+      // Exit early to avoid false drift detection between videos that are legitimately at different timeline positions.
+      if (primaryEnded && secondaryEnded) return;
+
+      // Determine which video is driving the timeline
       const drivingMeta = primaryEnded ? secondaryMeta : primaryMeta;
       const drivingTrim = primaryEnded ? secondaryTrim : primaryTrim;
       if (!drivingMeta) return;
 
       // ---- FPS Estimation ----
+      // Track frame delta to estimate actual playback frame rate
       const now = drivingMeta.mediaTime;
       const last = lastFrameRef.current ?? now;
       const delta = now - last;
@@ -286,6 +295,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       if (delta > 0 && delta < 1) {
         const instantaneous = 1 / delta;
         const clamped = Math.min(Math.max(instantaneous, 1), 120);
+        // Exponential moving average for smooth FPS estimate
         fpsEstimateRef.current = prevFps * 0.9 + clamped * 0.1;
       }
       const fps = fpsEstimateRef.current ?? 30;
@@ -293,50 +303,37 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       const frameMs = 1000 / fps;
 
       // ---- Sync tuning constants ----
-      const SYNC_TOLERANCE_MS = frameMs * 1.5; // ~1–2 frames drift allowed
-      const CLOCK_CORRECTION_THRESHOLD_MS = frameMs * 4; // correct only if >4-frame drift
-      const CLOCK_CORRECTION_LERP = 0.2; // 20% smooth clock correction
+      const RESYNC_THRESHOLD_MS = frameMs * 4; // Force resync if >4-frame drift
 
       const timelineMs = timelineFromMediaTime(
         drivingMeta.mediaTime,
         drivingTrim
       );
-      const end = maxEndTimelineMs();
+
+      setCurrentTimelineMs(timelineMs);
+      onTimeUpdate?.(timelineMs);
 
       // ---- If secondary not active in current segment ----
+      // Only primary is playing, no sync needed
       const secondaryActive = isSecondaryActiveAtTimeline(timelineMs);
       if (!secondaryActive) {
-        if (
-          Math.abs(clock.time - timelineMs) > CLOCK_CORRECTION_THRESHOLD_MS &&
-          !isSeekingRef.current
-        ) {
-          isSeekingRef.current = true;
-          lastClockSeekRef.current = timelineMs;
-          clock.controls.seek(timelineMs);
-          requestAnimationFrame(() => {
-            isSeekingRef.current = false;
-          });
-        }
-        onRender?.(timelineMs);
         return;
       }
 
       if (!secondaryMeta) return;
 
       // ---- Sync validation ----
+      // Check if secondary video is where it should be relative to primary
       const expectedSec = expectedSecondaryMediaSecForTimeline(timelineMs);
       const actualSec = secondaryMeta.mediaTime;
       const driftMs = Math.abs((actualSec - expectedSec) * 1000);
 
-      if (driftMs <= SYNC_TOLERANCE_MS) {
-        // In sync → render normally
-        onRender?.(timelineMs);
-      } else if (driftMs > CLOCK_CORRECTION_THRESHOLD_MS) {
-        // Smooth correction toward expected timeline (no hard jumps)
-        const corrected =
-          clock.time + (timelineMs - clock.time) * CLOCK_CORRECTION_LERP;
-        clock.controls.seek(corrected);
-        onRender?.(timelineMs);
+      if (driftMs > RESYNC_THRESHOLD_MS) {
+        logger.warn(
+          `Video drift detected: ${driftMs.toFixed(1)}ms, resyncing...`
+        );
+        stablePauseAll();
+        performSeek(timelineMs);
       }
     },
     [
@@ -344,14 +341,13 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       timelineFromMediaTime,
       isSecondaryActiveAtTimeline,
       expectedSecondaryMediaSecForTimeline,
-      onRender,
-      clock,
+      onTimeUpdate,
       primaryTrim,
       secondaryTrim,
       primaryEndTimelineMs,
       secondaryEndTimelineMs,
-      maxEndTimelineMs,
-      pauseAll,
+      performSeek,
+      stablePauseAll,
     ]
   );
 
@@ -371,15 +367,16 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       )
         return;
 
-      const now = clock.time;
       const end = maxEndTimelineMs();
-      if (now >= end) {
-        clock.controls.seek(end);
-        clock.controls.pause();
+      if (currentTimelineMs >= end) {
+        performSeek(end);
+        setStatus("ended");
         return;
       }
 
       isPlayingRef.current = true;
+      setStatus("playing");
+
       Promise.all([
         primary
           .play()
@@ -391,11 +388,9 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
           .catch((err: unknown) =>
             logger.warn("Secondary play failed:", normalizeError(err).message)
           ),
-      ]).then(() => {
-        if (clock.status !== "playing") clock.controls.play();
-      });
+      ]);
     }, RESUME_DEBOUNCE_MS);
-  }, [enabled, clock, maxEndTimelineMs]);
+  }, [enabled, currentTimelineMs, maxEndTimelineMs, performSeek]);
 
   const stableAttemptResume = useStableHandler(attemptResume);
 
@@ -430,9 +425,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         if (secondary && !secondary.paused && secondary.readyState < 3) {
           stalledRef.current.secondary = true;
           stablePauseAll();
+          isBufferingRef.current.secondary = true;
+          setBufferingState(true);
         }
       }, WAITING_DEBOUNCE_MS);
-      setBufferingState(true);
     };
 
     const onPlayPrimary = () => {
@@ -459,6 +455,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         waitingTimerRef.current.primary = null;
       }
       stalledRef.current.primary = false;
+      isBufferingRef.current.primary = false;
       if (!isBufferingRef.current.secondary) {
         setBufferingState(false);
       }
@@ -483,21 +480,25 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
 
     const onCanPlayThroughPrimary = () => {
       isBufferingRef.current.primary = false;
-      setBufferingState(false);
+      if (!isBufferingRef.current.secondary) {
+        setBufferingState(false);
+      }
     };
 
     const onCanPlayThroughSecondary = () => {
       isBufferingRef.current.secondary = false;
-      setBufferingState(false);
+      if (!isBufferingRef.current.primary) {
+        setBufferingState(false);
+      }
     };
 
     const onStalledPrimary = () => {
-      isBufferingRef.current.primary = false;
+      isBufferingRef.current.primary = true;
       setBufferingState(true);
     };
 
     const onStalledSecondary = () => {
-      isBufferingRef.current.secondary = false;
+      isBufferingRef.current.secondary = true;
       setBufferingState(true);
     };
 
@@ -525,14 +526,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       const primaryEndMs = primaryEndTimelineMs();
       const secondaryEndMs = secondaryEndTimelineMs();
 
-      // console.log({
-      //   primaryTimelineMs,
-      //   secondaryEndTimelineMs,
-      //   primaryEndMs,
-      //   secondaryEndMs,
-      //   repeat: clockRef.current.repeat,
-      // });
-
+      // Pause individual videos when they reach their segment end
       if (
         primaryTimelineMs >= primaryEndMs &&
         secondaryTimelineMs < secondaryEndMs
@@ -546,6 +540,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         secondary.pause();
       }
 
+      // Check if both videos have finished
       const currentTimelineMs = Math.max(
         primaryTimelineMs,
         secondaryTimelineMs
@@ -562,18 +557,23 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
           secondaryHandleRef.current = null;
         }
 
-        onRender?.(end);
+        setCurrentTimelineMs(end);
+        onTimeUpdate?.(end);
 
-        if (clockRef.current.repeat) {
+        // Handle repeat or end
+        if (repeatRef.current) {
           if (!isSeekingRef.current) {
             performSeek(0);
+            // Auto-restart playback
+            setTimeout(() => {
+              controls.play();
+            }, 50);
           }
         } else {
           if (!isSeekingRef.current) {
             performSeek(0);
           }
-
-          clockRef.current.controls.setStatus("ended");
+          setStatus("ended");
           pauseAll();
         }
       }
@@ -607,15 +607,35 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       secondary.removeEventListener("canplay", onCanPlaySecondary);
       primary.removeEventListener("error", onError);
       secondary.removeEventListener("error", onError);
-      primary.removeEventListener("canplaythrough", onCanPlayPrimary);
-      secondary.removeEventListener("canplaythrough", onCanPlaySecondary);
+      primary.removeEventListener("canplaythrough", onCanPlayThroughPrimary);
+      secondary.removeEventListener(
+        "canplaythrough",
+        onCanPlayThroughSecondary
+      );
       primary.removeEventListener("stalled", onStalledPrimary);
       secondary.removeEventListener("stalled", onStalledSecondary);
+      primary.removeEventListener("progress", onProgressPrimary);
+      secondary.removeEventListener("progress", onProgressSecondary);
       primary.removeEventListener("timeupdate", handleTimeUpdate);
       secondary.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, [enabled, stablePauseAll, stableAttemptResume, cleanup]);
+  }, [
+    enabled,
+    stablePauseAll,
+    stableAttemptResume,
+    cleanup,
+    performSeek,
+    pauseAll,
+    onTimeUpdate,
+    primaryTrim,
+    secondaryTrim,
+    maxEndTimelineMs,
+    primaryEndTimelineMs,
+    secondaryEndTimelineMs,
+    timelineFromMediaTime,
+  ]);
 
+  // Initialize video positions when enabled
   useEffect(() => {
     if (!enabled) return;
 
@@ -623,11 +643,11 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     const secondary = secondaryVideoRef.current;
     if (!primary || !secondary) return;
 
-    const timelineMs = clock.time;
+    const timelineMs = currentTimelineMs;
     const end = maxEndTimelineMs();
 
     if (timelineMs >= end) {
-      clock.controls.seek(end);
+      performSeek(end);
       pauseAll();
       return;
     }
@@ -658,6 +678,8 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     if (!primary || !secondary) return;
 
     isPlayingRef.current = true;
+    setStatus("playing");
+
     Promise.all([primary.play(), secondary.play()]).catch(() => {});
 
     const primaryFrameCallback = (
@@ -719,12 +741,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         logger.warn("Dual sync not enabled");
         return;
       }
-      clock.controls.play();
       play();
     },
 
     pause: () => {
-      clock.controls.pause();
       pause();
     },
 
@@ -739,16 +759,20 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       }
 
       if (isPlayingRef.current) {
-        clock.controls.pause();
         pause();
       } else {
-        clock.controls.play();
         play();
       }
     },
 
     toggleRepeat: () => {
-      clock.controls.toggleRepeat();
+      repeatRef.current = !repeatRef.current;
+      logger.info(`Repeat ${repeatRef.current ? "enabled" : "disabled"}`);
+    },
+
+    setRepeat: (repeat: boolean) => {
+      repeatRef.current = repeat;
+      logger.info(`Repeat ${repeat ? "enabled" : "disabled"}`);
     },
 
     setPlayback: (rate: number) => {
@@ -763,7 +787,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       if (primary) primary.playbackRate = rate;
       if (secondary) secondary.playbackRate = rate;
 
-      clock.controls.setSpeed(rate);
+      playbackRateRef.current = rate;
       logger.info(`Playback rate set to ${rate}x`);
     },
   };
@@ -775,5 +799,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     primaryBuffered,
     secondaryBuffered,
     hasError,
+    status,
+    currentTimelineMs,
+    duration: maxEndTimelineMs(),
+    repeat: repeatRef.current,
+    playbackRate: playbackRateRef.current,
   };
 }

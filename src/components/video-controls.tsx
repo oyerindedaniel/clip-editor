@@ -192,9 +192,9 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 PlaybackRoot.displayName = "PlaybackRoot";
 
 const PlaybackBuffer = () => {
-  const { isBuffering } = usePlayback();
+  const { isBuffering, playing } = usePlayback();
 
-  if (!isBuffering) return null;
+  if (!(isBuffering && playing)) return null;
 
   return (
     <Loader2 className="h-12 w-12 animate-spin absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10 text-white fill-white/10" />
@@ -246,12 +246,11 @@ interface PlaybackControlsProps extends React.HTMLAttributes<HTMLDivElement> {}
 const PlaybackControls = React.forwardRef<
   HTMLDivElement,
   PlaybackControlsProps
->(({ className, children, ...props }, ref) => {
+>(function PlaybackControls({ className, children, ...props }, ref) {
   const { playing, hovered, controlledControlsId, controlsId, videoPlayerId } =
     usePlayback();
 
-  if (playing && !hovered) return null;
-
+  const visible = !playing || hovered;
   const _controlsId = controlledControlsId || controlsId;
 
   return (
@@ -261,10 +260,15 @@ const PlaybackControls = React.forwardRef<
       role="group"
       aria-label="Video controls"
       aria-controls={videoPlayerId}
-      onClick={(e) => e.stopPropagation()}
+      onClick={function handleClick(e) {
+        e.stopPropagation();
+      }}
+      data-state={visible ? "visible" : "hidden"}
       className={cn(
         "flex items-center gap-2 border-none z-20",
         "absolute bottom-0 pointer-events-auto px-8 pb-3 pt-3.5 left-1/2 -translate-x-1/2 w-full",
+        "transition-opacity duration-300 ease-in-out",
+        "data-[state=visible]:opacity-100 data-[state=hidden]:opacity-0",
         className
       )}
       {...props}

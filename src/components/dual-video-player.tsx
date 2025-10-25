@@ -52,10 +52,9 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       setDualVideoSettings: state.setDualVideoSettings,
     }));
 
-    const { clock, primaryVideoRef, secondaryVideoRef } = useShallowSelector(
+    const { primaryVideoRef, secondaryVideoRef } = useShallowSelector(
       DualClockContext,
       (state) => ({
-        clock: state.clock,
         primaryVideoRef: state.primaryVideoRef,
         secondaryVideoRef: state.secondaryVideoRef,
       })
@@ -77,8 +76,10 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       secondaryBuffered,
       isBuffering: isBufferingDualVideo,
       hasError: hasErrorDualVideo,
+      status: dualStatus,
+      playbackRate: dualPlaybackRate,
+      repeat: dualRepeat,
     } = useDualVideoSync({
-      clock,
       primaryVideoRef,
       secondaryVideoRef,
       primaryTrim,
@@ -88,7 +89,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
     useEffect(() => {
       setDualVideoRef(primaryVideoRef);
-    }, [setDualVideoRef, primaryVideoRef]);
+    }, []);
 
     return (
       <div
@@ -122,8 +123,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
             <div className="absolute bottom-2 left-2 z-20">
               <Volume.Root
-                defaultValue={dualVideoSettings.primaryVolume}
-                onValueChangeAlways={(volume) => {
+                value={dualVideoSettings.primaryVolume}
+                onValueChange={(volume) => {
                   const video = primaryVideoRef.current;
                   if (!video) return;
                   const clamped = Math.max(0, Math.min(volume, 1));
@@ -164,8 +165,8 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
               <div className="absolute top-2 left-2 z-20">
                 <Volume.Root
-                  defaultValue={dualVideoSettings.secondaryVolume}
-                  onValueChangeAlways={(volume) => {
+                  value={dualVideoSettings.secondaryVolume}
+                  onValueChange={(volume) => {
                     const video = secondaryVideoRef.current;
                     if (!video) return;
                     const clamped = Math.max(0, Math.min(volume, 1));
@@ -197,7 +198,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
           {secondaryClip ? (
             <Playback.Root
-              playing={clock.status === "playing"}
+              playing={dualStatus === "playing"}
               onPlayingChange={(shouldPlay) => {
                 if (shouldPlay) {
                   dualVideoControls.play();
@@ -205,15 +206,15 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   dualVideoControls.pause();
                 }
               }}
-              playingStatus={clock.status}
+              playingStatus={dualStatus}
               isBuffering={isBufferingDualVideo}
               hasError={hasErrorDualVideo}
             >
               <Playback.Controls className="px-4">
                 <Playback.PlayToggle />
                 <Playback.LoopToggle
-                  defaultLoop={clock.repeat}
-                  onLoopChangeAlways={clock.controls.toggleRepeat}
+                  defaultLoop={dualRepeat}
+                  onLoopChangeAlways={dualVideoControls.toggleRepeat}
                 />
 
                 <Seek.Root
@@ -222,7 +223,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   secondaryTrim={secondaryTrim}
                   primaryBuffered={primaryBuffered}
                   secondaryBuffered={secondaryBuffered}
-                  isPlaying={clock.status === "playing"}
+                  isPlaying={dualStatus === "playing"}
                   onSeek={dualVideoControls.seek}
                 >
                   <Seek.Content>

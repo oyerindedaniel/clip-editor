@@ -345,8 +345,8 @@ export default function DualVideoControls({
               transition={{ duration: 0.3, ease: "easeInOut" }}
               className="overflow-hidden"
             >
-              <div className="space-y-4 pt-2 border-t border-surface-tertiary">
-                <div className="flex flex-col gap-2">
+              <div className="space-y-3 pt-2 border-t border-surface-tertiary">
+                <div className="flex flex-col gap-3">
                   <label className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     Layout
                   </label>
@@ -415,67 +415,69 @@ export default function DualVideoControls({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
 
-                  <div className="flex flex-col gap-3 items-start">
-                    <Volume.Root
-                      value={settings.primaryVolume}
-                      onValueChange={(v) => updateSetting("primaryVolume", v)}
-                    >
-                      <Volume.Label className="text-sm md:text-[0.8rem]">
-                        Primary Volume:{" "}
-                        <span className="font-bold text-foreground-default">
-                          {Math.round(settings.primaryVolume * 100)}%
-                        </span>
-                      </Volume.Label>
-                      <Volume.Controls variant="pill">
-                        <Volume.Button aria-label="Primary volume" />
-                        <Volume.Slider>
-                          <Volume.Slider.Track>
-                            <Volume.Slider.Range />
-                            <Volume.Slider.Thumb />
-                          </Volume.Slider.Track>
-                        </Volume.Slider>
-                      </Volume.Controls>
-                    </Volume.Root>
+                <Volume.Root
+                  value={settings.primaryVolume}
+                  onValueChange={(volume) =>
+                    updateSetting("primaryVolume", volume)
+                  }
+                >
+                  <Volume.Label className="mb-3">
+                    Primary Volume:{" "}
+                    <span className="font-bold text-foreground-default">
+                      {Math.round(settings.primaryVolume * 100)}%
+                    </span>
+                  </Volume.Label>
+                  <Volume.Controls variant="pill">
+                    <Volume.Button aria-label="Primary volume" />
+                    <Volume.Slider>
+                      <Volume.Slider.Track>
+                        <Volume.Slider.Range />
+                        <Volume.Slider.Thumb />
+                      </Volume.Slider.Track>
+                    </Volume.Slider>
+                  </Volume.Controls>
+                </Volume.Root>
 
-                    <Volume.Root
-                      value={settings.secondaryVolume}
-                      onValueChange={(v) => updateSetting("secondaryVolume", v)}
-                    >
-                      <Volume.Label className="text-sm md:text-[0.8rem]">
-                        Secondary Volume:{" "}
-                        <span className="font-bold text-foreground-default">
-                          {Math.round((settings.secondaryVolume || 0.6) * 100)}%
-                        </span>
-                      </Volume.Label>
-                      <Volume.Controls variant="pill">
-                        <Volume.Button aria-label="Secondary volume" />
-                        <Volume.Slider>
-                          <Volume.Slider.Track>
-                            <Volume.Slider.Range />
-                            <Volume.Slider.Thumb />
-                          </Volume.Slider.Track>
-                        </Volume.Slider>
-                      </Volume.Controls>
-                    </Volume.Root>
+                <Volume.Root
+                  value={settings.secondaryVolume}
+                  onValueChange={(volume) =>
+                    updateSetting("secondaryVolume", volume)
+                  }
+                >
+                  <Volume.Label className="mb-3">
+                    Secondary Volume:{" "}
+                    <span className="font-bold text-foreground-default">
+                      {Math.round((settings.secondaryVolume || 0.6) * 100)}%
+                    </span>
+                  </Volume.Label>
+                  <Volume.Controls variant="pill">
+                    <Volume.Button aria-label="Secondary volume" />
+                    <Volume.Slider>
+                      <Volume.Slider.Track>
+                        <Volume.Slider.Range />
+                        <Volume.Slider.Thumb />
+                      </Volume.Slider.Track>
+                    </Volume.Slider>
+                  </Volume.Controls>
+                </Volume.Root>
 
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="normalizeAudio"
-                        checked={settings.normalizeAudio}
-                        onCheckedChange={(v: boolean) =>
-                          updateSetting("normalizeAudio", v)
-                        }
-                        disabled={disabled}
-                      />
-                      <label
-                        htmlFor="normalizeAudio"
-                        className="text-sm md:text-[0.8rem] text-foreground-subtle"
-                      >
-                        Normalize Audio
-                      </label>
-                    </div>
-                  </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="normalizeAudio"
+                    checked={settings.normalizeAudio}
+                    onCheckedChange={(value: boolean) =>
+                      updateSetting("normalizeAudio", value)
+                    }
+                    disabled={disabled}
+                  />
+                  <label
+                    htmlFor="normalizeAudio"
+                    className="text-sm md:text-[0.8rem] text-foreground-subtle"
+                  >
+                    Normalize Audio
+                  </label>
                 </div>
               </div>
             </motion.div>

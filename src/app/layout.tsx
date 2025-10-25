@@ -47,7 +47,7 @@ export default function RootLayout({
           geistSans.variable,
           geistMono.variable,
           inter.variable,
-          "antialiased"
+          "antialiased overflow-x-hidden"
         )}
       >
         {children}

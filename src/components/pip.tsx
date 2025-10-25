@@ -358,15 +358,15 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
         ref={composedRefs}
         className={cn(
           "absolute will-change-transform pointer-events-auto z-20",
-          "border-2 rounded-lg",
-          "backdrop-blur-sm bg-black/10"
+          "border-2 border-primary/60 rounded-lg",
+          "backdrop-blur-sm bg-surface-secondary/80"
         )}
       >
         <div
           onMouseDown={handleDragStart}
-          className="absolute top-0 left-0 right-0 h-8 cursor-move touch-none z-11 hover:bg-white/10 transition-colors flex items-center justify-center"
+          className="absolute top-0 left-0 right-0 h-8 cursor-move touch-none z-11 hover:bg-primary/10 transition-colors flex items-center justify-center"
         >
-          <div className="w-12 h-1 rounded-full bg-white/40" />
+          <div className="w-12 h-1 rounded-full bg-primary/60" />
         </div>
 
         <div className="relative w-full h-full z-2 pointer-events-none">
@@ -375,19 +375,19 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
 
         <div
           onMouseDown={(e) => handleResizeStart(e, "top-left")}
-          className="absolute top-0 left-0 w-3 h-3 bg-white/90 z-12 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize hover:scale-125 transition-transform rounded-full"
+          className="absolute top-0 left-0 w-2.5 h-2.5 bg-primary z-12 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize hover:scale-110 transition-all duration-200 rounded-full border border-primary/20 shadow-md"
         />
         <div
           onMouseDown={(e) => handleResizeStart(e, "top-right")}
-          className="absolute top-0 right-0 w-3 h-3 bg-white/90 z-12 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize hover:scale-125 transition-transform rounded-full"
+          className="absolute top-0 right-0 w-2.5 h-2.5 bg-primary z-12 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize hover:scale-110 transition-all duration-200 rounded-full border border-primary/20 shadow-md"
         />
         <div
           onMouseDown={(e) => handleResizeStart(e, "bottom-left")}
-          className="absolute bottom-0 left-0 w-3 h-3 bg-white/90 z-12 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize hover:scale-125 transition-transform rounded-full"
+          className="absolute bottom-0 left-0 w-2.5 h-2.5 bg-primary z-12 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize hover:scale-110 transition-all duration-200 rounded-full border border-primary/20 shadow-md"
         />
         <div
           onMouseDown={(e) => handleResizeStart(e, "bottom-right")}
-          className="absolute bottom-0 right-0 w-3 h-3 bg-white/90 z-12 translate-x-1/2 translate-y-1/2 cursor-nwse-resize hover:scale-125 transition-transform rounded-full"
+          className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-primary z-12 translate-x-1/2 translate-y-1/2 cursor-nwse-resize hover:scale-110 transition-all duration-200 rounded-full border border-primary/20 shadow-md"
         />
       </div>
     );
