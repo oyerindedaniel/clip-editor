@@ -45,7 +45,7 @@ type ClipContextValue = {
     typeof useVideoRefs
   >["secondaryDualVideoRef"];
   pipVideoRef: ReturnType<typeof useVideoRefs>["pipVideoRef"];
-  clearTrimData: () => void;
+  clearTrimData: () => { primaryTrim: TrimData; secondaryTrim: TrimData };
   canClearTrim: boolean;
 };
 
@@ -214,23 +214,32 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (primaryDuration === 0 && secondaryDuration === 0) return false;
 
     const primaryDefault = isDefaultTrim(primaryTrim, primaryDuration);
-    const secondaryDefault = secondaryEl
-      ? isDefaultTrim(secondaryTrim, secondaryDuration)
-      : true;
+    const secondaryDefault =
+      secondaryEl && secondaryClip
+        ? isDefaultTrim(secondaryTrim, secondaryDuration)
+        : true;
 
     // only allow clear if something actually changed
     return !(primaryDefault && secondaryDefault);
-  }, [primaryTrim, secondaryTrim, isDefaultTrim]);
+  }, [primaryTrim, secondaryTrim, secondaryClip, isDefaultTrim]);
 
   const clearTrimData = useCallback(() => {
     const canClear = evaluateCanClearTrim();
 
     if (!canClear) {
       logger.info("Clear skipped: trims already default or no valid video.");
-      return;
+      return {
+        primaryTrim: primaryTrimRef.current,
+        secondaryTrim: secondaryTrimRef.current,
+      };
     }
 
-    if (!videoId) return;
+    if (!videoId) {
+      return {
+        primaryTrim: primaryTrimRef.current,
+        secondaryTrim: secondaryTrimRef.current,
+      };
+    }
 
     const combinedKey = getStorageKey(`${videoId}:trim-data`);
     if (combinedKey) {
@@ -240,14 +249,22 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     const primaryDuration = primaryVideoRef.current?.duration ?? 0;
     const secondaryDuration = secondaryVideoRef.current?.duration ?? 0;
 
-    setPrimaryTrim({
+    const newPrimaryTrim = {
       ...DEFAULT_TRIM_DATA,
       trimEnd: secondsToMs(primaryDuration) || 0,
-    });
-    setSecondaryTrim({
+    };
+    const newSecondaryTrim = {
       ...DEFAULT_TRIM_DATA,
       trimEnd: secondsToMs(secondaryDuration) || 0,
-    });
+    };
+
+    setPrimaryTrim(newPrimaryTrim);
+    setSecondaryTrim(newSecondaryTrim);
+
+    return {
+      primaryTrim: newPrimaryTrim,
+      secondaryTrim: newSecondaryTrim,
+    };
   }, [videoId, evaluateCanClearTrim]);
 
   const canClearTrim = useMemo(

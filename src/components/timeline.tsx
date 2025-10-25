@@ -20,13 +20,15 @@ import {
 import { cn } from "@/lib/utils";
 import { ClipContext } from "@/contexts/clip-context";
 import { useShallowSelector } from "react-shallow-store";
+import { Button } from "@/components/ui/button";
 import type { KeyframeData } from "@/utils/keyframe";
 import { Keyframe } from "./keyframe";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { TimelineTooltip } from "./timeline-tooltip";
 import InfoTooltip from "./info-tooltip";
-import { Scissors } from "lucide-react";
+import { Scissors, RotateCcw } from "lucide-react";
 import { msToSecondsRate } from "@/utils/timeline-utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface TimelineProps {
   duration: number;
@@ -43,14 +45,13 @@ const Timeline: React.FC<TimelineProps> = ({
   frames,
   keyframes,
 }) => {
-  const { primaryTrim, primaryTrimRef, setPrimaryTrim } = useShallowSelector(
-    ClipContext,
-    (state) => ({
-      primaryTrim: state.primaryTrim,
+  const { primaryTrimRef, setPrimaryTrim, clearTrimData, canClearTrim } =
+    useShallowSelector(ClipContext, (state) => ({
       primaryTrimRef: state.primaryTrimRef,
       setPrimaryTrim: state.setPrimaryTrim,
-    })
-  );
+      clearTrimData: state.clearTrimData,
+      canClearTrim: state.canClearTrim,
+    }));
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -65,8 +66,8 @@ const Timeline: React.FC<TimelineProps> = ({
   const rafIdRef = useRef<number | null>(null);
 
   const trimValuesRef = useRef({
-    start: primaryTrim.trimStart,
-    end: primaryTrim.trimEnd || duration,
+    start: primaryTrimRef.current.trimStart,
+    end: primaryTrimRef.current.trimEnd || duration,
   });
 
   const trimOverlayRef = React.useRef<HTMLDivElement>(null);
@@ -166,34 +167,6 @@ const Timeline: React.FC<TimelineProps> = ({
   useEffect(() => {
     renderStrip();
   }, [renderStrip]);
-
-  useEffect(() => {
-    const { trimStart, trimEnd } = primaryTrim;
-    const { start, end } = trimValuesRef.current;
-
-    if (trimStart === start && trimEnd === end) return;
-
-    trimValuesRef.current = { start: trimStart, end: trimEnd };
-
-    const leftEl = leftHandleRef.current;
-    const rightEl = rightHandleRef.current;
-    const overlayEl = trimOverlayRef.current;
-
-    if (!leftEl || !rightEl || !overlayEl) return;
-
-    const leftPos = Math.max(0, msToPx(trimStart, pxPerMs));
-    const rightPos = Math.max(
-      pxPerSecond,
-      msToPx(trimEnd, pxPerMs) || maxContentWidth
-    );
-
-    leftEl.style.left = `${leftPos}px`;
-    rightEl.style.left = `${rightPos}px`;
-
-    const overlayWidth = Math.max(0, msToPx(trimEnd - trimStart, pxPerMs));
-    overlayEl.style.left = `${leftPos}px`;
-    overlayEl.style.width = `${overlayWidth}px`;
-  }, [primaryTrim, pxPerMs, pxPerSecond, maxContentWidth]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, handleType: Dir) => {
@@ -337,6 +310,36 @@ const Timeline: React.FC<TimelineProps> = ({
     ]
   );
 
+  const clearTrim = () => {
+    const { primaryTrim: clearedPrimaryTrim } = clearTrimData();
+
+    const { trimStart, trimEnd } = clearedPrimaryTrim;
+    const { start, end } = trimValuesRef.current;
+
+    if (trimStart === start && trimEnd === end) return;
+
+    trimValuesRef.current = { start: trimStart, end: trimEnd };
+
+    const leftEl = leftHandleRef.current;
+    const rightEl = rightHandleRef.current;
+    const overlayEl = trimOverlayRef.current;
+
+    if (!leftEl || !rightEl || !overlayEl) return;
+
+    const leftPos = Math.max(0, msToPx(trimStart, pxPerMs));
+    const rightPos = Math.max(
+      pxPerSecond,
+      msToPx(trimEnd, pxPerMs) || maxContentWidth
+    );
+
+    leftEl.style.left = `${leftPos}px`;
+    rightEl.style.left = `${rightPos}px`;
+
+    const overlayWidth = Math.max(0, msToPx(trimEnd - trimStart, pxPerMs));
+    overlayEl.style.left = `${leftPos}px`;
+    overlayEl.style.width = `${overlayWidth}px`;
+  };
+
   const timelineWidth = `${duration * rawPxPerMs}px`;
 
   return (
@@ -348,7 +351,29 @@ const Timeline: React.FC<TimelineProps> = ({
           </div>
           <div>Drag handles to trim</div>
         </div>
-        <InfoTooltip content="Drag the left and right handles to set the start and end points of your trimmed video. The minimum duration is 1 second." />
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canClearTrim}
+                onClick={clearTrim}
+              >
+                <RotateCcw size={14} className="mr-1" />
+                Clear Trim
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {canClearTrim
+                  ? "Clear all trim data and reset to original video length"
+                  : "No trim data to clear"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          <InfoTooltip content="Drag the left and right handles to set the start and end points of your trimmed video. The minimum duration is 1 second." />
+        </div>
       </div>
 
       <div

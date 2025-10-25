@@ -115,35 +115,25 @@ const EditorPanelRoot = forwardRef<HTMLDivElement, EditorPanelRootProps>(
 
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
+        const node = contentRef.current;
+
         if (presence) {
-          // console.log("---entering");
           setAnimationState("entering");
           resolve();
           return;
         }
 
-        console.log("---presence", presence);
+        if (!node) return;
 
         setAnimationState("exiting");
 
-        const node = contentRef.current;
-        if (!node) {
-          // console.log("---node", node);
-          setAnimationState("idle");
-          resolve();
-          return;
-        }
-
         const onAnimationEnd = () => {
-          // console.log("---onAnimationEnd", presence);
           setAnimationState("idle");
           node.removeEventListener("animationend", onAnimationEnd);
-          node.removeEventListener("transitionend", onAnimationEnd);
           resolve();
         };
 
         node.addEventListener("animationend", onAnimationEnd);
-        node.addEventListener("transitionend", onAnimationEnd);
       });
     };
 
@@ -324,10 +314,10 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
         if (event.key === "Escape" && open) {
           onEscapeKeyDown?.(event);
 
-          if (!event.defaultPrevented) {
-            event.preventDefault();
-            onOpenChange(false);
-          }
+          // if (!event.defaultPrevented) {
+          event.preventDefault();
+          onOpenChange(false);
+          // }
         }
       };
 
@@ -360,13 +350,6 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
           (el) =>
             el instanceof HTMLElement && el.hasAttribute("data-overlay-id")
         );
-
-        // console.log({
-        //   isInNestedPortal,
-        //   isInContent,
-        //   isInTrigger,
-        //   isInOverlay,
-        // });
 
         if (!isInContent && !isInTrigger && !isInNestedPortal && !isInOverlay) {
           onPointerDownOutside?.(event);
@@ -403,8 +386,6 @@ const EditorPanelContent = forwardRef<HTMLDivElement, EditorPanelContentProps>(
     if (!shouldRender && !forceMount) return null;
 
     const state = getState(animationState);
-
-    console.log("---state", state, animationState);
 
     return (
       <>

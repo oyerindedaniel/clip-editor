@@ -40,7 +40,7 @@ function EditPageSkeleton() {
             {/* 16:9 primary player */}
             <div className="relative flex-1 min-w-0 aspect-video flex items-center justify-center overflow-hidden bg-surface-secondary shadow-md">
               <div className="relative w-full h-full">
-                <Skeleton className="w-full h-full rounded-lg" />
+                <Skeleton className="w-full h-full" />
                 {/* Video controls skeleton */}
                 <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ function EditPageSkeleton() {
             {/* 9:16 secondary preview */}
             <div className="relative flex items-center aspect-[9/16] w-full lg:w-[260px] justify-center overflow-hidden bg-surface-secondary shadow-md">
               <div className="relative w-full h-full">
-                <Skeleton className="w-full h-full rounded-lg" />
+                <Skeleton className="w-full h-full" />
                 {/* Badge skeleton */}
                 <Skeleton className="absolute top-2 left-2 h-5 w-16 rounded-full" />
               </div>

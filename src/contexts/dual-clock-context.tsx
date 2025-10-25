@@ -5,7 +5,7 @@ import { useClock } from "@/hooks/app/use-clock";
 interface DualClockContextValue {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
   secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
-  clock: ReturnType<typeof useClock>;
+  // clock: ReturnType<typeof useClock>;
 }
 
 export const DualClockContext =
@@ -22,12 +22,12 @@ export function DualClockProvider({
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
   secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
 }) {
-  const clock = useClock(duration);
+  // const clock = useClock(duration);
 
   const clockVideoStore = useContextStore({
     primaryVideoRef,
     secondaryVideoRef,
-    clock,
+    // clock,
   });
 
   return (

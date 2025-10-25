@@ -152,8 +152,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     primaryDualVideoRef,
     secondaryDualVideoRef,
     pipVideoRef,
-    clearTrimData,
-    canClearTrim,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -167,8 +165,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     primaryDualVideoRef: state.primaryDualVideoRef,
     secondaryDualVideoRef: state.secondaryDualVideoRef,
     pipVideoRef: state.pipVideoRef,
-    clearTrimData: state.clearTrimData,
-    canClearTrim: state.canClearTrim,
   }));
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
@@ -231,8 +227,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     forceMount: true,
   });
 
-  const playerActiveRef = useLatestValue(playerActive);
-  const activeVideoRef = getVideoRef(playerActiveRef.current);
+  const activeVideoRef = getVideoRef(playerActive);
 
   const [showTrace, setShowTrace] = useState(false);
   const showTraceRef = useLatestValue(showTrace);
@@ -598,16 +593,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
     }
   };
 
-  const handleTrim = (startTime: number, endTime: number) => {
-    setPrimaryTrim((prev) => ({
-      ...prev,
-      trimStart: startTime,
-      trimEnd: endTime,
-    }));
-
-    logger.log("Trimmed primary video from:", startTime, "to:", endTime);
-  };
-
   const primaryTrimData = primaryTrimRef.current;
 
   const primaryDurationMs =
@@ -629,8 +614,6 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
         isExporting={isExporting}
         onToggleTrace={toggleTrace}
         onOpenExport={openExportNamingModal}
-        onClearTrimData={clearTrimData}
-        canClearTrim={canClearTrim}
       />
 
       <div className="flex-1 min-h-0">
@@ -664,7 +647,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           onAspectRatioChange={setBoundaryAspectRatio}
                           visible={boundaryVisible}
                           onVisibleChange={setBoundaryVisible}
-                          disabled={!isValidBufferState || isExporting}
+                          disabled={!isVideoLoaded || isExporting}
                           cropMode={cropMode}
                           onCropModeChange={setCropMode}
                           padColor={padColor}
@@ -1102,7 +1085,7 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                           <Smartphone size={14} />
                         )}
                         <span>
-                          {active === "dual" ? "Canvas View" : "Dual View"}
+                          {active === "dual" ? "Preview" : "Dual View"}
                         </span>
                       </Button>
                     )}
@@ -1201,7 +1184,13 @@ const ClipEditor = ({ clipData }: ClipEditorProps) => {
                   ) : isVideoLoaded ? (
                     <Timeline
                       duration={duration}
-                      onTrim={handleTrim}
+                      onTrim={(startTime: number, endTime: number) => {
+                        setPrimaryTrim((prev) => ({
+                          ...prev,
+                          trimStart: startTime,
+                          trimEnd: endTime,
+                        }));
+                      }}
                       frames={primaryFrames}
                       keyframes={keyframes}
                     />

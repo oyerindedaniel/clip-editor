@@ -142,7 +142,7 @@ const VolumeLabel = React.forwardRef<HTMLLabelElement, VolumeLabelProps>(
         ref={ref}
         htmlFor={thumbId}
         className={cn(
-          "text-sm font-medium text-foreground-subtle select-none inline-block",
+          "text-sm md:text-[0.8rem] font-medium text-foreground-subtle select-none inline-block",
           orientation === "horizontal" ? "mr-3" : "mb-3",
           className
         )}
@@ -427,7 +427,7 @@ const VolumeSlider = React.forwardRef<HTMLDivElement, VolumeSliderProps>(
         data-state={state}
         className={cn(
           "flex items-center overflow-hidden [will-change:opacity,transform]",
-          orientation === "horizontal" ? "h-4 w-24" : "w-4 h-24 flex-col",
+          orientation === "horizontal" ? "h-4 w-20" : "w-4 h-20 flex-col",
           variant === "default" &&
             (orientation === "horizontal"
               ? "data-[state=open]:animate-volume-reveal-x-in data-[state=closed]:animate-volume-reveal-x-out"

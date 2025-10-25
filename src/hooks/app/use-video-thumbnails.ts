@@ -35,20 +35,20 @@ export function useVideoThumbnails(
           };
           video.addEventListener("error", onError, { once: true });
 
-          const timeout = setTimeout(() => {
-            logger.warn("Video load timeout in useVideoThumbnails");
-            resolve([]);
-          }, 30000);
+          // const timeout = setTimeout(() => {
+          //   logger.warn("Video load timeout in useVideoThumbnails");
+          //   resolve([]);
+          // }, 30000);
 
           await new Promise<void>((res) => {
             if (video.readyState >= 1) {
-              clearTimeout(timeout);
+              // clearTimeout(timeout);
               return res();
             }
             video.addEventListener(
               "loadedmetadata",
               () => {
-                clearTimeout(timeout);
+                // clearTimeout(timeout);
                 res();
               },
               { once: true }

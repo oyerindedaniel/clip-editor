@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useRef, useCallback } from "react";
 
 export function useVideoRefs() {
   // Video element refs
@@ -11,8 +11,8 @@ export function useVideoRefs() {
   const pipVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Helper to select video element
-  const getVideoRef = useMemo(
-    () => (player: "primary" | "secondary") =>
+  const getVideoRef = useCallback(
+    (player: "primary" | "secondary") =>
       player === "primary" ? primaryVideoRef : secondaryVideoRef,
     []
   );

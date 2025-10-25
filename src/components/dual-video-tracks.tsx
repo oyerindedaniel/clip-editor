@@ -8,7 +8,7 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from "react";
-import { Redo2, Scissors, Undo2, X, Film } from "lucide-react";
+import { Redo2, Scissors, Undo2, X, Film, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useScale } from "@/hooks/app/use-scale";
@@ -36,6 +36,10 @@ import { getStorageKey } from "@/utils/app";
 import { filterKeyframesByTarget } from "@/utils/keyframe";
 import { msToSeconds } from "@/utils/video";
 import { msToSecondsRate } from "@/utils/timeline-utils";
+import { ClipContext } from "@/contexts/clip-context";
+import { useShallowSelector } from "react-shallow-store";
+import { useStableHandler } from "@/hooks/use-stable-handler";
+import { useLazyRef } from "@/hooks/use-lazy-ref";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -58,6 +62,8 @@ interface HistoryState {
   secondaryDurationMs: number;
   action: HistoryAction;
   prevSecondaryDurationMs?: number;
+  cutTrimStart?: number;
+  cutTrimEnd?: number;
 }
 
 export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
@@ -72,6 +78,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   keyframes,
   videoId,
 }) => {
+  const { clearTrimData, canClearTrim } = useShallowSelector(
+    ClipContext,
+    (state) => ({
+      clearTrimData: state.clearTrimData,
+      canClearTrim: state.canClearTrim,
+    })
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const playheadRef = useRef<HTMLDivElement | null>(null);
@@ -85,8 +99,33 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  const [trimStart, setTrimStart] = useState<number | null>(null);
-  const [trimEnd, setTrimEnd] = useState<number | null>(null);
+  const initialStateRef = useLazyRef(() =>
+    getHistoryState(videoId, secondaryDurationMs)
+  );
+
+  const [editHistory, setEditHistory] = useState<HistoryState[]>(
+    initialStateRef.current.history
+  );
+  const editHistoryRef = useLatestValue(editHistory);
+
+  const [historyIndex, setHistoryIndex] = useState<number>(
+    initialStateRef.current.index
+  );
+  const historyIndexRef = useLatestValue(historyIndex);
+
+  const currentState = editHistory[historyIndex];
+
+  const currentSecondaryDurationMs = currentState
+    ? currentState.secondaryDurationMs
+    : secondaryDurationMs;
+
+  const [trimStart, setTrimStart] = useState<number | null>(
+    initialStateRef.current.trimStart
+  );
+
+  const [trimEnd, setTrimEnd] = useState<number | null>(
+    initialStateRef.current.trimEnd
+  );
 
   const hasBothMarkers = trimStart !== null && trimEnd !== null;
 
@@ -95,45 +134,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   }, [trimStart, trimEnd]);
 
   const markerCount = markers.length;
-
-  const [editHistory, setEditHistory] = useState<Array<HistoryState>>(() => {
-    const defaultState: Array<HistoryState> = [
-      {
-        trimStart: null,
-        trimEnd: null,
-        secondaryDurationMs,
-        action: "init",
-      },
-    ];
-
-    if (!videoId || typeof window === "undefined") {
-      return defaultState;
-    }
-
-    try {
-      const storageKey = getStorageKey(`${videoId}:dual-video-history`);
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Array<HistoryState>;
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {}
-
-    return defaultState;
-  });
-
-  const editHistoryRef = useLatestValue(editHistory);
-
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const historyIndexRef = useLatestValue(historyIndex);
-
-  const currentState = editHistory[historyIndex];
-
-  const currentSecondaryDurationMs = currentState
-    ? currentState.secondaryDurationMs
-    : secondaryDurationMs;
 
   const primaryKeyframes = useMemo(() => {
     return keyframes ? filterKeyframesByTarget(keyframes, "primary") : [];
@@ -148,7 +148,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const draggingPlayheadRef = useRef<boolean>(false);
 
   const rafIdRef = useRef<number | null>(null);
-  const moveRafIdRef = useRef<number | null>(null);
 
   const primaryStripInitialized = useRef(false);
 
@@ -186,11 +185,11 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (
       state.action === "cut" &&
-      state.trimStart !== null &&
-      state.trimEnd !== null
+      state.cutTrimStart != undefined &&
+      state.cutTrimEnd != undefined
     ) {
-      visualDuration = state.trimEnd - state.trimStart;
-      visualOffset = state.trimStart;
+      visualDuration = state.cutTrimEnd - state.cutTrimStart;
+      visualOffset = state.cutTrimStart;
     }
 
     return { visualDuration, visualOffset };
@@ -223,40 +222,15 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
 
     const state = editHistoryRef.current[historyIndexRef.current];
-
     if (!state) return;
 
     const { visualDuration } = getVisualState(state);
-    let trimmedFrames = secondaryPreviewFrames;
-
-    const trimStart = state.trimStart;
-    const trimEnd = state.trimEnd;
-
-    if (
-      secondaryPreviewFrames &&
-      secondaryPreviewFrames.length > 0 &&
-      trimStart !== null &&
-      trimEnd !== null
-    ) {
-      const startRatio = trimStart / state.secondaryDurationMs;
-      const endRatio = trimEnd / state.secondaryDurationMs;
-
-      const startFrameIndex = Math.floor(
-        startRatio * secondaryPreviewFrames.length
-      );
-      const endFrameIndex = Math.ceil(endRatio * secondaryPreviewFrames.length);
-
-      trimmedFrames = secondaryPreviewFrames.slice(
-        startFrameIndex,
-        endFrameIndex
-      );
-    }
 
     // Secondary strips
     renderTimelineStrips({
       pxPerMs,
       durationMs: visualDuration,
-      frames: trimmedFrames,
+      frames: secondaryPreviewFrames,
       container: secondaryStripRef.current,
     });
   }, [
@@ -273,7 +247,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const state = editHistoryRef.current[historyIndexRef.current];
     if (!state) return;
 
-    const { visualDuration, visualOffset } = getVisualState(state);
+    const { visualDuration } = getVisualState(state);
 
     if (primaryBlockRef.current) {
       const width = Math.max(0, msToPx(primaryDurationMs, pxPerMs));
@@ -283,7 +257,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (secondaryBlockRef.current) {
       const width = Math.max(0, msToPx(visualDuration, pxPerMs));
-      const left = Math.max(0, msToPx(offsetMs + visualOffset, pxPerMs));
+      const left = Math.max(0, msToPx(offsetMs, pxPerMs));
 
       secondaryBlockRef.current.style.width = `${width}px`;
       secondaryBlockRef.current.style.left = `${left}px`;
@@ -385,17 +359,17 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     [renderBlocks, renderRuler, renderStrips]
   );
 
+  const stableApplyHistoryState = useStableHandler(applyHistoryState);
+
   const handleUndo = useCallback(() => {
     let newIndex: number | null = null;
 
-    flushSync(() => {
-      setHistoryIndex((prevIndex) => {
-        if (prevIndex > 0) {
-          newIndex = prevIndex - 1;
-          return newIndex;
-        }
-        return prevIndex;
-      });
+    setHistoryIndex((prevIndex) => {
+      if (prevIndex > 0) {
+        newIndex = prevIndex - 1;
+        return newIndex;
+      }
+      return prevIndex;
     });
 
     if (newIndex !== null) {
@@ -403,11 +377,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       const prevState = editHistory[newIndex + 1];
 
       if (stateToApply) {
-        if (prevState?.action === "cut" && prevState.prevSecondaryDurationMs) {
-          onCutSecondaryAt?.({
-            trimStart: 0,
-            trimEnd: Math.round(prevState.prevSecondaryDurationMs),
-          });
+        if (prevState.action === "cut") {
+          if (prevState.prevSecondaryDurationMs) {
+            onCutSecondaryAt?.({
+              trimStart: 0,
+              trimEnd: Math.round(prevState.prevSecondaryDurationMs),
+            });
+          }
         }
 
         const needsRender =
@@ -424,14 +400,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const handleRedo = useCallback(() => {
     let newIndex: number | null = null;
 
-    flushSync(() => {
-      setHistoryIndex((prevIndex) => {
-        if (prevIndex < editHistory.length - 1) {
-          newIndex = prevIndex + 1;
-          return newIndex;
-        }
-        return prevIndex;
-      });
+    setHistoryIndex((prevIndex) => {
+      if (prevIndex < editHistory.length - 1) {
+        newIndex = prevIndex + 1;
+        return newIndex;
+      }
+      return prevIndex;
     });
 
     if (newIndex !== null) {
@@ -440,12 +414,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       if (stateToApply) {
         if (
           stateToApply.action === "cut" &&
-          stateToApply.trimStart !== null &&
-          stateToApply.trimEnd !== null
+          stateToApply.cutTrimStart !== undefined &&
+          stateToApply.cutTrimEnd !== undefined
         ) {
           onCutSecondaryAt?.({
-            trimStart: Math.round(stateToApply.trimStart),
-            trimEnd: Math.round(stateToApply.trimEnd),
+            trimStart: Math.round(stateToApply.cutTrimStart),
+            trimEnd: Math.round(stateToApply.cutTrimEnd),
           });
         }
 
@@ -493,7 +467,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     addToHistory(state);
 
     applyHistoryState(state, false);
-  }, [pxPerMs, addToHistory, currentSecondaryDurationMs, trimStart, trimEnd]);
+  }, [
+    pxPerMs,
+    addToHistory,
+    applyHistoryState,
+    currentSecondaryDurationMs,
+    trimStart,
+    trimEnd,
+  ]);
 
   const handleCutSecondary = useCallback(() => {
     if (trimStart === null || trimEnd === null) {
@@ -514,6 +495,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       secondaryDurationMs: newDuration,
       action: "cut",
       prevSecondaryDurationMs: currentSecondaryDurationMs,
+      cutTrimStart: trimStart,
+      cutTrimEnd: trimEnd,
     } satisfies HistoryState;
 
     addToHistory(state);
@@ -555,17 +538,11 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       const moveEvent = e;
       const startMouseX = moveEvent.clientX - containerRect.left;
 
-      const maxOffsetMs = primaryDurationMs - pxToMs(pxPerSecond, pxPerMs);
-
       draggingSecondaryRef.current = true;
 
       startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        const primaryMaxPx = msToPx(maxOffsetMs, pxPerMs);
-        const { canScrollLeft, canScrollRight } = getScrollState(
-          scrollContainer,
-          undefined,
-          primaryMaxPx
-        );
+        const { canScrollLeft, canScrollRight } =
+          getScrollState(scrollContainer);
 
         const isScrollingLeft = scrollDelta < 0;
         const isScrollingRight = scrollDelta > 0;
@@ -578,7 +555,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           const deltaMs = pxToMs(scrollDelta, pxPerMs);
           const newOffset = Math.max(
             0,
-            Math.min(currentOffsetRef.current + deltaMs, maxOffsetMs)
+            Math.min(currentOffsetRef.current + deltaMs, primaryDurationMs)
           );
 
           currentOffsetRef.current = newOffset;
@@ -601,18 +578,16 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       const onMove = (moveEvent: MouseEvent) => {
         if (!isDragging) return;
 
-        if (moveRafIdRef.current) cancelAnimationFrame(moveRafIdRef.current);
+        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
 
-        moveRafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = requestAnimationFrame(() => {
           const scrollContainerRect = scrollContainer.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
 
           if (!scrollContainerRect || !containerRect) return;
 
-          const maxContentWidth = msToPx(maxDurationMs, pxPerMs);
-
           const { containerWidth, canScrollLeft, canScrollRight } =
-            getScrollState(scrollContainer, maxContentWidth);
+            getScrollState(scrollContainer);
 
           const mouseXRelativeToContainer =
             moveEvent.clientX - scrollContainerRect.left;
@@ -636,7 +611,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             const deltaMs = pxToMs(deltaX, pxPerMs);
             const newOffset = Math.max(
               0,
-              Math.min(startOffset + deltaMs, maxOffsetMs)
+              Math.min(startOffset + deltaMs, primaryDurationMs)
             );
 
             currentOffsetRef.current = newOffset;
@@ -659,9 +634,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         stopAutoScroll();
         setShowTooltip(false);
 
-        if (moveRafIdRef.current) {
-          cancelAnimationFrame(moveRafIdRef.current);
-          moveRafIdRef.current = null;
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
         }
 
         document.removeEventListener("mousemove", onMove);
@@ -700,7 +675,10 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       let isDragging = true;
       const startPlayheadPos = parseFloat(playhead.style.left || "0");
       draggingPlayheadRef.current = true;
-      const secondaryWidth = msToPx(currentSecondaryDurationMs, pxPerMs);
+
+      const secondaryEnd =
+        msToPx(currentSecondaryDurationMs, pxPerMs) +
+        msToPx(currentOffsetRef.current, pxPerMs);
 
       startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
         const { canScrollLeft, canScrollRight } =
@@ -715,7 +693,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           const currentLeft = parseFloat(playhead.style.left || "0");
           const newLeft = Math.max(
             0,
-            Math.min(currentLeft + scrollDelta, secondaryWidth)
+            Math.min(currentLeft + scrollDelta, secondaryEnd)
           );
 
           playhead.style.left = `${newLeft}px`;
@@ -737,8 +715,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         const playhead = playheadRef.current;
         if (!isDragging || !playhead) return;
 
-        if (moveRafIdRef.current) cancelAnimationFrame(moveRafIdRef.current);
-        moveRafIdRef.current = requestAnimationFrame(() => {
+        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = requestAnimationFrame(() => {
           const scrollContainerRect = scrollContainer.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
           const { containerWidth, canScrollLeft, canScrollRight } =
@@ -759,7 +737,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           if (shouldControlPlayhead) {
             const mouseX = moveEvent.clientX;
             let newX = mouseX - containerRect.left;
-            newX = Math.max(0, Math.min(newX, secondaryWidth));
+            newX = Math.max(0, Math.min(newX, secondaryEnd));
 
             playhead.style.left = `${newX}px`;
             const timeMs = pxToMs(newX, pxPerMs);
@@ -777,9 +755,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         draggingPlayheadRef.current = false;
         stopAutoScroll();
         setShowTooltip(false);
-        if (moveRafIdRef.current) {
-          cancelAnimationFrame(moveRafIdRef.current);
-          moveRafIdRef.current = null;
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
         }
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
@@ -797,6 +775,24 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       updateTooltip,
     ]
   );
+
+  const clearTrim = () => {
+    clearTrimData();
+
+    const defaultState: HistoryState = {
+      trimStart: null,
+      trimEnd: null,
+      action: "init",
+      secondaryDurationMs,
+    };
+
+    setEditHistory([defaultState]);
+    setHistoryIndex(0);
+    setTrimStart(null);
+    setTrimEnd(null);
+
+    saveHistoryToStorage([defaultState]);
+  };
 
   return (
     <div className="flex relative flex-col gap-2 w-full h-[250px]">
@@ -816,6 +812,26 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           >
             <Scissors className="mr-1" size={14} /> Cut Secondary
           </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canClearTrim}
+                onClick={clearTrim}
+              >
+                <RotateCcw size={14} className="mr-1" />
+                Clear Trim
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {canClearTrim
+                  ? "Clear all trim data and reset to original video length"
+                  : "No trim data to clear"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -996,3 +1012,50 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 };
 
 export default DualVideoTracks;
+
+interface GetHistoryStateResult {
+  history: HistoryState[];
+  index: number;
+  trimStart: number | null;
+  trimEnd: number | null;
+}
+
+function getHistoryState(
+  videoId: string | undefined,
+  secondaryDurationMs: number
+): GetHistoryStateResult {
+  const fallbackState: GetHistoryStateResult = {
+    history: [
+      {
+        trimStart: null,
+        trimEnd: null,
+        action: "init",
+        secondaryDurationMs,
+      },
+    ],
+    index: 0,
+    trimStart: null,
+    trimEnd: null,
+  };
+
+  if (!videoId || typeof window === "undefined") return fallbackState;
+
+  try {
+    const key = getStorageKey(`${videoId}:dual-video-history`);
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallbackState;
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallbackState;
+
+    const last = parsed.at(-1);
+    return {
+      history: parsed,
+      index: parsed.length - 1,
+      trimStart: last?.trimStart ?? null,
+      trimEnd: last?.trimEnd ?? null,
+    };
+  } catch {
+    return fallbackState;
+  }
+}

@@ -107,31 +107,17 @@ export function renderTimelineRuler({
   }
 }
 
-export function getScrollState(
-  scrollContainer: HTMLDivElement,
-  maxContentWidth?: number,
-  logicalMaxPx?: number
-) {
+export function getScrollState(scrollContainer: HTMLDivElement) {
   const EPSILON = 1;
 
   const scrollLeft = scrollContainer.scrollLeft;
   const containerWidth = scrollContainer.clientWidth;
-
-  const naturalScrollWidth = scrollContainer.scrollWidth;
-  const scrollWidth =
-    maxContentWidth && maxContentWidth > 0
-      ? Math.min(naturalScrollWidth, maxContentWidth)
-      : naturalScrollWidth;
+  const scrollWidth = scrollContainer.scrollWidth;
 
   const maxScrollLeft = Math.max(0, scrollWidth - containerWidth);
 
-  let canScrollRight = scrollLeft < maxScrollLeft - EPSILON;
+  const canScrollRight = scrollLeft < maxScrollLeft - EPSILON;
   const canScrollLeft = scrollLeft > EPSILON;
-
-  if (logicalMaxPx != null) {
-    canScrollRight =
-      canScrollRight && scrollLeft + containerWidth < logicalMaxPx - EPSILON;
-  }
 
   return {
     scrollLeft,

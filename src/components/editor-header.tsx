@@ -4,12 +4,7 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Download, Crosshair, RotateCcw } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Download, Crosshair } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface EditorHeaderProps {
@@ -17,8 +12,6 @@ interface EditorHeaderProps {
   isExporting: boolean;
   onToggleTrace: () => void;
   onOpenExport: () => void;
-  onClearTrimData: () => void;
-  canClearTrim: boolean;
 }
 
 export const EditorHeader: React.FC<EditorHeaderProps> = ({
@@ -26,8 +19,6 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   isExporting,
   onToggleTrace,
   onOpenExport,
-  onClearTrimData,
-  canClearTrim,
 }) => {
   const isMd = useMediaQuery("(min-width: 768px)");
 
@@ -57,27 +48,6 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               <Crosshair size={14} className={isMd ? "md:mr-1" : ""} />
               <span className="hidden md:inline-block">Trace</span>
             </Button>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size={isMd ? "sm" : "icon"}
-                  disabled={!isVideoLoaded || !canClearTrim}
-                  onClick={onClearTrimData}
-                >
-                  <RotateCcw size={14} className={isMd ? "md:mr-1" : ""} />
-                  <span className="hidden md:inline-block">Clear Trim</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {canClearTrim
-                    ? "Clear all trim data and reset to original video length"
-                    : "No trim data to clear"}
-                </p>
-              </TooltipContent>
-            </Tooltip>
           </div>
 
           <Button
