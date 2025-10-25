@@ -265,7 +265,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       primaryTrim: newPrimaryTrim,
       secondaryTrim: newSecondaryTrim,
     };
-  }, [videoId, evaluateCanClearTrim, primaryTrimRef, secondaryTrimRef]);
+  }, [videoId, evaluateCanClearTrim]);
 
   const canClearTrim = useMemo(
     () => evaluateCanClearTrim(),

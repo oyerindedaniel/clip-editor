@@ -246,7 +246,7 @@ interface PlaybackControlsProps extends React.HTMLAttributes<HTMLDivElement> {}
 const PlaybackControls = React.forwardRef<
   HTMLDivElement,
   PlaybackControlsProps
->(function PlaybackControls({ className, children, ...props }, ref) {
+>(({ className, children, ...props }, ref) => {
   const { playing, hovered, controlledControlsId, controlsId, videoPlayerId } =
     usePlayback();
 
@@ -260,7 +260,7 @@ const PlaybackControls = React.forwardRef<
       role="group"
       aria-label="Video controls"
       aria-controls={videoPlayerId}
-      onClick={function handleClick(e) {
+      onClick={(e) => {
         e.stopPropagation();
       }}
       data-state={visible ? "visible" : "hidden"}
