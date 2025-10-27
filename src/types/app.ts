@@ -34,6 +34,32 @@ export interface S3ClipData {
   metadata: S3ClipMetadata;
 }
 
+export interface ManualClipMetadata {
+  clipId: string;
+  clipDurationMs: number;
+  clipStartTime: number;
+  clipEndTime: number;
+  originalFilename: string;
+  uploadTimestamp: string;
+  isManual: true;
+}
+
+export interface ManualClipData {
+  url: string;
+  metadata: ManualClipMetadata;
+  file: File;
+}
+
+export type ClipData = S3ClipData | ManualClipData;
+
+export function isManualClip(clip: ClipData): clip is ManualClipData {
+  return "isManual" in clip.metadata && clip.metadata.isManual === true;
+}
+
+export function isS3Clip(clip: ClipData): clip is S3ClipData {
+  return !isManualClip(clip);
+}
+
 export interface BaseOverlay {
   id: string;
   x: number;

@@ -89,8 +89,16 @@ type OverlaysContextValue = {
     currentTime?: number,
     duration?: number
   ) => void;
-  registerTextOverlayRef: (id: string, element: HTMLElement | null) => void;
-  registerImageOverlayRef: (id: string, element: HTMLElement | null) => void;
+  registerTextOverlayRef: (
+    id: string,
+    element: HTMLElement | null,
+    containerContext: ContainerContext
+  ) => void;
+  registerImageOverlayRef: (
+    id: string,
+    element: HTMLElement | null,
+    containerContext: ContainerContext
+  ) => void;
   updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
   updateImageOverlay: (id: string, updates: Partial<ImageOverlay>) => void;
   deleteTextOverlay: (id: string) => void;
@@ -141,8 +149,11 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   const textOverlaysRef = useLatestValue(textOverlays);
   const imageOverlaysRef = useLatestValue(imageOverlays);
 
-  const textOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const imageOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const primaryTextOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const dualTextOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const primaryImageOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const dualImageOverlayRefs = useRef<Map<string, HTMLElement>>(new Map());
+
   const previousVideoDimensions = useRef<{
     width: number;
     height: number;
@@ -307,25 +318,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // For 16:9 video
-      const { x, y, width: videoWidth } = getVideoBoundingBox(video);
-      const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-        overlayX: x,
-        overlayY: y,
-      });
+      const { width: videoWidth } = getVideoBoundingBox(video);
 
       // For 9:16 dual video
-      const {
-        x: dualX,
-        y: dualY,
-        width: dualVideoWidth,
-      } = getVideoBoundingBox(dualVideo);
-      const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
-        dualVideo,
-        {
-          overlayX: dualX,
-          overlayY: dualY,
-        }
-      );
+      const { width: dualVideoWidth } = getVideoBoundingBox(dualVideo);
 
       const newOverlay: TextOverlay = {
         type: "text",
@@ -333,10 +329,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         text: "New Text",
         startTime: currentTime,
         endTime: duration ?? Infinity,
-        x,
-        y,
-        normX,
-        normY,
+        x: 0,
+        y: 0,
+        normX: 0,
+        normY: 0,
         fontSize: 24,
         fontFamily: DEFAULT_FONT,
         letterSpacing: "-0.03em",
@@ -350,10 +346,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         visible: true,
         maxWidth: calculateMaxWidth(videoWidth),
         // 9:16 dimensions
-        dualX,
-        dualY,
-        dualNormX,
-        dualNormY,
+        dualX: 0,
+        dualY: 0,
+        dualNormX: 0,
+        dualNormY: 0,
         dualMaxWidth: calculateMaxWidth(dualVideoWidth),
       };
 
@@ -376,31 +372,12 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // For 16:9 video
-      const {
-        x,
-        y,
-        width: videoWidth,
-        height: videoHeight,
-      } = getVideoBoundingBox(video);
-      const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-        overlayX: x,
-        overlayY: y,
-      });
+      const { width: videoWidth, height: videoHeight } =
+        getVideoBoundingBox(video);
 
       // For 9:16 dual video
-      const {
-        x: dualX,
-        y: dualY,
-        width: dualVideoWidth,
-        height: dualVideoHeight,
-      } = getVideoBoundingBox(dualVideo);
-      const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
-        dualVideo,
-        {
-          overlayX: dualX,
-          overlayY: dualY,
-        }
-      );
+      const { width: dualVideoWidth, height: dualVideoHeight } =
+        getVideoBoundingBox(dualVideo);
 
       const url = URL.createObjectURL(file);
 
@@ -428,10 +405,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           file,
           startTime: currentTime,
           endTime: duration ?? Infinity,
-          x,
-          y,
-          normX,
-          normY,
+          x: 0,
+          y: 0,
+          normX: 0,
+          normY: 0,
           width,
           height,
           opacity: 1,
@@ -439,10 +416,10 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           rotation: 0,
           scale: 1,
           // 9:16 dimensions
-          dualX,
-          dualY,
-          dualNormX,
-          dualNormY,
+          dualX: 0,
+          dualY: 0,
+          dualNormX: 0,
+          dualNormY: 0,
           dualWidth,
           dualHeight,
         };
@@ -457,27 +434,42 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const registerTextOverlayRef = useCallback(
-    (id: string, element: HTMLElement | null) => {
+    (
+      id: string,
+      element: HTMLElement | null,
+      containerContext: ContainerContext
+    ) => {
+      const refMap =
+        containerContext === "dual"
+          ? dualTextOverlayRefs
+          : primaryTextOverlayRefs;
       if (element) {
-        textOverlayRefs.current.set(id, element);
+        refMap.current.set(id, element);
       } else {
-        textOverlayRefs.current.delete(id);
+        refMap.current.delete(id);
       }
     },
     []
   );
 
   const registerImageOverlayRef = useCallback(
-    (id: string, element: HTMLElement | null) => {
+    (
+      id: string,
+      element: HTMLElement | null,
+      containerContext: ContainerContext
+    ) => {
+      const refMap =
+        containerContext === "dual"
+          ? dualImageOverlayRefs
+          : primaryImageOverlayRefs;
       if (element) {
-        imageOverlayRefs.current.set(id, element);
+        refMap.current.set(id, element);
       } else {
-        imageOverlayRefs.current.delete(id);
+        refMap.current.delete(id);
       }
     },
     []
   );
-
   const updateTextOverlay = useCallback(
     (id: string, updates: Partial<TextOverlay>) => {
       setTextOverlays((prev) =>
@@ -502,102 +494,163 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
   const debouncedUpdateNormalizedCoords = useMemo(() => {
     const fn = () => {
-      const video = videoRef.current;
-      if (!video) return;
+      const primaryVideo = videoRef.current;
+      const dualVideo = dualVideoRef.current;
+      if (!primaryVideo || !dualVideo) return;
 
-      if (
-        textOverlayRefs.current.size === 0 &&
-        imageOverlayRefs.current.size === 0
-      ) {
-        return;
-      }
-
-      textOverlayRefs.current.forEach((element, id) => {
+      primaryTextOverlayRefs.current.forEach((element, id) => {
         const overlay = textOverlaysRef.current.find((o) => o.id === id);
         if (overlay) {
-          const { x, y } = overlay;
-          const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-            overlayX: x,
-            overlayY: y,
+          const { x, y, dualX, dualY } = overlay;
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(
+            primaryVideo,
+            {
+              overlayX: x,
+              overlayY: y,
+            }
+          );
+          const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+            dualVideo,
+            {
+              overlayX: dualX,
+              overlayY: dualY,
+            }
+          );
+          updateTextOverlay(id, {
+            x,
+            y,
+            normX,
+            normY,
+            dualX,
+            dualY,
+            dualNormX,
+            dualNormY,
           });
-          updateTextOverlay(id, { x, y, normX, normY });
         }
       });
 
-      imageOverlayRefs.current.forEach((element, id) => {
+      primaryImageOverlayRefs.current.forEach((element, id) => {
         const overlay = imageOverlaysRef.current.find((o) => o.id === id);
         if (overlay) {
-          const { x, y, width, height } = overlay;
-          const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-            overlayX: x,
-            overlayY: y,
+          const { x, y, width, height, dualX, dualY, dualWidth, dualHeight } =
+            overlay;
+          const { x: normX, y: normY } = getOverlayNormalizedCoords(
+            primaryVideo,
+            {
+              overlayX: x,
+              overlayY: y,
+            }
+          );
+          const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+            dualVideo,
+            {
+              overlayX: dualX,
+              overlayY: dualY,
+            }
+          );
+          updateImageOverlay(id, {
+            x,
+            y,
+            width,
+            height,
+            normX,
+            normY,
+            dualX,
+            dualY,
+            dualWidth,
+            dualHeight,
+            dualNormX,
+            dualNormY,
           });
-          updateImageOverlay(id, { x, y, normX, normY, width, height });
         }
       });
     };
 
     return debounce(fn, 300);
-  }, []);
+  }, [updateTextOverlay, updateImageOverlay]);
 
   const rafIdRef = useRef<number | null>(null);
 
-  // TODO: Review this function
   const handleWindowResize = useCallback(() => {
-    const container = getActiveContainer();
-    if (!container) return;
+    const primaryContainer = getContainer("primary");
+    const dualContainer = getContainer("dual");
+
+    if (!primaryContainer || !dualContainer) return;
 
     if (
-      textOverlayRefs.current.size === 0 &&
-      imageOverlayRefs.current.size === 0
+      primaryTextOverlayRefs.current.size === 0 &&
+      primaryImageOverlayRefs.current.size === 0
     ) {
       return;
     }
 
-    const { width: newContainerWidth, height: newContainerHeight } =
-      container.getBoundingClientRect();
+    const primaryRect = primaryContainer.getBoundingClientRect();
+    const dualRect = dualContainer.getBoundingClientRect();
     const prevDimensions = previousVideoDimensions.current;
 
     if (!prevDimensions) {
       previousVideoDimensions.current = {
-        width: newContainerWidth,
-        height: newContainerHeight,
+        width: primaryRect.width,
+        height: primaryRect.height,
       };
       return;
     }
 
-    const scaleX = newContainerWidth / prevDimensions.width;
-    const scaleY = newContainerHeight / prevDimensions.height;
+    const scaleX = primaryRect.width / prevDimensions.width;
+    const scaleY = primaryRect.height / prevDimensions.height;
+    const dualScaleX = dualRect.width / prevDimensions.width;
+    const dualScaleY = dualRect.height / prevDimensions.height;
 
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
     }
 
     rafIdRef.current = requestAnimationFrame(() => {
-      textOverlayRefs.current.forEach((element, id) => {
+      primaryTextOverlayRefs.current.forEach((element, id) => {
         const overlay = textOverlaysRef.current.find((o) => o.id === id);
         if (overlay) {
           const { x: currentX, y: currentY } = overlay;
-
           const finalLeft = currentX * scaleX;
           const finalTop = currentY * scaleY;
 
           const elementRect = element.getBoundingClientRect();
           const constrainedLeft = Math.max(
             0,
-            Math.min(newContainerWidth - elementRect.width, finalLeft)
+            Math.min(primaryRect.width - elementRect.width, finalLeft)
           );
           const constrainedTop = Math.max(
             0,
-            Math.min(newContainerHeight - elementRect.height, finalTop)
+            Math.min(primaryRect.height - elementRect.height, finalTop)
           );
 
           element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(0deg) scale(1)`;
-          element.style.maxWidth = calculateMaxWidth(newContainerWidth);
+          element.style.maxWidth = calculateMaxWidth(primaryRect.width);
         }
       });
 
-      imageOverlayRefs.current.forEach((element, id) => {
+      dualTextOverlayRefs.current.forEach((element, id) => {
+        const overlay = textOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const { dualX: currentX, dualY: currentY } = overlay;
+          const finalLeft = currentX * dualScaleX;
+          const finalTop = currentY * dualScaleY;
+
+          const elementRect = element.getBoundingClientRect();
+          const constrainedLeft = Math.max(
+            0,
+            Math.min(dualRect.width - elementRect.width, finalLeft)
+          );
+          const constrainedTop = Math.max(
+            0,
+            Math.min(dualRect.height - elementRect.height, finalTop)
+          );
+
+          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(0deg) scale(1)`;
+          element.style.maxWidth = calculateMaxWidth(dualRect.width);
+        }
+      });
+
+      primaryImageOverlayRefs.current.forEach((element, id) => {
         const overlay = imageOverlaysRef.current.find((o) => o.id === id);
         if (overlay) {
           const {
@@ -611,17 +664,48 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
           const finalLeft = currentX * scaleX;
           const finalTop = currentY * scaleY;
-
           const targetWidth = currentWidth * scaleX;
           const targetHeight = currentHeight * scaleY;
 
           const constrainedLeft = Math.max(
             0,
-            Math.min(newContainerWidth - targetWidth, finalLeft)
+            Math.min(primaryRect.width - targetWidth, finalLeft)
           );
           const constrainedTop = Math.max(
             0,
-            Math.min(newContainerHeight - targetHeight, finalTop)
+            Math.min(primaryRect.height - targetHeight, finalTop)
+          );
+
+          element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
+          element.style.width = `${targetWidth}px`;
+          element.style.height = `${targetHeight}px`;
+        }
+      });
+
+      dualImageOverlayRefs.current.forEach((element, id) => {
+        const overlay = imageOverlaysRef.current.find((o) => o.id === id);
+        if (overlay) {
+          const {
+            dualX: currentX,
+            dualY: currentY,
+            scale,
+            rotation,
+            dualWidth: currentWidth,
+            dualHeight: currentHeight,
+          } = overlay;
+
+          const finalLeft = currentX * dualScaleX;
+          const finalTop = currentY * dualScaleY;
+          const targetWidth = currentWidth * dualScaleX;
+          const targetHeight = currentHeight * dualScaleY;
+
+          const constrainedLeft = Math.max(
+            0,
+            Math.min(dualRect.width - targetWidth, finalLeft)
+          );
+          const constrainedTop = Math.max(
+            0,
+            Math.min(dualRect.height - targetHeight, finalTop)
           );
 
           element.style.transform = `translate3d(${constrainedLeft}px, ${constrainedTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
@@ -631,13 +715,13 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       });
 
       previousVideoDimensions.current = {
-        width: newContainerWidth,
-        height: newContainerHeight,
+        width: primaryRect.width,
+        height: primaryRect.height,
       };
     });
 
     debouncedUpdateNormalizedCoords();
-  }, [debouncedUpdateNormalizedCoords, getActiveContainer]);
+  }, [debouncedUpdateNormalizedCoords]);
 
   useEffect(() => {
     window.addEventListener("resize", handleWindowResize);
@@ -648,7 +732,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       }
       debouncedUpdateNormalizedCoords.cancel?.();
     };
-  }, [handleWindowResize]);
+  }, [handleWindowResize, debouncedUpdateNormalizedCoords]);
 
   const deleteTextOverlay = useCallback((id: string) => {
     setTextOverlays((prev) => prev.filter((overlay) => overlay.id !== id));
@@ -685,6 +769,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       e: React.MouseEvent,
       containerContext: ContainerContext = "primary"
     ) => {
+      e.stopPropagation();
       const target = e.currentTarget as HTMLElement;
       const container = getContainer(containerContext);
       if (!container) return;
@@ -697,48 +782,81 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
       if (!overlay) return;
 
-      const {
-        x: currentX,
-        y: currentY,
-        dualX: currentDualX,
-        dualY: currentDualY,
-      } = overlay;
+      const isDualContainer = containerContext === "dual";
+      const initialX = isDualContainer ? overlay.dualX : overlay.x;
+      const initialY = isDualContainer ? overlay.dualY : overlay.y;
+
       let scale = 1;
       let rotation = 0;
+      const targetRect = target.getBoundingClientRect();
+      const elementWidth = targetRect.width;
+      const elementHeight = targetRect.height;
 
       if (overlay.type === "image") {
         scale = overlay.scale;
         rotation = overlay.rotation;
       }
 
+      const otherContainerContext: ContainerContext = isDualContainer
+        ? "primary"
+        : "dual";
+      const otherContainer = getContainer(otherContainerContext);
+
+      let otherElement: HTMLElement | null = null;
+      if (overlay.type === "text") {
+        const otherRefMap = isDualContainer
+          ? primaryTextOverlayRefs
+          : dualTextOverlayRefs;
+        otherElement = otherRefMap.current.get(overlayId) || null;
+      } else {
+        const otherRefMap = isDualContainer
+          ? primaryImageOverlayRefs
+          : dualImageOverlayRefs;
+        otherElement = otherRefMap.current.get(overlayId) || null;
+      }
+
+      let otherElementWidth = elementWidth;
+      let otherElementHeight = elementHeight;
+      if (otherElement) {
+        const otherRect = otherElement.getBoundingClientRect();
+        otherElementWidth = otherRect.width;
+        otherElementHeight = otherRect.height;
+      }
+
+      const otherInitialX = isDualContainer ? overlay.x : overlay.dualX;
+      const otherInitialY = isDualContainer ? overlay.y : overlay.dualY;
+
       dragRef.current = {
         isDragging: true,
         startX: e.clientX,
         startY: e.clientY,
         element: target,
-        offsetX: containerContext === "dual" ? currentDualX : currentX,
-        offsetY: containerContext === "dual" ? currentDualY : currentY,
+        offsetX: initialX,
+        offsetY: initialY,
         overlayId,
         rafId: null,
-        finalLeft: containerContext === "dual" ? currentDualX : currentX,
-        finalTop: containerContext === "dual" ? currentDualY : currentY,
+        finalLeft: initialX,
+        finalTop: initialY,
         containerContext,
       };
+
       setSelectedOverlay(overlayId);
 
       const onMouseMove = (ev: MouseEvent) => {
         const drag = dragRef.current;
         if (!drag.isDragging || !drag.element) return;
+
         const dx = ev.clientX - drag.startX;
         const dy = ev.clientY - drag.startY;
-        const container = getContainer(drag.containerContext);
-        if (!container) return;
-        const containerRect = container.getBoundingClientRect();
-        const elementRect = drag.element.getBoundingClientRect();
-        const elementWidth = elementRect.width;
-        const elementHeight = elementRect.height;
+
+        const currentContainer = getContainer(drag.containerContext);
+        if (!currentContainer) return;
+
+        const containerRect = currentContainer.getBoundingClientRect();
+
         let newLeft = drag.offsetX + dx;
         let newTop = drag.offsetY + dy;
+
         newLeft = Math.max(
           0,
           Math.min(containerRect.width - elementWidth, newLeft)
@@ -747,106 +865,153 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
           0,
           Math.min(containerRect.height - elementHeight, newTop)
         );
+
         drag.finalLeft = newLeft;
         drag.finalTop = newTop;
+
+        // Snap guides
         const containerCenterX = containerRect.width / 2;
         const containerCenterY = containerRect.height / 2;
         const elementCenterX = newLeft + elementWidth / 2;
         const elementCenterY = newTop + elementHeight / 2;
         const THRESHOLD = 2;
+
         if (vGuideRef.current) {
           if (Math.abs(elementCenterX - containerCenterX) <= THRESHOLD) {
-            vGuideRef.current.style.left = `${containerCenterX}px`;
             vGuideRef.current.style.display = "block";
+            vGuideRef.current.style.left = `${containerCenterX}px`;
           } else {
             vGuideRef.current.style.display = "none";
           }
         }
+
         if (hGuideRef.current) {
           if (Math.abs(elementCenterY - containerCenterY) <= THRESHOLD) {
-            hGuideRef.current.style.top = `${containerCenterY}px`;
             hGuideRef.current.style.display = "block";
+            hGuideRef.current.style.top = `${containerCenterY}px`;
           } else {
             hGuideRef.current.style.display = "none";
           }
         }
-        if (drag.rafId) {
-          cancelAnimationFrame(drag.rafId);
-        }
+
+        if (drag.rafId) cancelAnimationFrame(drag.rafId);
+
         drag.rafId = requestAnimationFrame(() => {
           if (drag.element) {
             drag.element.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
           }
+
+          if (otherElement && otherContainer) {
+            const otherContainerRect = otherContainer.getBoundingClientRect();
+
+            const containerRatio =
+              otherContainerRect.width / containerRect.width;
+            const scaledDx = dx * containerRatio;
+            const scaledDy = dy * containerRatio;
+
+            let otherLeft = otherInitialX + scaledDx;
+            let otherTop = otherInitialY + scaledDy;
+
+            otherLeft = Math.max(
+              0,
+              Math.min(otherContainerRect.width - otherElementWidth, otherLeft)
+            );
+            otherTop = Math.max(
+              0,
+              Math.min(otherContainerRect.height - otherElementHeight, otherTop)
+            );
+
+            otherElement.style.transform = `translate3d(${otherLeft}px, ${otherTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
+          }
         });
       };
+
       const onMouseUp = () => {
         const drag = dragRef.current;
         drag.isDragging = false;
 
         if (drag.overlayId) {
-          const video =
-            containerContext === "dual"
-              ? dualVideoRef.current
-              : videoRef.current;
-          if (video) {
-            const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-              overlayX: drag.finalLeft,
-              overlayY: drag.finalTop,
-            });
+          const primaryVideo = videoRef.current;
+          const dualVideo = dualVideoRef.current;
 
-            const textOverlay = textOverlaysRef.current.find(
-              (o) => o.id === drag.overlayId
-            );
-            const imageOverlay = imageOverlaysRef.current.find(
-              (o) => o.id === drag.overlayId
-            );
+          if (primaryVideo && dualVideo) {
+            const primaryContainer = getContainer("primary");
+            const dualContainer = getContainer("dual");
 
-            if (textOverlay) {
-              const updates =
-                containerContext === "dual"
-                  ? {
-                      dualX: drag.finalLeft,
-                      dualY: drag.finalTop,
-                      dualNormX: normX,
-                      dualNormY: normY,
-                    }
-                  : { x: drag.finalLeft, y: drag.finalTop, normX, normY };
-              updateTextOverlay(drag.overlayId, updates);
-            } else if (imageOverlay) {
-              const updates =
-                containerContext === "dual"
-                  ? {
-                      dualX: drag.finalLeft,
-                      dualY: drag.finalTop,
-                      dualNormX: normX,
-                      dualNormY: normY,
-                    }
-                  : { x: drag.finalLeft, y: drag.finalTop, normX, normY };
-              updateImageOverlay(drag.overlayId, updates);
+            if (!primaryContainer || !dualContainer) return;
+
+            const primaryRect = primaryContainer.getBoundingClientRect();
+            const dualRect = dualContainer.getBoundingClientRect();
+
+            const dx = drag.finalLeft - drag.offsetX;
+            const dy = drag.finalTop - drag.offsetY;
+
+            let primaryX: number;
+            let primaryY: number;
+            let dualX: number;
+            let dualY: number;
+
+            if (isDualContainer) {
+              dualX = drag.finalLeft;
+              dualY = drag.finalTop;
+
+              const containerRatio = primaryRect.width / dualRect.width;
+              const scaledDx = dx * containerRatio;
+              const scaledDy = dy * containerRatio;
+              primaryX = otherInitialX + scaledDx;
+              primaryY = otherInitialY + scaledDy;
+            } else {
+              primaryX = drag.finalLeft;
+              primaryY = drag.finalTop;
+
+              const containerRatio = dualRect.width / primaryRect.width;
+              const scaledDx = dx * containerRatio;
+              const scaledDy = dy * containerRatio;
+              dualX = otherInitialX + scaledDx;
+              dualY = otherInitialY + scaledDy;
             }
 
-            logger.log("[Overlay Position]", {
-              container: containerContext,
-              x: drag.finalLeft,
-              y: drag.finalTop,
-              normX,
-              normY,
-            });
+            const { x: primaryNormX, y: primaryNormY } =
+              getOverlayNormalizedCoords(primaryVideo, {
+                overlayX: primaryX,
+                overlayY: primaryY,
+              });
+
+            const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+              dualVideo,
+              {
+                overlayX: dualX,
+                overlayY: dualY,
+              }
+            );
+
+            const updates = {
+              x: primaryX,
+              y: primaryY,
+              normX: primaryNormX,
+              normY: primaryNormY,
+              dualX,
+              dualY,
+              dualNormX,
+              dualNormY,
+            };
+
+            if (overlay.type === "text") {
+              updateTextOverlay(drag.overlayId, updates);
+            } else {
+              updateImageOverlay(drag.overlayId, updates);
+            }
           }
         }
 
         removeGuides();
         drag.element = null;
         drag.overlayId = null;
-        drag.finalLeft = 0;
-        drag.finalTop = 0;
-        drag.offsetX = 0;
-        drag.offsetY = 0;
-        drag.containerContext = "primary";
         drag.rafId = null;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
+
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
@@ -865,29 +1030,33 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       const container = getContainer(containerContext);
       if (!container) return;
 
-      const overlay = imageOverlaysRef.current.find(
-        (overlay) => overlay.id === overlayId
-      );
+      const overlay = imageOverlaysRef.current.find((o) => o.id === overlayId);
       if (!overlay) return;
 
-      const {
-        x: currentX,
-        y: currentY,
-        width: currentWidth,
-        height: currentHeight,
-        dualWidth: currentDualWidth,
-        dualHeight: currentDualHeight,
-        rotation,
-        scale,
-        dualX: currentDualX,
-        dualY: currentDualY,
-      } = overlay;
-
-      const startWidth =
-        containerContext === "dual" ? currentDualWidth : currentWidth;
-      const startHeight =
-        containerContext === "dual" ? currentDualHeight : currentHeight;
+      const isDualContainer = containerContext === "dual";
+      const startWidth = isDualContainer ? overlay.dualWidth : overlay.width;
+      const startHeight = isDualContainer ? overlay.dualHeight : overlay.height;
+      const startLeft = isDualContainer ? overlay.dualX : overlay.x;
+      const startTop = isDualContainer ? overlay.dualY : overlay.y;
       const aspectRatio = startWidth / startHeight;
+
+      const otherContainerContext: ContainerContext = isDualContainer
+        ? "primary"
+        : "dual";
+      const otherContainer = getContainer(otherContainerContext);
+      const otherRefMap = isDualContainer
+        ? primaryImageOverlayRefs
+        : dualImageOverlayRefs;
+      const otherElement = otherRefMap.current.get(overlayId) || null;
+
+      const otherStartWidth = isDualContainer
+        ? overlay.width
+        : overlay.dualWidth;
+      const otherStartHeight = isDualContainer
+        ? overlay.height
+        : overlay.dualHeight;
+      const otherStartLeft = isDualContainer ? overlay.x : overlay.dualX;
+      const otherStartTop = isDualContainer ? overlay.y : overlay.dualY;
 
       resizeRef.current = {
         isResizing: true,
@@ -896,12 +1065,12 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         startY: e.clientY,
         startWidth,
         startHeight,
-        startLeft: containerContext === "dual" ? currentDualX : currentX,
-        startTop: containerContext === "dual" ? currentDualY : currentY,
+        startLeft,
+        startTop,
         finalWidth: startWidth,
         finalHeight: startHeight,
-        finalLeft: containerContext === "dual" ? currentDualX : currentX,
-        finalTop: containerContext === "dual" ? currentDualY : currentY,
+        finalLeft: startLeft,
+        finalTop: startTop,
         rafId: null,
         overlayId,
         containerContext,
@@ -917,15 +1086,14 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
 
         const dx = ev.clientX - resize.startX;
         const dy = ev.clientY - resize.startY;
-
         const containerRect = container.getBoundingClientRect();
+
         let newWidth = resize.startWidth;
         let newHeight = resize.startHeight;
         let newLeft = resize.startLeft;
         let newTop = resize.startTop;
 
         resize.preserveAspectRatio = ev.shiftKey;
-
         const MIN_OVERLAY_SIZE = 50;
 
         if (resize.preserveAspectRatio) {
@@ -1019,65 +1187,138 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         if (newLeft === 0) newWidth = Math.min(newWidth, containerRect.width);
         if (newTop === 0) newHeight = Math.min(newHeight, containerRect.height);
 
-        resizeRef.current.finalHeight = newHeight;
-        resizeRef.current.finalWidth = newWidth;
-        resizeRef.current.finalTop = newTop;
-        resizeRef.current.finalLeft = newLeft;
+        resize.finalWidth = newWidth;
+        resize.finalHeight = newHeight;
+        resize.finalLeft = newLeft;
+        resize.finalTop = newTop;
 
         if (resize.rafId) cancelAnimationFrame(resize.rafId);
+
         resize.rafId = requestAnimationFrame(() => {
           if (target) {
-            target.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${rotation}deg) scale(${scale})`;
+            target.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${overlay.rotation}deg) scale(${overlay.scale})`;
             target.style.width = `${newWidth}px`;
             target.style.height = `${newHeight}px`;
+          }
+
+          if (otherElement && otherContainer) {
+            const otherContainerRect = otherContainer.getBoundingClientRect();
+            const containerRatio =
+              otherContainerRect.width / containerRect.width;
+
+            const widthDelta = newWidth - resize.startWidth;
+            const heightDelta = newHeight - resize.startHeight;
+            const leftDelta = newLeft - resize.startLeft;
+            const topDelta = newTop - resize.startTop;
+
+            const otherWidth = otherStartWidth + widthDelta * containerRatio;
+            const otherHeight = otherStartHeight + heightDelta * containerRatio;
+            let otherLeft = otherStartLeft + leftDelta * containerRatio;
+            let otherTop = otherStartTop + topDelta * containerRatio;
+
+            otherLeft = Math.max(
+              0,
+              Math.min(otherContainerRect.width - otherWidth, otherLeft)
+            );
+            otherTop = Math.max(
+              0,
+              Math.min(otherContainerRect.height - otherHeight, otherTop)
+            );
+
+            otherElement.style.transform = `translate3d(${otherLeft}px, ${otherTop}px, 0) rotate(${overlay.rotation}deg) scale(${overlay.scale})`;
+            otherElement.style.width = `${otherWidth}px`;
+            otherElement.style.height = `${otherHeight}px`;
           }
         });
       };
 
       const onMouseUp = () => {
         const resize = resizeRef.current;
-        const { overlayId, finalLeft, finalTop, finalWidth, finalHeight } =
-          resize;
         resize.isResizing = false;
 
-        if (overlayId) {
-          const video =
-            containerContext === "dual"
-              ? dualVideoRef.current
-              : videoRef.current;
-          if (video) {
-            const { x: normX, y: normY } = getOverlayNormalizedCoords(video, {
-              overlayX: finalLeft,
-              overlayY: finalTop,
+        if (resize.overlayId) {
+          const primaryVideo = videoRef.current;
+          const dualVideo = dualVideoRef.current;
+
+          if (primaryVideo && dualVideo) {
+            const primaryContainer = getContainer("primary");
+            const dualContainer = getContainer("dual");
+
+            if (!primaryContainer || !dualContainer) return;
+
+            const primaryRect = primaryContainer.getBoundingClientRect();
+            const dualRect = dualContainer.getBoundingClientRect();
+
+            const widthDelta = resize.finalWidth - resize.startWidth;
+            const heightDelta = resize.finalHeight - resize.startHeight;
+            const leftDelta = resize.finalLeft - resize.startLeft;
+            const topDelta = resize.finalTop - resize.startTop;
+
+            let primaryX: number;
+            let primaryY: number;
+            let primaryWidth: number;
+            let primaryHeight: number;
+            let dualX: number;
+            let dualY: number;
+            let dualWidth: number;
+            let dualHeight: number;
+
+            if (isDualContainer) {
+              dualX = resize.finalLeft;
+              dualY = resize.finalTop;
+              dualWidth = resize.finalWidth;
+              dualHeight = resize.finalHeight;
+
+              const containerRatio = primaryRect.width / dualRect.width;
+              primaryWidth = otherStartWidth + widthDelta * containerRatio;
+              primaryHeight = otherStartHeight + heightDelta * containerRatio;
+              primaryX = otherStartLeft + leftDelta * containerRatio;
+              primaryY = otherStartTop + topDelta * containerRatio;
+            } else {
+              primaryX = resize.finalLeft;
+              primaryY = resize.finalTop;
+              primaryWidth = resize.finalWidth;
+              primaryHeight = resize.finalHeight;
+
+              const containerRatio = dualRect.width / primaryRect.width;
+              dualWidth = otherStartWidth + widthDelta * containerRatio;
+              dualHeight = otherStartHeight + heightDelta * containerRatio;
+              dualX = otherStartLeft + leftDelta * containerRatio;
+              dualY = otherStartTop + topDelta * containerRatio;
+            }
+
+            const { x: primaryNormX, y: primaryNormY } =
+              getOverlayNormalizedCoords(primaryVideo, {
+                overlayX: primaryX,
+                overlayY: primaryY,
+              });
+
+            const { x: dualNormX, y: dualNormY } = getOverlayNormalizedCoords(
+              dualVideo,
+              {
+                overlayX: dualX,
+                overlayY: dualY,
+              }
+            );
+
+            updateImageOverlay(resize.overlayId, {
+              x: primaryX,
+              y: primaryY,
+              width: primaryWidth,
+              height: primaryHeight,
+              normX: primaryNormX,
+              normY: primaryNormY,
+              dualX,
+              dualY,
+              dualWidth,
+              dualHeight,
+              dualNormX,
+              dualNormY,
             });
-
-            const updates =
-              containerContext === "dual"
-                ? {
-                    dualWidth: finalWidth,
-                    dualHeight: finalHeight,
-                    dualX: finalLeft,
-                    dualY: finalTop,
-                    dualNormX: normX,
-                    dualNormY: normY,
-                  }
-                : {
-                    width: finalWidth,
-                    height: finalHeight,
-                    x: finalLeft,
-                    y: finalTop,
-                    normX,
-                    normY,
-                  };
-
-            updateImageOverlay(overlayId, updates);
           }
         }
 
         resize.overlayId = null;
-        resize.containerContext = "primary";
-        resize.aspectRatio = 1;
-        resize.preserveAspectRatio = false;
         resize.rafId = null;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
@@ -1105,20 +1346,30 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       );
       if (!imageOverlay) return;
 
-      const { rotation, scale, x, y } = imageOverlay;
+      const isDualContainer = containerContext === "dual";
+      const currentX = isDualContainer ? imageOverlay.dualX : imageOverlay.x;
+      const currentY = isDualContainer ? imageOverlay.dualY : imageOverlay.y;
 
       const rect = target.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-
       const startAngle =
         Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+
+      const otherContainerContext: ContainerContext = isDualContainer
+        ? "primary"
+        : "dual";
+      const otherContainer = getContainer(otherContainerContext);
+      const otherRefMap = isDualContainer
+        ? primaryImageOverlayRefs
+        : dualImageOverlayRefs;
+      const otherElement = otherRefMap.current.get(overlayId) || null;
 
       rotationRef.current = {
         isRotating: true,
         startAngle,
-        startRotation: rotation,
-        finalRotation: rotation,
+        startRotation: imageOverlay.rotation,
+        finalRotation: imageOverlay.rotation,
         element: target,
         overlayId,
         rafId: null,
@@ -1134,16 +1385,26 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         const currentAngle =
           Math.atan2(ev.clientY - centerY, ev.clientX - centerX) *
           (180 / Math.PI);
-
         const deltaAngle = currentAngle - rotation.startAngle;
         const newRotation = rotation.startRotation + deltaAngle;
 
         rotation.finalRotation = newRotation;
 
         if (rotation.rafId) cancelAnimationFrame(rotation.rafId);
+
         rotation.rafId = requestAnimationFrame(() => {
           if (rotation.element) {
-            rotation.element.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${newRotation}deg) scale(${scale})`;
+            rotation.element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) rotate(${newRotation}deg) scale(${imageOverlay.scale})`;
+          }
+
+          if (otherElement && otherContainer) {
+            const otherX = isDualContainer
+              ? imageOverlay.x
+              : imageOverlay.dualX;
+            const otherY = isDualContainer
+              ? imageOverlay.y
+              : imageOverlay.dualY;
+            otherElement.style.transform = `translate3d(${otherX}px, ${otherY}px, 0) rotate(${newRotation}deg) scale(${imageOverlay.scale})`;
           }
         });
       };
@@ -1155,18 +1416,12 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
         if (rotation.overlayId) {
           updateImageOverlay(rotation.overlayId, {
             rotation: rotation.finalRotation,
-            scale,
           });
         }
 
         rotation.element = null;
         rotation.overlayId = null;
-        rotation.containerContext = "primary";
-        if (rotation.rafId) {
-          cancelAnimationFrame(rotation.rafId);
-          rotation.rafId = null;
-        }
-
+        rotation.rafId = null;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
@@ -1174,7 +1429,7 @@ export const OverlaysProvider = ({ children }: { children: ReactNode }) => {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [updateImageOverlay]
+    [updateImageOverlay, getContainer]
   );
 
   const contextValue = {

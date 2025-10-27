@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, forwardRef } from "react";
 import { AspectRatio } from "@/utils/aspect-ratios";
-import type { KeyframeData } from "@/utils/keyframe";
+import type { KeyframeBounds, KeyframeData } from "@/utils/keyframe";
 import {
   ReactiveVideoControls,
   useReactiveVideoTime,
@@ -62,10 +62,13 @@ export interface VideoPreviewProps {
   className?: string;
   style?: React.CSSProperties;
 
-  keyframeBounds: {
-    start: number;
-    end: number;
-  };
+  // Keyframe bounds: relative to TRIMMED clip (0 = start of trim)
+  keyframeBounds: KeyframeBounds;
+
+  // Trim data: absolute positions in SOURCE video
+  trimData: TrimData;
+
+  externalControls?: boolean;
 }
 
 export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
@@ -76,6 +79,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       targetAspect,
       variant,
       keyframes,
+      trimData,
       onTimeChange,
       playing: externalPlaying = false,
       onPlayingChange,
@@ -84,11 +88,24 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       children,
       className,
       style,
+      externalControls = false,
     } = props;
 
     const repeatRef = useRef(defaultRepeat);
-    const startRef = useLatestValue(keyframeBounds.start);
-    const endRef = useLatestValue(keyframeBounds.end);
+
+    const sourceVideoStartSeconds = useMemo(
+      () => keyframeBounds.start + msToSeconds(trimData.trimStart),
+      [keyframeBounds.start, trimData.trimStart]
+    );
+
+    const sourceVideoEndSeconds = useMemo(
+      () => keyframeBounds.end + msToSeconds(trimData.trimStart),
+      [keyframeBounds.end, trimData.trimStart]
+    );
+
+    const startRef = useLatestValue(sourceVideoStartSeconds);
+    const endRef = useLatestValue(sourceVideoEndSeconds);
+
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const composedRef = useComposedRefs(videoRef, getElementRef(source));
 
@@ -119,15 +136,17 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         onPlayingChange,
       });
 
+    const relativeTime = time - msToSeconds(trimData.trimStart);
+
     const transform = useInterpolatedTransform(
       keyframes,
-      time,
+      relativeTime,
       variant,
       baseAspect,
       targetAspect
     );
 
-    const trimData = useMemo<TrimData>(() => {
+    const keyframeTrimData = useMemo<TrimData>(() => {
       return {
         trimStart: secondsToMs(keyframeBounds.start),
         trimEnd: secondsToMs(keyframeBounds.end),
@@ -183,7 +202,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       <div
         ref={forwardedRef}
         className={cn(
-          "relative overflow-hidden rounded-lg shadow-md w-full aspect-(--aspect-ratio) group",
+          "relative overflow-hidden shadow-md w-full aspect-(--aspect-ratio) group",
           className
         )}
         style={
@@ -202,74 +221,78 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
           {renderedChild}
         </div>
 
-        <div className="absolute top-2 left-2 z-20">
-          <Volume.Root
-            defaultValue={controls.getVolume()}
-            onValueChangeAlways={controls.setVolume}
-          >
-            <Volume.Controls variant="pill">
-              <Volume.Button />
-              <Volume.Slider>
-                <Volume.Slider.Track>
-                  <Volume.Slider.Range />
-                  <Volume.Slider.Thumb />
-                </Volume.Slider.Track>
-              </Volume.Slider>
-            </Volume.Controls>
-          </Volume.Root>
-        </div>
+        {!externalControls && (
+          <>
+            <div className="absolute top-2 left-2 z-20">
+              <Volume.Root
+                defaultValue={controls.getVolume()}
+                onValueChangeAlways={controls.setVolume}
+              >
+                <Volume.Controls variant="pill">
+                  <Volume.Button />
+                  <Volume.Slider>
+                    <Volume.Slider.Track>
+                      <Volume.Slider.Range />
+                      <Volume.Slider.Thumb />
+                    </Volume.Slider.Track>
+                  </Volume.Slider>
+                </Volume.Controls>
+              </Volume.Root>
+            </div>
 
-        <div className="flex items-center justify-center gap-2">
-          <Playback.Root
-            defaultPlaying={playState.isPlaying}
-            onPlayingChangeAlways={(shouldPlay) => {
-              if (shouldPlay) {
-                controls.play();
-              } else {
-                controls.pause();
-              }
-            }}
-            playingStatus={status}
-            isBuffering={isBuffering}
-            hasError={hasError}
-          >
-            <Playback.Controls className="flex items-center justify-between px-4">
-              <div className="flex items-center gap-3">
-                <Playback.PlayToggle />
-                <Playback.LoopToggle
-                  defaultLoop={repeatRef.current}
-                  onLoopChange={(value) => {
-                    repeatRef.current = value;
-                  }}
-                />
-              </div>
-              <Playback.RateControl
-                defaultRate={controls.getPlaybackRate()}
-                onRateChangeAlways={controls.setPlaybackRate}
-              />
-            </Playback.Controls>
-            <Seek.Root
-              primaryVideoRef={videoRef}
-              primaryTrim={trimData}
-              secondaryTrim={null}
-              isPlaying={playState.isPlaying}
-              onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
-              primaryBuffered={buffered}
-              secondaryBuffered={null}
-            >
-              <Seek.Content>
-                <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
-                {/* TODO: 58px height of Playback.Controls */}
-                <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
-                  <Seek.Buffer />
-                  <Seek.Progress />
-                  <Seek.Thumb />
-                </Seek.Track>
-                <Seek.Animator />
-              </Seek.Content>
-            </Seek.Root>
-          </Playback.Root>
-        </div>
+            <div className="flex items-center justify-center gap-2">
+              <Playback.Root
+                defaultPlaying={playState.isPlaying}
+                onPlayingChangeAlways={(shouldPlay) => {
+                  if (shouldPlay) {
+                    controls.play();
+                  } else {
+                    controls.pause();
+                  }
+                }}
+                playingStatus={status}
+                isBuffering={isBuffering}
+                hasError={hasError}
+              >
+                <Playback.Controls className="flex items-center justify-between px-4">
+                  <div className="flex items-center gap-3">
+                    <Playback.PlayToggle />
+                    <Playback.LoopToggle
+                      defaultLoop={repeatRef.current}
+                      onLoopChange={(value) => {
+                        repeatRef.current = value;
+                      }}
+                    />
+                  </div>
+                  <Playback.RateControl
+                    defaultRate={controls.getPlaybackRate()}
+                    onRateChangeAlways={controls.setPlaybackRate}
+                  />
+                </Playback.Controls>
+                <Seek.Root
+                  primaryVideoRef={videoRef}
+                  primaryTrim={keyframeTrimData}
+                  secondaryTrim={null}
+                  isPlaying={playState.isPlaying}
+                  onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                  primaryBuffered={buffered}
+                  secondaryBuffered={null}
+                >
+                  <Seek.Content>
+                    <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
+                    {/* TODO: 58px height of Playback.Controls */}
+                    <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
+                      <Seek.Buffer />
+                      <Seek.Progress />
+                      <Seek.Thumb />
+                    </Seek.Track>
+                    <Seek.Animator />
+                  </Seek.Content>
+                </Seek.Root>
+              </Playback.Root>
+            </div>
+          </>
+        )}
 
         {/* Hidden video element kept mounted as a frame source for CanvasVideoRenderer to read and paint from */}
         {isChildCanvasRenderer

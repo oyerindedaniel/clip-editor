@@ -40,6 +40,8 @@ interface PlaybackContextValue {
 
   isBuffering: boolean;
   hasError: boolean;
+
+  isDual: boolean;
 }
 
 const PlaybackContext = React.createContext<PlaybackContextValue | null>(null);
@@ -65,6 +67,8 @@ interface PlaybackRootProps {
 
   isBuffering: boolean;
   hasError: boolean;
+
+  isDual?: boolean;
 }
 
 const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
@@ -80,6 +84,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       controlsId: controlledControlsId,
       isBuffering = false,
       hasError = false,
+      isDual = false,
       ...props
     },
     _
@@ -149,6 +154,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         controlsId,
         isBuffering,
         hasError,
+        isDual,
       }),
       [
         playing,
@@ -192,9 +198,9 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 PlaybackRoot.displayName = "PlaybackRoot";
 
 const PlaybackBuffer = () => {
-  const { isBuffering, playing } = usePlayback();
+  const { isBuffering, playing, isDual } = usePlayback();
 
-  if (!(isBuffering && playing)) return null;
+  if (isDual ? !isBuffering : !(isBuffering && playing)) return null;
 
   return (
     <Loader2 className="h-12 w-12 animate-spin absolute top-1/2 left-2/4 -translate-y-1/2 -translate-x-2/4 z-10 text-white fill-white/10" />

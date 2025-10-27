@@ -42,7 +42,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const transformRef = useLatestValue<InterpolatedResult>(transformData);
-  const rafIdRef = useRef<number | null>(null);
+  const callbackIdRef = useRef<number | null>(null);
 
   const drawFrame = () => {
     const canvas = canvasRef.current;
@@ -137,42 +137,39 @@ const CanvasVideoRenderer: TaggedRendererComponent<
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (!renderEnabled) {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-
       drawFrame();
       return;
     }
 
-    let mounted = true;
+    const video = videoRef.current;
+    if (!video) return;
 
-    const loop = () => {
-      if (!mounted) return;
+    const videoFrameCallback = () => {
+      if (!renderEnabled) return;
+
       drawFrame();
 
       const video = videoRef.current;
-      if (video && !video.ended) {
-        rafIdRef.current = requestAnimationFrame(loop);
+      if (video && !video.paused && !video.ended) {
+        callbackIdRef.current =
+          video.requestVideoFrameCallback(videoFrameCallback);
       }
     };
 
-    const video = videoRef.current;
-    if (video && !video.ended) {
-      rafIdRef.current = requestAnimationFrame(loop);
+    if (!video.paused && !video.ended) {
+      callbackIdRef.current =
+        video.requestVideoFrameCallback(videoFrameCallback);
     } else {
       drawFrame();
     }
 
     return () => {
-      mounted = false;
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+      if (callbackIdRef.current !== null && video) {
+        video.cancelVideoFrameCallback(callbackIdRef.current);
+        callbackIdRef.current = null;
       }
     };
-  }, [renderEnabled, width, height, variant, color]);
+  }, [renderEnabled, width, height, variant, color, drawFrame, videoRef]);
 
   return <canvas ref={canvasRef} className={cn("", className)} />;
 };

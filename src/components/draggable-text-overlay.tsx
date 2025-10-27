@@ -34,11 +34,9 @@ export const DraggableTextOverlay = ({
   );
 
   useEffect(() => {
-    if (!isDualVideo) {
-      registerTextOverlayRef(overlay.id, elementRef.current);
-      return () => registerTextOverlayRef(overlay.id, null);
-    }
-  }, [isDualVideo, registerTextOverlayRef, overlay.id]);
+    registerTextOverlayRef(overlay.id, elementRef.current, containerContext);
+    return () => registerTextOverlayRef(overlay.id, null, containerContext);
+  }, [registerTextOverlayRef, overlay.id, containerContext]);
 
   return (
     <div

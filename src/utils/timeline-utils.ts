@@ -144,3 +144,29 @@ export function msToSecondsRate(ratePxPerMs: number) {
 export function secondsToMsRate(ratePxPerSecond: number) {
   return ratePxPerSecond / 1000;
 }
+
+/**
+ * Convert absolute video time to relative trimmed time
+ * @param absoluteTimeMs - Time in milliseconds from video start
+ * @param trimStartMs - Trim start time in milliseconds
+ * @returns Relative time in milliseconds (0-based for trimmed area)
+ */
+export function absoluteToRelativeTime(
+  absoluteTimeMs: number,
+  trimStartMs: number
+): number {
+  return Math.max(0, absoluteTimeMs - trimStartMs);
+}
+
+/**
+ * Convert relative trimmed time back to absolute video time
+ * @param relativeTimeMs - Time in milliseconds from trim start (0-based)
+ * @param trimStartMs - Trim start time in milliseconds
+ * @returns Absolute time in milliseconds from video start
+ */
+export function relativeToAbsoluteTime(
+  relativeTimeMs: number,
+  trimStartMs: number
+): number {
+  return relativeTimeMs + trimStartMs;
+}

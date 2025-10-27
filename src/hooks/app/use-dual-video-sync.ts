@@ -459,6 +459,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       if (!isBufferingRef.current.secondary) {
         setBufferingState(false);
       }
+
+      if (!stalledRef.current.secondary && isPlayingRef.current) {
+        stableAttemptResume();
+      }
     };
 
     const onCanPlaySecondary = () => {
@@ -470,6 +474,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       isBufferingRef.current.secondary = false;
       if (!isBufferingRef.current.primary) {
         setBufferingState(false);
+      }
+
+      if (!stalledRef.current.primary && isPlayingRef.current) {
+        stableAttemptResume();
       }
     };
 

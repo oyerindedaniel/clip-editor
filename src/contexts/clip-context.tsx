@@ -72,6 +72,7 @@ export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
 interface ClipProviderProps {
   children: ReactNode;
   videoId?: string;
+  isManual?: boolean;
 }
 
 export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {

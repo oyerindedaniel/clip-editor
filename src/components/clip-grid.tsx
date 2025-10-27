@@ -6,24 +6,39 @@ import React, {
   useCallback,
   useLayoutEffect,
   useEffect,
+  useMemo,
 } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Edit } from "lucide-react";
-import type { S3ClipData as ClipData } from "@/types/app";
+import { Edit, X } from "lucide-react";
+import type { ClipData } from "@/types/app";
+import { isManualClip } from "@/types/app";
 import Link from "next/link";
 import { LoaderIcon } from "@/icons/loader";
 import logger from "@/utils/logger";
 import { useLatestValue } from "@/hooks/use-latest-value";
+import UploadVideoItem from "./upload-video-item";
+import { useManualClips } from "@/hooks/app/use-manual-clips";
+import { toast } from "sonner";
+import { useClientOnly } from "@/hooks/use-client-only";
 
 interface ClipGridProps {
   initialClips: ClipData[];
 }
 
 export default function ClipGrid({ initialClips }: ClipGridProps) {
+  const isClient = useClientOnly();
   const router = useRouter();
+  const { manualClips, addManualClip, removeManualClip } = useManualClips();
+  const [isUploading, setIsUploading] = useState(false);
+
+  const allClips = useMemo(() => {
+    if (!isClient) return initialClips;
+    return [...initialClips, ...manualClips];
+  }, [isClient, initialClips, manualClips]);
+
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(
-    () => new Set(initialClips.map((c) => c.metadata.clipId))
+    () => new Set(allClips.map((clip) => clip.metadata.clipId))
   );
   const processedThumbnailsRef = useRef<Set<string>>(new Set());
   const dimensionRef = useRef<{ width: number; height: number }>({
@@ -34,7 +49,35 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
   const [ready, setReady] = useState(false);
   const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
-  const initialClipsRef = useLatestValue(initialClips);
+  const allClipsRef = useLatestValue(allClips);
+
+  const handleVideoUpload = useCallback(
+    async (file: File) => {
+      setIsUploading(true);
+      try {
+        const manualClip = await addManualClip(file);
+        toast.success(
+          `Video uploaded successfully: ${manualClip.metadata.originalFilename}`
+        );
+      } catch (error) {
+        logger.error("Failed to upload video:", error);
+        toast.error("Failed to upload video. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [addManualClip]
+  );
+
+  const handleRemoveManualClip = useCallback(
+    (e: React.MouseEvent, clipId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeManualClip(clipId);
+      toast.success("Video removed successfully");
+    },
+    [removeManualClip]
+  );
 
   useLayoutEffect(() => {
     if (containerRef.current) {
@@ -150,9 +193,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
     const cleanups: (() => void)[] = [];
 
     for (const [clipId, canvas] of canvasRefs.current.entries()) {
-      const clip = initialClipsRef.current.find(
-        (c) => c.metadata.clipId === clipId
-      );
+      const clip = allClips.find((clip) => clip.metadata.clipId === clipId);
       if (clip && canvas) {
         const cleanup = generateThumbnail(clip.url, canvas, clipId);
         if (cleanup) cleanups.push(cleanup);
@@ -162,7 +203,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
     return () => {
       cleanups.forEach((fn) => fn());
     };
-  }, [ready, generateThumbnail]);
+  }, [ready, generateThumbnail, allClips]);
 
   const setCanvasRef = useCallback((clipId: string, videoUrl: string) => {
     return (el: HTMLCanvasElement | null) => {
@@ -172,7 +213,7 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
     };
   }, []);
 
-  if (initialClips.length === 0) {
+  if (allClips.length === 0 && !isUploading) {
     return (
       <div>
         <h2 className="text-3xl font-semibold absolute left-2/4 top-2/4 -translate-y-2/4 -translate-x-2/4 text-foreground-subtle mb-4 font-sans tracking-tight">
@@ -191,9 +232,19 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-        {initialClips.map((clip, index) => (
+        <UploadVideoItem
+          onVideoUpload={handleVideoUpload}
+          isUploading={isUploading}
+          className="group"
+        />
+
+        {allClips.map((clip, index) => (
           <Link
-            href={`/edit/${clip.metadata.clipId}`}
+            href={
+              isManualClip(clip)
+                ? `/edit/manual/${clip.metadata.clipId}`
+                : `/edit/${clip.metadata.clipId}`
+            }
             key={clip.metadata.clipId}
           >
             <div
@@ -221,29 +272,50 @@ export default function ClipGrid({ initialClips }: ClipGridProps) {
                         variant="default"
                         onClick={(e) => {
                           e.stopPropagation();
-                          router.push(`/edit/${clip.metadata.clipId}`);
+                          const href = isManualClip(clip)
+                            ? `/edit/manual/${clip.metadata.clipId}`
+                            : `/edit/${clip.metadata.clipId}`;
+                          router.push(href);
                         }}
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
+                      {isManualClip(clip) && (
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={(e) =>
+                            handleRemoveManualClip(e, clip.metadata.clipId)
+                          }
+                          className="bg-error hover:bg-error/90"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="pt-4">
-                <h3 className="font-semibold text-foreground-default truncate text-lg font-sans tracking-wide">
-                  {clip.metadata.clipId}
+                <h3 className="font-semibold text-foreground-default truncate text-lg font-sans tracking-wide max-w-[80%]">
+                  {isManualClip(clip)
+                    ? clip.metadata.originalFilename
+                    : clip.metadata.clipId}
                 </h3>
                 <div className="mt-2 space-y-1">
                   <p className="text-sm text-foreground-subtle font-sans tracking-wide">
-                    {clip.metadata.streamerName}
+                    {isManualClip(clip)
+                      ? "Uploaded by you"
+                      : clip.metadata.streamerName || "Unknown Streamer"}
                   </p>
                   <p
                     className="text-sm text-foreground-subtle font-sans tracking-wide"
                     suppressHydrationWarning
                   >
-                    {clip.metadata.streamStartTime
+                    {isManualClip(clip)
+                      ? new Date(clip.metadata.uploadTimestamp).toLocaleString()
+                      : clip.metadata.streamStartTime
                       ? new Date(clip.metadata.streamStartTime).toLocaleString()
                       : "Unknown"}
                   </p>
