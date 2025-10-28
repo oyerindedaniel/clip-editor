@@ -16,8 +16,175 @@ import { Volume } from "./volume";
 import { Playback } from "./video-controls";
 import { Seek } from "./video-seek-bar";
 import type { KeyframeBounds } from "@/utils/keyframe";
+import PiPOverlay from "./pip-overlay";
+import { useShallowSelector } from "react-shallow-store";
+import { ClipContext } from "@/contexts/clip-context";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { composeRefs } from "@/lib/compose-refs";
+import { getElementRef } from "@/lib/get-element-ref";
 
-interface DualVideoPreviewProps {
+interface BaseDualVideoProps {
+  keyframes: KeyframeData[];
+  canvasWidth: number;
+  canvasHeight: number;
+  padColor?: Color;
+  className?: string;
+  style?: React.CSSProperties;
+  playing?: boolean;
+  baseAspect: AspectRatio;
+  targetAspect: AspectRatio;
+}
+
+interface DualVideoPreviewEditorProps extends BaseDualVideoProps {
+  primaryVideoUrl: string;
+  secondaryVideoUrl?: string;
+
+  primaryTrimData: TrimData;
+  secondaryTrimData?: TrimData;
+  cropMode: CropMode;
+}
+
+const DualVideoPreviewEditor = forwardRef<
+  HTMLDivElement,
+  DualVideoPreviewEditorProps
+>((props, forwardedRef) => {
+  const {
+    primaryVideoUrl,
+    secondaryVideoUrl,
+    keyframes,
+    primaryTrimData,
+    secondaryTrimData,
+    baseAspect,
+    targetAspect,
+    cropMode,
+    canvasWidth,
+    canvasHeight,
+    padColor,
+    className,
+    style,
+    playing = false,
+  } = props;
+
+  const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
+  const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const { dualVideoSettings } = useShallowSelector(ClipContext, (state) => ({
+    dualVideoSettings: state.dualVideoSettings,
+  }));
+
+  const hasSecondaryClip = Boolean(secondaryVideoUrl && secondaryTrimData);
+
+  const hasSecondaryKeyframes = keyframes.some(
+    (kf) => kf.target === "secondary"
+  );
+
+  const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
+
+  if (useDualMode && secondaryVideoUrl && secondaryTrimData) {
+    const primaryKeyframeBounds = useMemo(
+      () => getKeyframeBoundsForTarget(keyframes, "primary"),
+      [keyframes]
+    );
+    const secondaryKeyframeBounds = useMemo(
+      () => getKeyframeBoundsForTarget(keyframes, "secondary"),
+      [keyframes]
+    );
+
+    return (
+      <DualVideoPreview
+        ref={forwardedRef}
+        primarySource={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
+        secondarySource={
+          <video ref={secondaryVideoRef} src={secondaryVideoUrl} />
+        }
+        primaryTrimData={primaryTrimData}
+        secondaryTrimData={secondaryTrimData}
+        primaryKeyframeBounds={primaryKeyframeBounds}
+        secondaryKeyframeBounds={secondaryKeyframeBounds}
+        baseAspect={baseAspect}
+        targetAspect={targetAspect}
+        variant={cropMode}
+        keyframes={keyframes}
+        playing={playing}
+        canvasWidth={canvasWidth}
+        canvasHeight={canvasHeight}
+        padColor={padColor}
+        className={className}
+        style={style}
+      />
+    );
+  }
+
+  const primaryKeyframeBounds = useMemo(
+    () => getKeyframeBoundsForTarget(keyframes, "primary"),
+    [keyframes]
+  );
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backgroundVideoRef =
+    dualVideoSettings.backgroundVideo === "primary"
+      ? primaryVideoRef
+      : secondaryVideoRef;
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative overflow-hidden shadow-md w-full aspect-(--aspect-ratio)",
+        className
+      )}
+      style={
+        {
+          "--aspect-ratio": targetAspect.replace(":", "/"),
+          height: canvasHeight,
+          ...style,
+        } as React.CSSProperties
+      }
+    >
+      <VideoPreview
+        ref={forwardedRef}
+        playing={playing}
+        source={<video src={primaryVideoUrl} />}
+        baseAspect={baseAspect}
+        targetAspect={targetAspect}
+        variant={cropMode}
+        keyframes={filterKeyframesByTarget(keyframes, "primary")}
+        keyframeBounds={primaryKeyframeBounds}
+        trimData={primaryTrimData}
+        className="w-full h-full"
+      >
+        {({ transform, variant, videoRef }) => (
+          <CanvasVideoRenderer
+            renderEnabled={playing}
+            videoRef={videoRef}
+            transformData={transform}
+            variant={variant}
+            width={canvasWidth}
+            height={canvasHeight}
+            color={padColor}
+            backgroundMode={dualVideoSettings.backgroundMode}
+            backgroundVideo={dualVideoSettings.backgroundVideo}
+            backgroundVideoRef={backgroundVideoRef}
+          />
+        )}
+      </VideoPreview>
+
+      {dualVideoSettings.layout === "pip" && secondaryVideoUrl && (
+        <PiPOverlay containerRef={containerRef}>
+          <video src={secondaryVideoUrl} />
+        </PiPOverlay>
+      )}
+    </div>
+  );
+});
+
+DualVideoPreviewEditor.displayName = "DualVideoPreviewEditor";
+
+interface DualVideoPreviewProps extends BaseDualVideoProps {
   primarySource: Video;
   secondarySource: Video;
 
@@ -27,24 +194,12 @@ interface DualVideoPreviewProps {
   primaryKeyframeBounds: KeyframeBounds;
   secondaryKeyframeBounds: KeyframeBounds;
 
-  baseAspect: AspectRatio;
-  targetAspect: AspectRatio;
-  variant: CropMode;
-
-  keyframes: KeyframeData[];
-
-  playing?: boolean;
   onTimeChange?: (timelineMs: number) => void;
   onPlayingChange?: (status: PlayingStatus) => void;
 
   defaultRepeat?: boolean;
 
-  canvasWidth: number;
-  canvasHeight: number;
-  padColor?: Color;
-
-  className?: string;
-  style?: React.CSSProperties;
+  variant: CropMode;
 }
 
 export const DualVideoPreview = forwardRef<
@@ -95,7 +250,25 @@ export const DualVideoPreview = forwardRef<
     enabled: true,
   });
 
-  const halfHeight = canvasHeight / 2;
+  const { dualVideoSettings, setDualVideoSettings } = useShallowSelector(
+    ClipContext,
+    (state) => ({
+      dualVideoSettings: state.dualVideoSettings,
+      setDualVideoSettings: state.setDualVideoSettings,
+    })
+  );
+
+  const primaryPercentage = dualVideoSettings.primaryPanelPercentage || 50;
+  const secondaryPercentage = 100 - primaryPercentage;
+
+  const handlePanelResize = (sizes: number[]) => {
+    if (sizes.length >= 2) {
+      setDualVideoSettings((prev) => ({
+        ...prev,
+        primaryPanelPercentage: Math.round(sizes[0]),
+      }));
+    }
+  };
 
   return (
     <div
@@ -112,64 +285,82 @@ export const DualVideoPreview = forwardRef<
         } as React.CSSProperties
       }
     >
-      <div className="absolute inset-x-0 top-0" style={{ height: halfHeight }}>
-        <VideoPreview
-          source={React.cloneElement(primarySource, {
-            ref: primaryVideoRef,
-          })}
-          baseAspect={baseAspect}
-          targetAspect={targetAspect}
-          variant={variant}
-          keyframes={primaryKeyframes}
-          keyframeBounds={primaryKeyframeBounds}
-          trimData={primaryTrimData}
-          playing={sync.status === "playing"}
-          externalControls={true}
-        >
-          {({ transform, videoRef }) => (
-            <CanvasVideoRenderer
-              renderEnabled={true}
-              videoRef={videoRef}
-              transformData={transform}
-              variant={variant}
-              width={canvasWidth}
-              height={halfHeight}
-              color={padColor}
-            />
-          )}
-        </VideoPreview>
-      </div>
-
-      <div
-        className="absolute inset-x-0 bottom-0"
-        style={{ height: halfHeight }}
+      <ResizablePanelGroup
+        direction="vertical"
+        onLayout={handlePanelResize}
+        className="h-full"
       >
-        <VideoPreview
-          source={React.cloneElement(secondarySource, {
-            ref: secondaryVideoRef,
-          })}
-          baseAspect={baseAspect}
-          targetAspect={targetAspect}
-          variant={variant}
-          keyframes={secondaryKeyframes}
-          keyframeBounds={secondaryKeyframeBounds}
-          trimData={secondaryTrimData}
-          playing={sync.status === "playing"}
-          externalControls={true}
+        <ResizablePanel
+          defaultSize={primaryPercentage}
+          minSize={20}
+          maxSize={80}
+          className="relative"
         >
-          {({ transform, videoRef }) => (
-            <CanvasVideoRenderer
-              renderEnabled={true}
-              videoRef={videoRef}
-              transformData={transform}
-              variant={variant}
-              width={canvasWidth}
-              height={halfHeight}
-              color={padColor}
-            />
-          )}
-        </VideoPreview>
-      </div>
+          <VideoPreview
+            source={React.cloneElement(primarySource, {
+              ref: composeRefs(primaryVideoRef, getElementRef(primarySource)),
+            })}
+            baseAspect={baseAspect}
+            targetAspect={targetAspect}
+            variant={variant}
+            keyframes={primaryKeyframes}
+            keyframeBounds={primaryKeyframeBounds}
+            trimData={primaryTrimData}
+            playing={sync.status === "playing"}
+            externalControls
+          >
+            {({ transform, videoRef }) => (
+              <CanvasVideoRenderer
+                renderEnabled
+                videoRef={videoRef}
+                transformData={transform}
+                variant={variant}
+                width={canvasWidth}
+                height={canvasHeight * (primaryPercentage / 100)}
+                color={padColor}
+              />
+            )}
+          </VideoPreview>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel
+          defaultSize={secondaryPercentage}
+          minSize={20}
+          maxSize={80}
+          className="relative"
+        >
+          <VideoPreview
+            source={React.cloneElement(secondarySource, {
+              ref: composeRefs(
+                secondaryVideoRef,
+                getElementRef(secondarySource)
+              ),
+            })}
+            baseAspect={baseAspect}
+            targetAspect={targetAspect}
+            variant={variant}
+            keyframes={secondaryKeyframes}
+            keyframeBounds={secondaryKeyframeBounds}
+            trimData={secondaryTrimData}
+            playing={sync.status === "playing"}
+            externalControls
+          >
+            {({ transform, videoRef }) => (
+              <CanvasVideoRenderer
+                renderEnabled
+                videoRef={videoRef}
+                transformData={transform}
+                variant={variant}
+                width={canvasWidth}
+                height={canvasHeight * (secondaryPercentage / 100)}
+                color={padColor}
+              />
+            )}
+          </VideoPreview>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <div className="absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-12 pb-4">
         <div className="flex items-center justify-center gap-2 px-4">
@@ -251,121 +442,5 @@ export const DualVideoPreview = forwardRef<
 });
 
 DualVideoPreview.displayName = "DualVideoPreview";
-
-interface DualVideoPreviewEditorProps {
-  primaryVideoUrl: string;
-  secondaryVideoUrl?: string;
-  keyframes: KeyframeData[];
-  primaryTrimData: TrimData;
-  secondaryTrimData?: TrimData;
-  baseAspect: AspectRatio;
-  targetAspect: AspectRatio;
-  cropMode: CropMode;
-  canvasWidth: number;
-  canvasHeight: number;
-  padColor?: Color;
-  className?: string;
-  style?: React.CSSProperties;
-}
-
-const DualVideoPreviewEditor = forwardRef<
-  HTMLDivElement,
-  DualVideoPreviewEditorProps
->((props, forwardedRef) => {
-  const {
-    primaryVideoUrl,
-    secondaryVideoUrl,
-    keyframes,
-    primaryTrimData,
-    secondaryTrimData,
-    baseAspect,
-    targetAspect,
-    cropMode,
-    canvasWidth,
-    canvasHeight,
-    padColor,
-    className,
-    style,
-  } = props;
-
-  const [playing, setPlaying] = React.useState(false);
-
-  const hasSecondaryClip = Boolean(secondaryVideoUrl && secondaryTrimData);
-
-  const hasSecondaryKeyframes = keyframes.some(
-    (kf) => kf.target === "secondary"
-  );
-
-  const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
-
-  if (useDualMode && secondaryVideoUrl && secondaryTrimData) {
-    const primaryKeyframeBounds = getKeyframeBoundsForTarget(
-      keyframes,
-      "primary"
-    );
-    const secondaryKeyframeBounds = getKeyframeBoundsForTarget(
-      keyframes,
-      "secondary"
-    );
-
-    return (
-      <DualVideoPreview
-        ref={forwardedRef}
-        primarySource={<video src={primaryVideoUrl} />}
-        secondarySource={<video src={secondaryVideoUrl} />}
-        primaryTrimData={primaryTrimData}
-        secondaryTrimData={secondaryTrimData}
-        primaryKeyframeBounds={primaryKeyframeBounds}
-        secondaryKeyframeBounds={secondaryKeyframeBounds}
-        baseAspect={baseAspect}
-        targetAspect={targetAspect}
-        variant={cropMode}
-        keyframes={keyframes}
-        playing={playing}
-        onPlayingChange={(status) => setPlaying(status === "playing")}
-        canvasWidth={canvasWidth}
-        canvasHeight={canvasHeight}
-        padColor={padColor}
-        className={className}
-        style={style}
-      />
-    );
-  }
-
-  const primaryKeyframeBounds = getKeyframeBoundsForTarget(
-    keyframes,
-    "primary"
-  );
-
-  return (
-    <VideoPreview
-      source={<video src={primaryVideoUrl} />}
-      baseAspect={baseAspect}
-      targetAspect={targetAspect}
-      variant={cropMode}
-      keyframes={filterKeyframesByTarget(keyframes, "primary")}
-      keyframeBounds={primaryKeyframeBounds}
-      trimData={primaryTrimData}
-      playing={playing}
-      onPlayingChange={(status) => setPlaying(status === "playing")}
-      className={className}
-      style={style}
-    >
-      {({ transform, variant, videoRef }) => (
-        <CanvasVideoRenderer
-          renderEnabled={playing}
-          videoRef={videoRef}
-          transformData={transform}
-          variant={variant}
-          width={canvasWidth}
-          height={canvasHeight}
-          color={padColor}
-        />
-      )}
-    </VideoPreview>
-  );
-});
-
-DualVideoPreviewEditor.displayName = "DualVideoPreviewEditor";
 
 export default DualVideoPreviewEditor;

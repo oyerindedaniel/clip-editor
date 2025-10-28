@@ -1,13 +1,14 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
-import type { CropMode } from "@/types/app";
+import type { CropMode, BackgroundMode, BackgroundVideo } from "@/types/app";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Color } from "./color-palette";
 import {
   CANVAS_RENDERER_SYMBOL,
   TaggedRendererComponent,
 } from "@/utils/renderer";
+import { useRAF } from "@/hooks/use-raf";
 
 /**
  * CanvasVideoRendererProps
@@ -26,6 +27,10 @@ export interface CanvasVideoRendererProps {
   className?: string;
   color?: Color;
   renderEnabled?: boolean;
+  // Background settings for letterbox mode
+  backgroundMode?: BackgroundMode;
+  backgroundVideo?: BackgroundVideo;
+  backgroundVideoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 const CanvasVideoRenderer: TaggedRendererComponent<
@@ -39,12 +44,15 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   color,
   className,
   renderEnabled = true,
+  backgroundMode = "pad-color",
+  backgroundVideo = "primary",
+  backgroundVideoRef,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const transformRef = useLatestValue<InterpolatedResult>(transformData);
   const callbackIdRef = useRef<number | null>(null);
 
-  const drawFrame = () => {
+  const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const video = videoRef.current;
@@ -97,7 +105,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       return;
     }
 
-    // Fit/letterbox (default): shows full video with black bars, no transforms applied
+    // Fit/letterbox (default): shows full video with background, no transforms applied
     {
       const srcAR = vw / vh;
       let destW = width;
@@ -115,13 +123,25 @@ const CanvasVideoRenderer: TaggedRendererComponent<
         dx = (width - destW) / 2;
       }
 
-      ctx.fillStyle = color ?? "black";
-      ctx.fillRect(0, 0, width, height);
+      if (backgroundMode === "video" && backgroundVideoRef?.current) {
+        const bgVideo = backgroundVideoRef.current;
+        if (bgVideo.readyState >= 2) {
+          ctx.drawImage(bgVideo, 0, 0, width, height);
+        } else {
+          ctx.fillStyle = color ?? "black";
+          ctx.fillRect(0, 0, width, height);
+        }
+      } else {
+        ctx.fillStyle = color ?? "black";
+        ctx.fillRect(0, 0, width, height);
+      }
 
       ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
       return;
     }
-  };
+  }, [width, height, variant, color, backgroundMode]);
+
+  console.log({ renderEnabled, width, height });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -149,14 +169,14 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
       drawFrame();
 
-      const video = videoRef.current;
-      if (video && !video.paused && !video.ended) {
+      if (video) {
         callbackIdRef.current =
           video.requestVideoFrameCallback(videoFrameCallback);
       }
     };
 
-    if (!video.paused && !video.ended) {
+    if (video) {
+      drawFrame();
       callbackIdRef.current =
         video.requestVideoFrameCallback(videoFrameCallback);
     } else {
@@ -169,7 +189,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
         callbackIdRef.current = null;
       }
     };
-  }, [renderEnabled, width, height, variant, color, drawFrame, videoRef]);
+  }, [renderEnabled, width, height, variant, color, backgroundMode, drawFrame]);
 
   return <canvas ref={canvasRef} className={cn("", className)} />;
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Crop, Maximize2 } from "lucide-react";
+import { Crop, Maximize2, Video, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { cn } from "@/lib/utils";
 import ColorPalette, { Color } from "@/components/color-palette";
-import type { CropMode } from "@/types/app";
+import type { CropMode, BackgroundMode, BackgroundVideo } from "@/types/app";
 import type {
   ScreenSize,
   AspectRatio169,
@@ -19,6 +19,17 @@ import type {
 } from "@/utils/aspect-ratios";
 import { cropModes } from "./aspect-ratio-selector";
 import { DEFAULT_CLIP_METADATA } from "@/constants/app";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useShallowSelector } from "react-shallow-store";
+import { ClipContext } from "@/contexts/clip-context";
+import { PillToggle } from "@/components/ui/pill-toggle";
 
 type AspectRatioType = AspectRatio | null;
 
@@ -33,6 +44,8 @@ interface AspectRatioPickerProps {
   onCropModeChange?: (mode: CropMode) => void;
   padColor?: Color;
   onPadColorChange?: (color: Color) => void;
+  // Background settings
+  hasSecondaryClip?: boolean;
 }
 
 const aspectRatios169: {
@@ -69,6 +82,7 @@ const AspectRatioPicker = ({
   onCropModeChange,
   padColor,
   onPadColorChange,
+  hasSecondaryClip = false,
 }: AspectRatioPickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [localAspectRatio, setLocalAspectRatio] =
@@ -76,6 +90,14 @@ const AspectRatioPicker = ({
 
   const availableRatios =
     screenSize === "16:9" ? aspectRatios169 : aspectRatios916;
+
+  const { dualVideoSettings, setDualVideoSettings } = useShallowSelector(
+    ClipContext,
+    (state) => ({
+      dualVideoSettings: state.dualVideoSettings,
+      setDualVideoSettings: state.setDualVideoSettings,
+    })
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -116,7 +138,7 @@ const AspectRatioPicker = ({
 
       <PopoverContent
         data-dialog-popover-ratio
-        className="w-fit bg-surface-primary"
+        className="w-fit h-[420px] overflow-y-auto bg-surface-primary no-scrollbar"
         align="start"
         side="bottom"
       >
@@ -176,29 +198,97 @@ const AspectRatioPicker = ({
           {onPadColorChange && cropMode === "letterbox" && (
             <div className="grid gap-2">
               <div className="text-sm md:text-[0.8rem] font-medium text-foreground-default">
-                Pad Color
+                Background
               </div>
-              <ColorPalette
-                id="padColor"
-                value={padColor ?? DEFAULT_CLIP_METADATA.padColor}
-                onChange={(c) => onPadColorChange(c)}
-              >
-                <Button
-                  type="button"
-                  variant="tertiary"
-                  size="sm"
-                  className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2 border-1 border-subtle"
+
+              <div className="flex items-center space-x-2">
+                <PillToggle.Root
+                  value={dualVideoSettings.backgroundMode === "pad-color"}
+                  onValueChange={(checked) =>
+                    setDualVideoSettings((prev) => ({
+                      ...prev,
+                      backgroundMode: checked ? "pad-color" : "video",
+                    }))
+                  }
+                  disabled={disabled}
                 >
-                  <span
-                    className="h-4 w-4 rounded border"
-                    style={{
-                      backgroundColor:
-                        padColor ?? DEFAULT_CLIP_METADATA.padColor,
-                    }}
-                  />
-                  <span>{padColor ?? DEFAULT_CLIP_METADATA.padColor}</span>
-                </Button>
-              </ColorPalette>
+                  <PillToggle.Item side="left">
+                    <Palette size={14} />
+                    <span>Pad Color</span>
+                  </PillToggle.Item>
+                  <PillToggle.Divider />
+                  <PillToggle.Item side="right">
+                    <Video size={14} />
+                    <span>Video</span>
+                  </PillToggle.Item>
+                </PillToggle.Root>
+              </div>
+
+              {dualVideoSettings.backgroundMode === "video" &&
+                hasSecondaryClip && (
+                  <div className="grid gap-2">
+                    <Label className="text-sm md:text-[0.8rem] font-medium text-foreground-default">
+                      Background Video
+                    </Label>
+                    <Select
+                      value={dualVideoSettings.backgroundVideo}
+                      onValueChange={(value: BackgroundVideo) =>
+                        setDualVideoSettings((prev) => ({
+                          ...prev,
+                          backgroundVideo: value,
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="primary">
+                          <div className="flex items-center space-x-2">
+                            <Video size={14} />
+                            <span>Primary Video</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="secondary">
+                          <div className="flex items-center space-x-2">
+                            <Video size={14} />
+                            <span>Secondary Video</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+              {dualVideoSettings.backgroundMode === "pad-color" && (
+                <div className="grid gap-2">
+                  <Label className="text-sm md:text-[0.8rem] font-medium text-foreground-default">
+                    Pad Color
+                  </Label>
+                  <ColorPalette
+                    id="padColor"
+                    value={padColor ?? DEFAULT_CLIP_METADATA.padColor}
+                    onChange={(c) => onPadColorChange(c)}
+                  >
+                    <Button
+                      type="button"
+                      variant="tertiary"
+                      size="sm"
+                      className="h-7 px-2 text-sm md:text-[0.8rem] flex items-center gap-2 border-1 border-subtle"
+                    >
+                      <span
+                        className="h-4 w-4 rounded border"
+                        style={{
+                          backgroundColor:
+                            padColor ?? DEFAULT_CLIP_METADATA.padColor,
+                        }}
+                      />
+                      <span>{padColor ?? DEFAULT_CLIP_METADATA.padColor}</span>
+                    </Button>
+                  </ColorPalette>
+                </div>
+              )}
             </div>
           )}
 

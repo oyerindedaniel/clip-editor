@@ -1,3 +1,5 @@
+import type { Dimensions, Point } from "@/types/app";
+
 function debounce<F extends (...args: any[]) => void>(func: F, delay: number) {
   let timeoutId: NodeJS.Timeout | null = null;
 
@@ -123,6 +125,20 @@ function getStorageKey(suffix: string): string {
   return `zinc:${suffix}`;
 }
 
+function normalizePosition(position: Point, container: Dimensions): Point {
+  const { x, y } = position;
+  const { width, height } = container;
+
+  if (width <= 0 || height <= 0) {
+    throw new Error("Container dimensions must be greater than zero.");
+  }
+
+  const normalizedX = Math.min(Math.max(x / width, 0), 1);
+  const normalizedY = Math.min(Math.max(y / height, 0), 1);
+
+  return { x: normalizedX, y: normalizedY };
+}
+
 export {
   debounce,
   throttle,
@@ -131,4 +147,5 @@ export {
   formatTime,
   roundToDecimals,
   getStorageKey,
+  normalizePosition,
 };

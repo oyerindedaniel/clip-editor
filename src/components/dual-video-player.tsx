@@ -32,13 +32,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
   ) => {
     const repeatRef = React.useRef(false);
 
-    const { setDualVideoRef, secondaryContainerRef } = useShallowSelector(
-      OverlaysContext,
-      (state) => ({
+    const { setDualVideoRef, secondaryContainerRef, activePersistentOverlays } =
+      useShallowSelector(OverlaysContext, (state) => ({
         setDualVideoRef: state.setDualVideoRef,
         secondaryContainerRef: state.secondaryContainerRef,
-      })
-    );
+        activePersistentOverlays: state.activePersistentOverlays,
+      }));
 
     const {
       primaryTrim,
@@ -104,7 +103,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
           <div
             className={cn(
               "relative overflow-hidden w-full flex",
-              secondaryClip ? "items-end h-1/2" : "items-stretch bg-yellow-500"
+              secondaryClip ? "items-end h-1/2" : "items-stretch"
             )}
           >
             <video
@@ -113,7 +112,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               poster={"/thumbnails/video-thumb-2.webp"}
               playsInline
               preload="metadata"
-              className={cn("rounded-none object-contain bg-red-500")}
+              className={cn("rounded-none object-contain")}
             />
 
             <div className="absolute bottom-2 left-2 z-20">
@@ -204,6 +203,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               playingStatus={dualStatus}
               isBuffering={isBufferingDualVideo}
               hasError={hasErrorDualVideo}
+              isDual
             >
               <Playback.Controls className="px-4">
                 <Playback.PlayToggle />
@@ -269,7 +269,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                 primaryBuffered={buffered}
                 secondaryBuffered={null}
                 isPlaying={playState.isPlaying}
-                onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                onSeek={(timelineMs: number) => {
+                  const sourceTimeSec = msToSeconds(
+                    primaryTrim.trimStart + timelineMs
+                  );
+                  controls.seek(sourceTimeSec);
+                }}
               >
                 <Seek.Content>
                   <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
@@ -291,7 +296,9 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
           />
         </div>
 
-        <PersistentOverlays duration={duration} isDualVideo />
+        {activePersistentOverlays === "dual" && (
+          <PersistentOverlays duration={duration} isDualVideo />
+        )}
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import { AspectRatioValue } from "@/components/aspect-ratio-selector";
 import type { Color } from "@/components/color-palette";
 import type { Transform } from "@/utils/transform";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 
 /**
  * Represents a marked clip segment in the recording.
@@ -24,6 +25,8 @@ export interface S3ClipMetadata {
   uploadTimestamp?: string;
   originalFilename?: string;
 }
+
+export type Point = { x: number; y: number };
 
 export type Dimensions = { width: number; height: number };
 
@@ -165,6 +168,9 @@ export interface ClipMetadata extends Settings {
 export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
 export type AudioMixMode = "primary" | "secondary" | "mixed";
 
+export type BackgroundMode = "pad-color" | "video";
+export type BackgroundVideo = "primary" | "secondary";
+
 export interface DualVideoSettings {
   layout: DualVideoLayout;
   primaryAudio: AudioMixMode;
@@ -173,6 +179,12 @@ export interface DualVideoSettings {
   secondaryVolume: number;
   // Picture-in-Picture specific settings
   pip?: Transform;
+  pipAspectRatio?: AspectRatio;
+  // Background settings for letterbox mode
+  backgroundMode?: BackgroundMode;
+  backgroundVideo?: BackgroundVideo;
+  // Panel sizing for dual video layout
+  primaryPanelPercentage?: number; // 0-100, default 50
 }
 
 export interface DualVideoClip {

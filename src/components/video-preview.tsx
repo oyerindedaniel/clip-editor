@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, forwardRef } from "react";
+import React, { useMemo, useRef, forwardRef, useState } from "react";
 import { AspectRatio } from "@/utils/aspect-ratios";
 import type { KeyframeBounds, KeyframeData } from "@/utils/keyframe";
 import {
@@ -93,19 +93,22 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
 
     const repeatRef = useRef(defaultRepeat);
 
-    const sourceVideoStartSeconds = useMemo(
-      () => keyframeBounds.start + msToSeconds(trimData.trimStart),
-      [keyframeBounds.start, trimData.trimStart]
-    );
+    const validatedBounds = useMemo(() => {
+      const trimStartSec = msToSeconds(trimData.trimStart);
+      const trimEndSec = msToSeconds(trimData.trimEnd);
 
-    const sourceVideoEndSeconds = useMemo(
-      () => keyframeBounds.end + msToSeconds(trimData.trimStart),
-      [keyframeBounds.end, trimData.trimStart]
-    );
+      const clampedStart = Math.max(keyframeBounds.start, trimStartSec);
+      const clampedEnd = Math.min(keyframeBounds.end, trimEndSec);
 
-    const startRef = useLatestValue(sourceVideoStartSeconds);
-    const endRef = useLatestValue(sourceVideoEndSeconds);
+      if (clampedStart >= clampedEnd) {
+        return { start: trimStartSec, end: trimEndSec };
+      }
 
+      return { start: clampedStart, end: clampedEnd };
+    }, [keyframeBounds, trimData]);
+
+    const startRef = useLatestValue(validatedBounds.start);
+    const endRef = useLatestValue(validatedBounds.end);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const composedRef = useComposedRefs(videoRef, getElementRef(source));
 
@@ -125,6 +128,16 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       });
     }, [source]);
 
+    const filteredKeyframes = useMemo(() => {
+      if (!keyframes) return undefined;
+
+      return keyframes.filter((kf) => {
+        return (
+          kf.time >= validatedBounds.start && kf.time <= validatedBounds.end
+        );
+      });
+    }, [keyframes, validatedBounds]);
+
     const { time, status, controls, isBuffering, hasError, buffered } =
       useReactiveVideoTime({
         videoRef,
@@ -136,23 +149,21 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         onPlayingChange,
       });
 
-    const relativeTime = time - msToSeconds(trimData.trimStart);
-
     const transform = useInterpolatedTransform(
-      keyframes,
-      relativeTime,
+      filteredKeyframes,
+      time,
       variant,
       baseAspect,
       targetAspect
     );
 
-    const keyframeTrimData = useMemo<TrimData>(() => {
+    const seekTrimData = useMemo<TrimData>(() => {
       return {
-        trimStart: secondsToMs(keyframeBounds.start),
-        trimEnd: secondsToMs(keyframeBounds.end),
+        trimStart: secondsToMs(validatedBounds.start),
+        trimEnd: secondsToMs(validatedBounds.end),
         timelineOffset: 0,
       };
-    }, [keyframeBounds.start, keyframeBounds.end]);
+    }, [validatedBounds]);
 
     const playState = getPlayingState(status);
 
@@ -201,22 +212,13 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     return (
       <div
         ref={forwardedRef}
-        className={cn(
-          "relative overflow-hidden shadow-md w-full aspect-(--aspect-ratio) group",
-          className
-        )}
-        style={
-          {
-            "--aspect-ratio": targetAspect.replace(":", "/"),
-            ...style,
-          } as React.CSSProperties
-        }
+        className={cn("w-full h-full group", className)}
+        style={{
+          ...style,
+        }}
       >
         <div
-          className={cn(
-            "absolute inset-0",
-            targetAspect !== "9:16" && "flex items-center justify-center"
-          )}
+          className={cn("absolute inset-0 flex items-center justify-center")}
         >
           {renderedChild}
         </div>
@@ -271,10 +273,14 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
                 </Playback.Controls>
                 <Seek.Root
                   primaryVideoRef={videoRef}
-                  primaryTrim={keyframeTrimData}
+                  primaryTrim={seekTrimData}
                   secondaryTrim={null}
                   isPlaying={playState.isPlaying}
-                  onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                  onSeek={(timeMs) => {
+                    const sourceTimeSec =
+                      msToSeconds(timeMs) + validatedBounds.start;
+                    controls.seek(sourceTimeSec);
+                  }}
                   primaryBuffered={buffered}
                   secondaryBuffered={null}
                 >

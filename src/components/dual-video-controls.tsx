@@ -34,6 +34,7 @@ import type {
   VideoFormat,
   CropMode,
 } from "@/types/app";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
 import logger from "@/utils/logger";
@@ -92,6 +93,39 @@ const audioModeOptions = [
     value: "mixed" as AudioMixMode,
     label: "Mixed Audio",
     icon: <VolumeX size={14} />,
+  },
+];
+
+const pipAspectRatioOptions = [
+  {
+    value: "16:9" as AspectRatio,
+    label: "16:9",
+    description: "Widescreen",
+  },
+  {
+    value: "9:16" as AspectRatio,
+    label: "9:16",
+    description: "Portrait",
+  },
+  {
+    value: "1:1" as AspectRatio,
+    label: "1:1",
+    description: "Square",
+  },
+  {
+    value: "4:3" as AspectRatio,
+    label: "4:3",
+    description: "Standard",
+  },
+  {
+    value: "3:4" as AspectRatio,
+    label: "3:4",
+    description: "Portrait Standard",
+  },
+  {
+    value: "21:9" as AspectRatio,
+    label: "21:9",
+    description: "Ultra-wide",
   },
 ];
 
@@ -384,6 +418,38 @@ export default function DualVideoControls({
                   </Select>
                 </div>
 
+              
+                {settings.layout === "pip" && (
+                  <div className="flex flex-col gap-3">
+                    <label className="text-sm md:text-[0.8rem] text-foreground-subtle">
+                      PiP Aspect Ratio
+                    </label>
+                    <Select
+                      value={settings.pipAspectRatio || "16:9"}
+                      onValueChange={(value: AspectRatio) =>
+                        updateSetting("pipAspectRatio", value)
+                      }
+                      disabled={disabled}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipAspectRatioOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center space-x-2">
+                              <span>{option.label}</span>
+                              <span className="text-sm md:text-[0.8rem] text-foreground-muted">
+                                {option.description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-3">
                   <label className="text-sm md:text-[0.8rem] text-foreground-subtle">
                     Audio Mode
@@ -467,7 +533,7 @@ export default function DualVideoControls({
                   <Switch
                     id="normalizeAudio"
                     checked={settings.normalizeAudio}
-                    onCheckedChange={(value: boolean) =>
+                    onCheckedChange={(value) =>
                       updateSetting("normalizeAudio", value)
                     }
                     disabled={disabled}

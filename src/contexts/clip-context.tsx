@@ -63,6 +63,10 @@ export const DEFAULT_DUAL_VIDEO_SETTINGS = {
   primaryVolume: 0.8,
   secondaryVolume: 0.6,
   pip: DEFAULT_TRANSFORM,
+  pipAspectRatio: "16:9",
+  backgroundMode: "pad-color",
+  backgroundVideo: "primary",
+  primaryPanelPercentage: 50,
 } as const;
 
 export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(

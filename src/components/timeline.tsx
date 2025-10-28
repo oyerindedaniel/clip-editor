@@ -432,7 +432,6 @@ const Timeline: React.FC<TimelineProps> = ({
               scrollRef={scrollContainerRef!}
               pxPerMs={pxPerMs}
               edgeThreshold={EDGE_THRESHOLD}
-              trimStartMs={primaryTrimRef.current.trimStart}
             />
           ))}
 

@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Scissors, Type, Image as ImageIcon, Music, Video } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import {
+  Scissors,
+  Type,
+  Image as ImageIcon,
+  Music,
+  Video,
+  Layers,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DualVideoControls from "./dual-video-controls";
 import TextOverlayItemContainer from "./text-overlay-item";
@@ -14,6 +21,7 @@ import { formatTime, getStorageKey } from "@/utils/app";
 import { toast } from "sonner";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
+import { Switch } from "@/components/ui/switch";
 import {
   Accordion,
   AccordionContent,
@@ -22,6 +30,7 @@ import {
 } from "@/components/ui/accordion";
 import { KeyframeContext } from "@/contexts/keyframe-context";
 import KeyframePanelLists from "@/components/keyframe-panel-lists";
+import { startTransition } from "react";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -58,13 +67,17 @@ export function EditorRightPanel({
     addAudioTrack: state.addAudioTrack,
   }));
 
-  const { addTextOverlay, addImageOverlay } = useShallowSelector(
-    OverlaysContext,
-    (state) => ({
-      addTextOverlay: state.addTextOverlay,
-      addImageOverlay: state.addImageOverlay,
-    })
-  );
+  const {
+    addTextOverlay,
+    addImageOverlay,
+    activePersistentOverlays,
+    setActivePersistentOverlays,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    addTextOverlay: state.addTextOverlay,
+    addImageOverlay: state.addImageOverlay,
+    activePersistentOverlays: state.activePersistentOverlays,
+    setActivePersistentOverlays: state.setActivePersistentOverlays,
+  }));
 
   const { keyframes, currentKeyframeId, setCurrentKeyframeId, setKeyframes } =
     useShallowSelector(KeyframeContext, (state) => ({
@@ -99,7 +112,7 @@ export function EditorRightPanel({
   );
 
   const handleAccordionChange = (sections: string[]) => {
-    setActiveSections(sections);
+    startTransition(() => setActiveSections(sections));
 
     if (sections.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
@@ -228,6 +241,30 @@ export function EditorRightPanel({
           </AccordionContent>
         </AccordionItem>
 
+        <AccordionItem value="overlays">
+          <AccordionTrigger>
+            <div className="flex items-center gap-2">
+              <Layers size={14} />
+              <span>Persistent Overlays</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Target screen</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm md:text-[0.8rem]">16:9</span>
+                <Switch
+                  checked={activePersistentOverlays === "dual"}
+                  onCheckedChange={(checked) =>
+                    setActivePersistentOverlays(checked ? "dual" : "primary")
+                  }
+                />
+                <span className="text-sm md:text-[0.8rem]">9:16</span>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="dual">
           <AccordionTrigger>
             <div className="flex items-center gap-2">
@@ -247,6 +284,7 @@ export function EditorRightPanel({
     [
       activeSections,
       addTextOverlay,
+      activePersistentOverlays,
       clipData,
       duration,
       isVideoLoaded,

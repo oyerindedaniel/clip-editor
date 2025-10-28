@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type {
   ExportSettings,
   ClipExportData,
@@ -10,7 +10,8 @@ import type {
 import { isManualClip } from "@/types/app";
 import { toast } from "sonner";
 import { normalizeError } from "@/utils/error-utils";
-import { processClipForExport, onFFmpegProgress } from "@/utils/ffmpeg";
+import { processClipForExport } from "@/utils/ffmpeg";
+import { idbGetManualClipRecord } from "@/utils/idb";
 import logger from "@/utils/logger";
 import {
   getVideoBoundingBox,
@@ -70,8 +71,6 @@ import type { KeyframeEasing } from "@/utils/keyframe";
 import ColorPalette, { Color } from "./color-palette";
 import type { CropMode } from "@/types/app";
 import { useElementSize } from "@/hooks/use-element-size";
-import VideoPreview from "./video-preview";
-import CanvasVideoRenderer from "./canvas-video-renderer";
 import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
 import { LoaderIcon } from "@/icons/loader";
 import { cn } from "@/lib/utils";
@@ -83,6 +82,8 @@ import MainMedia from "./main-media";
 import PiPOverlay from "./pip-overlay";
 import { DualClockProvider } from "@/contexts/dual-clock-context";
 import DualVideoPreviewEditor from "./dual-video-preview";
+import { EditPageSkeleton } from "./edit-skeleton";
+import { withProgressToast } from "@/lib/with-progress-toast";
 
 interface Data {
   buffer: ArrayBuffer;
@@ -107,35 +108,7 @@ const ClipEditor = ({
 }: ClipEditorProps) => {
   const [duration, setDuration] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [manualClipData] = useState<ClipData | null>(() => {
-    if (typeof window === "undefined" || !isManual || !clipId) {
-      return null;
-    }
-
-    try {
-      const storedClips = window.localStorage.getItem("manual-clips");
-      if (!storedClips) {
-        return null;
-      }
-
-      const clips: unknown = JSON.parse(storedClips);
-      if (!Array.isArray(clips)) {
-        return null;
-      }
-
-      const manualClip = (clips as ClipData[]).find(
-        (clip: ClipData) =>
-          isManualClip(clip) && clip.metadata?.clipId === clipId
-      );
-
-      return manualClip ?? null;
-    } catch (error) {
-      logger.error("Failed to parse stored manual clips:", error);
-      return null;
-    }
-  });
-
-  const currentClipData = isManual ? manualClipData : clipData;
+  const [manualClipData, setManualClipData] = useState<ClipData | null>(null);
 
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
@@ -168,13 +141,19 @@ const ClipEditor = ({
   const primaryClipMetaDataRef = useRef<ClipMetadata>(DEFAULT_CLIP_METADATA);
   const traceRef = useRef<HTMLDivElement>(null);
 
-  const { textOverlaysRef, imageOverlaysRef, containerRef, setVideoRef } =
-    useShallowSelector(OverlaysContext, (state) => ({
-      containerRef: state.containerRef,
-      textOverlaysRef: state.textOverlaysRef,
-      imageOverlaysRef: state.imageOverlaysRef,
-      setVideoRef: state.setVideoRef,
-    }));
+  const {
+    textOverlaysRef,
+    imageOverlaysRef,
+    containerRef,
+    setVideoRef,
+    activePersistentOverlays,
+  } = useShallowSelector(OverlaysContext, (state) => ({
+    containerRef: state.containerRef,
+    textOverlaysRef: state.textOverlaysRef,
+    imageOverlaysRef: state.imageOverlaysRef,
+    setVideoRef: state.setVideoRef,
+    activePersistentOverlays: state.activePersistentOverlays,
+  }));
 
   const {
     primaryTrimRef,
@@ -276,19 +255,10 @@ const ClipEditor = ({
 
   const isValidBufferState = bufferStatus.isValid;
 
-  if (!currentClipData) {
-    return (
-      <div className="min-h-dvh bg-surface-primary flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-3xl text-foreground-subtle font-sans tracking-wide">
-            Loading video clip...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const currentClipData = isManual ? manualClipData : clipData;
+  const currentClipDataRef = useLatestValue(currentClipData);
 
-  const primaryUrl = currentClipData.url;
+  const primaryUrl = currentClipData?.url;
 
   const toggleActivePlayer = useCallback(() => {
     const primary =
@@ -322,6 +292,7 @@ const ClipEditor = ({
   }, []);
 
   const toggleTrace = useCallback(() => {
+    console.log(canvasSizeRef.current.height, videoRenderRef);
     setShowTrace((v) => {
       if (traceRef.current) {
         if (v) {
@@ -333,62 +304,6 @@ const ClipEditor = ({
       return !v;
     });
   }, []);
-
-  const withProgressToast = useCallback(
-    async <T,>(
-      label: string,
-      task: () => Promise<T>,
-      toastId?: string
-    ): Promise<T> => {
-      const id = toastId || `${currentClipData.metadata.clipId}-${Date.now()}`;
-
-      const render = (percent: number) =>
-        toast.custom(
-          () => (
-            <div className="w-80 rounded-lg bg-primary shadow-xl p-3 text-foreground-on-accent">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm md:text-[0.8rem] font-medium tracking-tight">
-                  {label}
-                </span>
-                <span className="text-[10px] tabular-nums text-foreground-on-accent/80">
-                  {percent}%
-                </span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-foreground-on-accent/20 overflow-hidden">
-                <div
-                  className="h-full bg-foreground-on-accent transition-all duration-150"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            </div>
-          ),
-          { id }
-        );
-
-      render(0);
-
-      let unsub: (() => void) | null = null;
-      try {
-        unsub = onFFmpegProgress((p) => {
-          const percent = Math.max(
-            0,
-            Math.min(100, Math.round((p || 0) * 100))
-          );
-          render(percent);
-        });
-        const result = await task();
-        toast.dismiss(id);
-        toast.success(`${label} done`);
-        return result;
-      } catch (e) {
-        toast.dismiss(id);
-        throw e;
-      } finally {
-        if (unsub) unsub();
-      }
-    },
-    []
-  );
 
   const adjustOverlayBounds = useCallback(() => {
     const video = activeVideoRef.current;
@@ -419,6 +334,33 @@ const ClipEditor = ({
   );
 
   useEffect(() => {
+    let revokedUrl: string | null = null;
+    let active = true;
+    if (!isManual || !clipId) return;
+
+    (async () => {
+      try {
+        const record = await idbGetManualClipRecord(clipId);
+        if (!record || !active) return;
+        const url = URL.createObjectURL(record.file);
+        revokedUrl = url;
+        setManualClipData({
+          url,
+          file: record.file as File,
+          metadata: record.metadata,
+        } as ClipData);
+      } catch (e) {
+        logger.error("Failed to load manual clip from IDB", e);
+      }
+    })();
+
+    return () => {
+      active = false;
+      if (revokedUrl) URL.revokeObjectURL(revokedUrl);
+    };
+  }, [isManual, clipId]);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
@@ -432,6 +374,7 @@ const ClipEditor = ({
 
   useEffect(() => {
     let abortController: AbortController | undefined;
+    const currentClipData = currentClipDataRef.current;
 
     const convertUrlToBuffer = async () => {
       if (!primaryUrl || !currentClipData) return;
@@ -475,7 +418,7 @@ const ClipEditor = ({
         abortController.abort();
       }
     };
-  }, [primaryUrl, currentClipData]);
+  }, [primaryUrl]);
 
   useEffect(() => {
     return () => {
@@ -531,7 +474,7 @@ const ClipEditor = ({
       video.removeEventListener("error", handleError);
       window.removeEventListener("resize", adjustOverlayBounds);
     };
-  }, [adjustOverlayBounds]);
+  }, [adjustOverlayBounds, primaryUrl]);
 
   const handleExport = async (
     outputName: string,
@@ -561,7 +504,14 @@ const ClipEditor = ({
     // TODO: review video this definety wrong
     const video = activeVideoRef.current;
     const bufferData = bufferStatus.data?.buffer;
-    if (!video || !primaryClipMetaDataRef.current || !bufferData) return;
+    if (
+      !video ||
+      !primaryClipMetaDataRef.current ||
+      !bufferData ||
+      !currentClipData ||
+      !primaryUrl
+    )
+      return;
 
     setIsExporting(true);
 
@@ -660,6 +610,15 @@ const ClipEditor = ({
 
   const maxDurationMs = Math.max(primaryDurationMs, secondaryDurationMs);
 
+  if (!currentClipData || !primaryUrl) {
+    return <EditPageSkeleton />;
+  }
+
+  console.log({
+    width: canvasSizeRef.current.width,
+    height: canvasSizeRef.current.height,
+  });
+
   return (
     <div className="h-dvh bg-surface-primary text-foreground-default text-sm flex flex-col">
       <EditorHeader
@@ -687,7 +646,6 @@ const ClipEditor = ({
               deleteKeyframe,
               getKeyframe,
               updateColors,
-              getKeyframeBounds,
             }) => (
               <>
                 <div className="w-full flex flex-col lg:flex-row items-center gap-4">
@@ -705,6 +663,7 @@ const ClipEditor = ({
                           onCropModeChange={setCropMode}
                           padColor={padColor}
                           onPadColorChange={(color) => setPadColor(color)}
+                          hasSecondaryClip={!!secondaryClip}
                         />
 
                         <div className="flex items-center gap-px">
@@ -873,7 +832,9 @@ const ClipEditor = ({
                             </DualClockProvider>
 
                             <div ref={traceRef} />
-                            <PersistentOverlays duration={duration} />
+                            {activePersistentOverlays === "primary" && (
+                              <PersistentOverlays duration={duration} />
+                            )}
 
                             <BoundaryBox.Draggable>
                               <BoundaryBox.Overlay>
@@ -1177,6 +1138,7 @@ const ClipEditor = ({
                           }
                           primaryVideoUrl={primaryUrl}
                           secondaryVideoUrl={secondaryClip?.url}
+                          playing={active === "renderer"}
                           keyframes={keyframes}
                           primaryTrimData={primaryTrimRef.current}
                           secondaryTrimData={secondaryTrimRef.current}

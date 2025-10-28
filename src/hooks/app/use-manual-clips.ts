@@ -1,21 +1,40 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { ManualClipData } from "@/types/app";
 import logger from "@/utils/logger";
 import { secondsToMs } from "@/utils/video";
 import { useLatestValue } from "../use-latest-value";
+import {
+  idbDeleteManualClip,
+  idbGetAllManualClipRecords,
+  idbSaveManualClipRecord,
+} from "@/utils/idb";
 
 export function useManualClips() {
-  const [manualClips, setManualClips] = useState<ManualClipData[]>(() => {
-    if (typeof window === "undefined") return [];
-    const stored = localStorage.getItem("manual-clips");
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    return [];
-  });
+  const [manualClips, setManualClips] = useState<ManualClipData[]>([]);
   const manualClipsRef = useLatestValue(manualClips);
+
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      const records = await idbGetAllManualClipRecords();
+      if (cancelled) return;
+
+      const restored: ManualClipData[] = records.map((rec) => ({
+        url: URL.createObjectURL(rec.file),
+        file: rec.file as File,
+        metadata: rec.metadata,
+      }));
+
+      setManualClips(restored);
+    };
+
+    restore();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const addManualClip = useCallback((file: File) => {
     return new Promise<ManualClipData>((resolve, reject) => {
@@ -44,17 +63,15 @@ export function useManualClips() {
           },
         };
 
-        setManualClips((prev) => {
-          const newClips = [...prev, manualClip];
+        setManualClips((prev) => [...prev, manualClip]);
 
-          try {
-            localStorage.setItem("manual-clips", JSON.stringify(newClips));
-          } catch (error) {
-            logger.warn("Failed to store manual clips in localStorage:", error);
-          }
-
-          return newClips;
-        });
+        idbSaveManualClipRecord({
+          clipId,
+          file,
+          metadata: manualClip.metadata,
+        }).catch((e) =>
+          logger.warn("Failed to persist manual clip in IDB", clipId, e)
+        );
 
         video.removeEventListener("loadedmetadata", handleLoadedMetadata);
         video.removeEventListener("error", handleError);
@@ -82,8 +99,14 @@ export function useManualClips() {
     const newClips = manualClipsRef.current.filter(
       (clip) => clip.metadata.clipId !== clipId
     );
-    localStorage.setItem("manual-clips", JSON.stringify(newClips));
     setManualClips(newClips);
+    idbDeleteManualClip(clipId).catch((e) =>
+      logger.warn("Failed to delete manual clip from IDB", clipId, e)
+    );
+    const removed = manualClipsRef.current.find(
+      (c) => c.metadata.clipId === clipId
+    );
+    if (removed?.url) URL.revokeObjectURL(removed.url);
   }, []);
 
   const cleanupAllManualClips = useCallback(() => {
@@ -93,12 +116,6 @@ export function useManualClips() {
     setManualClips([]);
     logger.log("All manual clips cleaned up");
   }, []);
-
-  useEffect(() => {
-    return () => {
-      cleanupAllManualClips();
-    };
-  }, [cleanupAllManualClips]);
 
   return {
     manualClips,

@@ -3,6 +3,7 @@ import type {
   Dimensions,
   ExportSettings,
   Overlay,
+  Point,
   Settings,
 } from "@/types/app";
 import { ASPECT_RATIOS, AspectRatio } from "./aspect-ratios";
@@ -63,7 +64,7 @@ function getVideoBoundingBox(video: HTMLVideoElement): {
 function getOverlayNormalizedCoords(
   video: HTMLVideoElement,
   position: { overlayX: number; overlayY: number }
-): { x: number; y: number } {
+): Point {
   const { overlayX, overlayY } = position;
   const {
     x: frameX,

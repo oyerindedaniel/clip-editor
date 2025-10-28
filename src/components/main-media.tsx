@@ -112,6 +112,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
             playingStatus={dualStatus}
             isBuffering={isBufferingDualVideo}
             hasError={hasErrorDualVideo}
+            isDual
           >
             <Playback.Controls className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -124,7 +125,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   >
                     <Volume.Controls
                       variant="pill"
-                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
+                      className="!p-0 !border-none bg-transparent hover:!glass"
                     >
                       <Volume.Button
                         size="icon"
@@ -191,7 +192,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   >
                     <Volume.Controls
                       variant="pill"
-                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
+                      className="!p-0 !border-none bg-transparent hover:!glass"
                     >
                       <Volume.Button
                         size="icon"
@@ -219,7 +220,14 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   primaryBuffered={buffered}
                   secondaryBuffered={null}
                   isPlaying={playState.isPlaying}
-                  onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                  onSeek={(timelineMs: number) => {
+                    const trim =
+                      mediaType === "primary" ? primaryTrim : secondaryTrim;
+                    const sourceTimeSec = msToSeconds(
+                      trim.trimStart + timelineMs
+                    );
+                    controls.seek(sourceTimeSec);
+                  }}
                 />
               </div>
 

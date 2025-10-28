@@ -1,14 +1,15 @@
-import { useRef, useSyncExternalStore, useCallback } from "react";
+import { useRef, useSyncExternalStore, useCallback, useState } from "react";
 import { useRAF } from "@/hooks/use-raf";
 import {
   useBuildVideoControls,
   type PlayingStatus,
 } from "./use-video-controls-core";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 export interface UseReactiveVideoTimeOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  trimStartRef: React.RefObject<number>;
-  trimEndRef: React.RefObject<number>;
+  trimStartRef: React.RefObject<number>; // in secs
+  trimEndRef: React.RefObject<number>; // in secs
   repeatRef?: React.RefObject<boolean>;
   playing?: boolean;
   onTimeChange?: (time: number) => void;
@@ -40,10 +41,18 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     trimStartRef,
     trimEndRef,
     repeatRef,
-    playing,
+    playing: externalPlaying = false,
     onTimeChange,
     onPlayingChange,
   } = opts;
+
+  const stableOnTimeChange = useStableHandler(onTimeChange!);
+  const stableOnPlayingChange = useStableHandler(onPlayingChange!);
+
+  // acts as our internal playing state
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
+  const isLoopingRef = useRef(false);
 
   const storeRef = useRef<{
     state: ReactiveVideoState;
@@ -61,111 +70,139 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     bufferingTimeout: null,
   });
 
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      storeRef.current.notify = notify;
-      const video = videoRef.current;
-      if (!video) return () => {};
+  const subscribe = useCallback((notify: () => void) => {
+    storeRef.current.notify = notify;
+    const video = videoRef.current;
+    if (!video) return () => {};
 
-      const updateState = (updates: Partial<ReactiveVideoState>) => {
-        const prev = storeRef.current.state;
-        const next = {
-          time: updates.time ?? prev.time,
-          status: updates.status ?? prev.status,
-          isBuffering: updates.isBuffering ?? prev.isBuffering,
-          hasError: updates.hasError ?? prev.hasError,
-          buffered: updates.buffered ?? prev.buffered,
-        };
-
-        if (
-          prev.time !== next.time ||
-          prev.status !== next.status ||
-          prev.isBuffering !== next.isBuffering ||
-          prev.hasError !== next.hasError ||
-          prev.buffered !== next.buffered
-        ) {
-          storeRef.current.state = next;
-          storeRef.current.notify();
-
-          if (updates.time !== undefined) {
-            onTimeChange?.(next.time);
-          }
-          if (updates.status !== undefined && prev.status !== next.status) {
-            onPlayingChange?.(next.status);
-          }
-        }
+    const updateState = (updates: Partial<ReactiveVideoState>) => {
+      const prev = storeRef.current.state;
+      const next = {
+        time: updates.time ?? prev.time,
+        status: updates.status ?? prev.status,
+        isBuffering: updates.isBuffering ?? prev.isBuffering,
+        hasError: updates.hasError ?? prev.hasError,
+        buffered: updates.buffered ?? prev.buffered,
       };
 
-      const setBufferingState = (shouldBuffer: boolean) => {
-        if (storeRef.current.bufferingTimeout) {
-          clearTimeout(storeRef.current.bufferingTimeout);
-          storeRef.current.bufferingTimeout = null;
+      if (
+        prev.time !== next.time ||
+        prev.status !== next.status ||
+        prev.isBuffering !== next.isBuffering ||
+        prev.hasError !== next.hasError ||
+        prev.buffered !== next.buffered
+      ) {
+        storeRef.current.state = next;
+        storeRef.current.notify();
+
+        if (updates.time !== undefined) {
+          stableOnTimeChange?.(next.time);
         }
-
-        const isPlaying = video && !video.paused;
-
-        if (shouldBuffer && isPlaying) {
-          updateState({ isBuffering: true });
-        } else if (!isPlaying) {
-          updateState({ isBuffering: false });
-        } else {
-          storeRef.current.bufferingTimeout = setTimeout(() => {
-            updateState({ isBuffering: false });
-          }, 200);
+        if (updates.status !== undefined && prev.status !== next.status) {
+          stableOnPlayingChange?.(next.status);
         }
-      };
-
-      const handleProgress = () => updateState({ buffered: video.buffered });
-      const handleWaiting = () => setBufferingState(true);
-      const handleCanPlay = () => setBufferingState(false);
-      const handleCanPlayThrough = () => setBufferingState(false);
-      const handleStalled = () => setBufferingState(true);
-      const handleError = () =>
-        updateState({ hasError: true, isBuffering: false });
-
-      video.addEventListener("waiting", handleWaiting);
-      video.addEventListener("canplay", handleCanPlay);
-      video.addEventListener("canplaythrough", handleCanPlayThrough);
-      video.addEventListener("stalled", handleStalled);
-      video.addEventListener("error", handleError);
-      video.addEventListener("progress", handleProgress);
-
-      const initialCurrent = Math.max(
-        video.currentTime,
-        trimStartRef.current ?? 0
-      );
-      let initialStatus: ReactiveVideoState["status"];
-      if (video.paused && initialCurrent === 0) {
-        initialStatus = "idle";
-      } else if (video.ended) {
-        initialStatus = "ended";
-      } else {
-        initialStatus = video.paused ? "paused" : "playing";
       }
-      updateState({
-        time: initialCurrent,
-        status: initialStatus,
-        buffered: video.buffered,
-      });
+    };
 
-      return () => {
-        if (storeRef.current.bufferingTimeout) {
-          clearTimeout(storeRef.current.bufferingTimeout);
-          storeRef.current.bufferingTimeout = null;
-        }
-        video.removeEventListener("waiting", handleWaiting);
-        video.removeEventListener("canplay", handleCanPlay);
-        video.removeEventListener("canplaythrough", handleCanPlayThrough);
-        video.removeEventListener("stalled", handleStalled);
-        video.removeEventListener("error", handleError);
-        video.removeEventListener("progress", handleProgress);
-      };
-    },
-    [onTimeChange, onPlayingChange]
-  );
+    const setBufferingState = (shouldBuffer: boolean) => {
+      if (storeRef.current.bufferingTimeout) {
+        clearTimeout(storeRef.current.bufferingTimeout);
+        storeRef.current.bufferingTimeout = null;
+      }
+
+      const isPlaying = video && !video.paused;
+
+      if (shouldBuffer && isPlaying) {
+        updateState({ isBuffering: true });
+      } else if (!isPlaying) {
+        updateState({ isBuffering: false });
+      } else {
+        storeRef.current.bufferingTimeout = setTimeout(() => {
+          updateState({ isBuffering: false });
+        }, 200);
+      }
+    };
+
+    const handleProgress = () => updateState({ buffered: video.buffered });
+    const handleWaiting = () => setBufferingState(true);
+    const handleCanPlay = () => setBufferingState(false);
+    const handleCanPlayThrough = () => setBufferingState(false);
+    const handleStalled = () => setBufferingState(true);
+    const handleError = () =>
+      updateState({ hasError: true, isBuffering: false });
+
+    const handlePlay = () => {
+      isLoopingRef.current = false;
+      setIsVideoPlaying(true);
+    };
+
+    const handlePause = () => {
+      // Ignore pause events when we're intentionally looping
+      if (isLoopingRef.current) {
+        return;
+      }
+
+      setIsVideoPlaying(false);
+    };
+
+    const handleEnded = () => {
+      setIsVideoPlaying(false);
+    };
+
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("waiting", handleWaiting);
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("canplaythrough", handleCanPlayThrough);
+    video.addEventListener("stalled", handleStalled);
+    video.addEventListener("error", handleError);
+    video.addEventListener("progress", handleProgress);
+
+    const initialCurrent = Math.max(
+      video.currentTime,
+      trimStartRef.current ?? 0
+    );
+
+    video.currentTime = initialCurrent;
+
+    let initialStatus: ReactiveVideoState["status"];
+    if (video.paused && initialCurrent === 0) {
+      initialStatus = "idle";
+    } else if (video.ended) {
+      initialStatus = "ended";
+    } else {
+      initialStatus = video.paused ? "paused" : "playing";
+    }
+    updateState({
+      time: initialCurrent,
+      status: initialStatus,
+      buffered: video.buffered,
+    });
+
+    return () => {
+      if (storeRef.current.bufferingTimeout) {
+        clearTimeout(storeRef.current.bufferingTimeout);
+        storeRef.current.bufferingTimeout = null;
+      }
+
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("waiting", handleWaiting);
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("canplaythrough", handleCanPlayThrough);
+      video.removeEventListener("stalled", handleStalled);
+      video.removeEventListener("error", handleError);
+      video.removeEventListener("progress", handleProgress);
+    };
+  }, []);
 
   // Global RAF just polls video.currentTime for UI state
   // Canvas uses requestVideoFrameCallback for actual rendering
+  const video = videoRef.current;
+  const shouldPoll = externalPlaying && video && isVideoPlaying;
+
   useRAF(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -190,9 +227,12 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
       current = trimStart;
     } else if (current > trimEnd) {
       if (repeat) {
+        isLoopingRef.current = true;
         video.currentTime = trimStart;
         current = trimStart;
+        status = "playing";
       } else {
+        isLoopingRef.current = false;
         video.pause();
         video.currentTime = trimStart;
         current = trimStart;
@@ -204,10 +244,10 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     if (prev.time !== current || prev.status !== status) {
       storeRef.current.state = { ...prev, time: current, status };
       storeRef.current.notify();
-      if (prev.time !== current) onTimeChange?.(current);
-      if (prev.status !== status) onPlayingChange?.(status);
+      if (prev.time !== current) stableOnTimeChange?.(current);
+      if (prev.status !== status) stableOnPlayingChange?.(status);
     }
-  }, playing ?? false);
+  }, shouldPoll ?? false);
 
   const getSnapshot = () => storeRef.current.state;
   const getServerSnapshot = () => ({
@@ -229,7 +269,7 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     },
     notifyStore: () => storeRef.current.notify(),
     startLoop: () => {},
-    onSeek: onTimeChange,
+    onSeek: stableOnTimeChange,
   });
 
   return { ...state, controls };

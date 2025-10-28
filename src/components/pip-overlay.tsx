@@ -9,6 +9,8 @@ import { getElementRef } from "@/lib/get-element-ref";
 import { PiP } from "./pip";
 import type { Video } from "@/components/video-preview";
 import { Volume } from "./volume";
+import { PIP_SETTINGS } from "@/constants/app";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 
 export interface PiPOverlayProps {
   children: Video;
@@ -74,18 +76,16 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
 
     if (settings.layout !== "pip") return null;
 
+    const pipAspectRatio = (settings.pipAspectRatio || "16:9") as AspectRatio;
+    const pipSettings = PIP_SETTINGS[pipAspectRatio];
+
     return (
       <PiP
+        key={pipAspectRatio}
         containerRef={containerRef}
-        aspectRatio="16:9"
-        initialPosition={{
-          width: 240,
-          height: 135,
-        }}
-        constraints={{
-          minWidth: 160,
-          minHeight: 90,
-        }}
+        aspectRatio={pipAspectRatio}
+        initialPosition={pipSettings.initialPosition}
+        constraints={pipSettings.constraints}
         onPositionChange={handlePositionChange}
       >
         <>

@@ -1,3 +1,5 @@
+import logger from "@/utils/logger";
+
 type RAFCallback = (time: number, deltaTime: number) => void;
 
 /**
@@ -48,7 +50,7 @@ class RAFManager {
       try {
         callback(time, deltaTime);
       } catch (err) {
-        console.error("RAF callback error:", err);
+        logger.error("RAF callback error:", err);
       }
     });
 
