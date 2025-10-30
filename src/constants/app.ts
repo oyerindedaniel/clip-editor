@@ -248,3 +248,10 @@ export const PIP_SETTINGS: Record<
     constraints: { minWidth: 187, minHeight: 80 },
   },
 };
+
+export const BACKGROUND_ALIGN_MAP: Record<"left" | "center" | "right", number> =
+  {
+    left: 0,
+    center: 0.5,
+    right: 1,
+  };

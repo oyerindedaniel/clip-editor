@@ -125,7 +125,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   >
                     <Volume.Controls
                       variant="pill"
-                      className="!p-0 !border-none bg-transparent hover:!glass"
+                      className="!py-0 !pl-0 !pr-1  !border-none bg-transparent hover:!glass"
                     >
                       <Volume.Button
                         size="icon"

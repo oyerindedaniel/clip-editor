@@ -25,6 +25,7 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
 import { Playback } from "./video-controls";
 import { msToSeconds, secondsToMs } from "@/utils/video";
+import type { Color } from "./color-palette";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -69,6 +70,8 @@ export interface VideoPreviewProps {
   trimData: TrimData;
 
   externalControls?: boolean;
+
+  padColor?: Color;
 }
 
 export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
@@ -89,6 +92,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       className,
       style,
       externalControls = false,
+      padColor,
     } = props;
 
     const repeatRef = useRef(defaultRepeat);
@@ -212,16 +216,12 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     return (
       <div
         ref={forwardedRef}
-        className={cn("w-full h-full group", className)}
+        className={cn("group", className)}
         style={{
           ...style,
         }}
       >
-        <div
-          className={cn("absolute inset-0 flex items-center justify-center")}
-        >
-          {renderedChild}
-        </div>
+        <div>{renderedChild}</div>
 
         {!externalControls && (
           <>

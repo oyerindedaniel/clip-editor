@@ -67,6 +67,9 @@ export const DEFAULT_DUAL_VIDEO_SETTINGS = {
   backgroundMode: "pad-color",
   backgroundVideo: "primary",
   primaryPanelPercentage: 50,
+  backgroundAlign: "center",
+  backgroundOpacity: 0.3,
+  backgroundBlur: 2,
 } as const;
 
 export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(

@@ -127,13 +127,15 @@ const TextOverlayItem = ({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm md:text-[0.8rem] text-foreground-subtle">
-                  Opacity:{" "}
+                <Label htmlFor="opacity">
+                  Opacity (
                   <span className="font-bold text-foreground-default">
                     {Math.round(overlay.opacity * 100)}%
                   </span>
+                  )
                 </Label>
                 <input
+                  id="opacity"
                   type="range"
                   min="0"
                   max="100"
@@ -143,7 +145,7 @@ const TextOverlayItem = ({
                       opacity: Number(e.target.value) / 100,
                     })
                   }
-                  className="w-full h-2 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1.5 bg-surface-tertiary rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                 />
               </div>
 
@@ -254,7 +256,7 @@ const TextOverlayItem = ({
                           alignment: value as "left" | "center" | "right",
                         })
                       }
-                      className={cn("h-7 w-7 p-0 rounded", {
+                      className={cn("", {
                         "bg-primary": overlay.alignment === value,
                         "bg-surface-tertiary": overlay.alignment !== value,
                       })}

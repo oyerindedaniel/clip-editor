@@ -185,6 +185,10 @@ export interface DualVideoSettings {
   backgroundVideo?: BackgroundVideo;
   // Panel sizing for dual video layout
   primaryPanelPercentage?: number; // 0-100, default 50
+  // Background position and opacity
+  backgroundAlign?: "left" | "center" | "right";
+  backgroundOpacity?: number; // 0..1
+  backgroundBlur?: number; // px
 }
 
 export interface DualVideoClip {

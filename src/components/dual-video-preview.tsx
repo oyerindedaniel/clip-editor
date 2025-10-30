@@ -9,7 +9,7 @@ import CanvasVideoRenderer from "./canvas-video-renderer";
 import type { Color } from "./color-palette";
 import { VideoPreview, type Video } from "./video-preview";
 import type { CropMode, TrimData } from "@/types/app";
-import type { AspectRatio } from "@/utils/aspect-ratios";
+import { calculateHeight, type AspectRatio } from "@/utils/aspect-ratios";
 import type { PlayingStatus } from "@/hooks/app/use-video-controls-core";
 import { cn } from "@/lib/utils";
 import { Volume } from "./volume";
@@ -37,6 +37,7 @@ interface BaseDualVideoProps {
   playing?: boolean;
   baseAspect: AspectRatio;
   targetAspect: AspectRatio;
+  boundaryAspectRatio: AspectRatio | null;
 }
 
 interface DualVideoPreviewEditorProps extends BaseDualVideoProps {
@@ -64,6 +65,7 @@ const DualVideoPreviewEditor = forwardRef<
     canvasWidth,
     canvasHeight,
     padColor,
+    boundaryAspectRatio,
     className,
     style,
     playing = false,
@@ -84,16 +86,22 @@ const DualVideoPreviewEditor = forwardRef<
 
   const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
 
-  if (useDualMode && secondaryVideoUrl && secondaryTrimData) {
-    const primaryKeyframeBounds = useMemo(
-      () => getKeyframeBoundsForTarget(keyframes, "primary"),
-      [keyframes]
-    );
-    const secondaryKeyframeBounds = useMemo(
-      () => getKeyframeBoundsForTarget(keyframes, "secondary"),
-      [keyframes]
-    );
+  const primaryKeyframeBounds = useMemo(
+    () => getKeyframeBoundsForTarget(keyframes, "primary"),
+    [keyframes]
+  );
+  const secondaryKeyframeBounds = useMemo(
+    () => getKeyframeBoundsForTarget(keyframes, "secondary"),
+    [keyframes]
+  );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backgroundVideoRef =
+    dualVideoSettings.backgroundVideo === "primary"
+      ? primaryVideoRef
+      : secondaryVideoRef;
+
+  if (useDualMode && secondaryVideoUrl && secondaryTrimData) {
     return (
       <DualVideoPreview
         ref={forwardedRef}
@@ -112,6 +120,7 @@ const DualVideoPreviewEditor = forwardRef<
         playing={playing}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
+        boundaryAspectRatio={boundaryAspectRatio}
         padColor={padColor}
         className={className}
         style={style}
@@ -119,36 +128,21 @@ const DualVideoPreviewEditor = forwardRef<
     );
   }
 
-  const primaryKeyframeBounds = useMemo(
-    () => getKeyframeBoundsForTarget(keyframes, "primary"),
-    [keyframes]
-  );
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const backgroundVideoRef =
-    dualVideoSettings.backgroundVideo === "primary"
-      ? primaryVideoRef
-      : secondaryVideoRef;
-
   return (
     <div
       ref={containerRef}
       className={cn(
-        "relative overflow-hidden shadow-md w-full aspect-(--aspect-ratio)",
+        "relative overflow-hidden bg-surface-secondary shadow-md w-full h-full flex items-center justify-center",
         className
       )}
-      style={
-        {
-          "--aspect-ratio": targetAspect.replace(":", "/"),
-          height: canvasHeight,
-          ...style,
-        } as React.CSSProperties
-      }
+      style={{
+        ...style,
+      }}
     >
       <VideoPreview
         ref={forwardedRef}
         playing={playing}
-        source={<video src={primaryVideoUrl} />}
+        source={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
         baseAspect={baseAspect}
         targetAspect={targetAspect}
         variant={cropMode}
@@ -164,11 +158,20 @@ const DualVideoPreviewEditor = forwardRef<
             transformData={transform}
             variant={variant}
             width={canvasWidth}
-            height={canvasHeight}
+            height={calculateHeight({
+              aspectRatio: boundaryAspectRatio ?? "9:16",
+              width: canvasWidth,
+            })}
             color={padColor}
+            className={cn({
+              "absolute top-1/2 -translate-y-1/2": targetAspect !== "9:16",
+            })}
             backgroundMode={dualVideoSettings.backgroundMode}
             backgroundVideo={dualVideoSettings.backgroundVideo}
             backgroundVideoRef={backgroundVideoRef}
+            backgroundAlign={dualVideoSettings.backgroundAlign}
+            backgroundOpacity={dualVideoSettings.backgroundOpacity}
+            backgroundBlur={dualVideoSettings.backgroundBlur}
           />
         )}
       </VideoPreview>
@@ -223,6 +226,7 @@ export const DualVideoPreview = forwardRef<
     defaultRepeat = false,
     canvasWidth,
     canvasHeight,
+    boundaryAspectRatio,
     padColor,
     className,
     style,
@@ -261,6 +265,8 @@ export const DualVideoPreview = forwardRef<
   const primaryPercentage = dualVideoSettings.primaryPanelPercentage || 50;
   const secondaryPercentage = 100 - primaryPercentage;
 
+  console.log({ primaryPercentage, secondaryPercentage });
+
   const handlePanelResize = (sizes: number[]) => {
     if (sizes.length >= 2) {
       setDualVideoSettings((prev) => ({
@@ -274,16 +280,12 @@ export const DualVideoPreview = forwardRef<
     <div
       ref={forwardedRef}
       className={cn(
-        "relative overflow-hidden shadow-md w-full aspect-(--aspect-ratio)",
+        "relative overflow-hidden shadow-md w-full h-full",
         className
       )}
-      style={
-        {
-          "--aspect-ratio": targetAspect.replace(":", "/"),
-          height: canvasHeight,
-          ...style,
-        } as React.CSSProperties
-      }
+      style={{
+        ...style,
+      }}
     >
       <ResizablePanelGroup
         direction="vertical"

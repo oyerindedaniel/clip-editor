@@ -334,6 +334,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         );
         stablePauseAll();
         performSeek(timelineMs);
+
+        setTimeout(() => {
+          controls.play();
+        }, 50);
       }
     },
     [
