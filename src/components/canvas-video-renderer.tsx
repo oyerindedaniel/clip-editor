@@ -66,6 +66,51 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   const backgroundOpacityRef = useLatestValue(backgroundOpacity);
   const backgroundBlurRef = useLatestValue(backgroundBlur);
 
+  const drawBackground = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    align: "left" | "center" | "right",
+    opacity: number,
+    blurPx: number
+  ) => {
+    if (backgroundModeRef.current === "video" && backgroundVideoRef?.current) {
+      const bgVideo = backgroundVideoRef.current;
+      if (bgVideo.readyState >= 2) {
+        const prevAlpha = ctx.globalAlpha;
+        const prevFilter = ctx.filter ?? "none";
+        ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+        ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
+
+        const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
+        const canvasAR = width / height;
+        let drawW: number, drawH: number, bgDx: number, bgDy: number;
+        if (bgAR > canvasAR) {
+          drawH = height;
+          drawW = bgAR * drawH;
+          if (align === "left") bgDx = 0;
+          else if (align === "right") bgDx = width - drawW;
+          else bgDx = (width - drawW) / 2;
+          bgDy = 0;
+        } else {
+          drawW = width;
+          drawH = drawW / bgAR;
+          bgDx = 0;
+          bgDy = (height - drawH) / 2;
+        }
+        ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
+        ctx.globalAlpha = prevAlpha;
+        ctx.filter = prevFilter;
+      } else {
+        ctx.fillStyle = colorRef.current ?? "black";
+        ctx.fillRect(0, 0, width, height);
+      }
+    } else {
+      ctx.fillStyle = colorRef.current ?? "black";
+      ctx.fillRect(0, 0, width, height);
+    }
+  };
+
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -83,6 +128,15 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
     // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
     if (variantRef.current === "crop") {
+      // draw background if crop with non 9:16 aspect is in effect
+      drawBackground(
+        ctx,
+        widthRef.current,
+        heightRef.current,
+        backgroundAlignRef.current,
+        backgroundOpacityRef.current ?? 0.3,
+        backgroundBlurRef.current ?? 0
+      );
       const baseAR = transform.baseAR;
       const targetAR = transform.targetAR;
 
@@ -145,58 +199,14 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       }
 
       // Background fill or cover video
-      if (
-        backgroundModeRef.current === "video" &&
-        backgroundVideoRef?.current
-      ) {
-        const bgVideo = backgroundVideoRef.current;
-        if (bgVideo.readyState >= 2) {
-          const prevAlpha = ctx.globalAlpha;
-          const prevFilter = ctx.filter ?? "none";
-          ctx.globalAlpha = Math.max(
-            0,
-            Math.min(1, backgroundOpacityRef.current ?? 0.3)
-          );
-          ctx.filter = `blur(${Math.max(0, backgroundBlurRef.current)}px)`;
-
-          const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
-          const canvasAR = widthRef.current / heightRef.current;
-
-          let drawW: number, drawH: number, bgDx: number, bgDy: number;
-
-          if (bgAR > canvasAR) {
-            // background wider → crop horizontally
-            drawH = heightRef.current;
-            drawW = bgAR * drawH;
-
-            if (backgroundAlignRef.current === "left") {
-              bgDx = 0;
-            } else if (backgroundAlignRef.current === "right") {
-              bgDx = widthRef.current - drawW;
-            } else {
-              bgDx = (widthRef.current - drawW) / 2;
-            }
-
-            bgDy = 0;
-          } else {
-            // background taller → crop vertically (centered)
-            drawW = widthRef.current;
-            drawH = drawW / bgAR;
-            bgDx = 0;
-            bgDy = (heightRef.current - drawH) / 2;
-          }
-
-          ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
-          ctx.globalAlpha = prevAlpha;
-          ctx.filter = prevFilter;
-        } else {
-          ctx.fillStyle = colorRef.current ?? "black";
-          ctx.fillRect(0, 0, widthRef.current, heightRef.current);
-        }
-      } else {
-        ctx.fillStyle = colorRef.current ?? "black";
-        ctx.fillRect(0, 0, widthRef.current, heightRef.current);
-      }
+      drawBackground(
+        ctx,
+        widthRef.current,
+        heightRef.current,
+        backgroundAlignRef.current,
+        backgroundOpacityRef.current ?? 0.3,
+        backgroundBlurRef.current ?? 0
+      );
 
       ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
       return;

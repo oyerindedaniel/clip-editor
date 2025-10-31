@@ -19,6 +19,7 @@ import type { KeyframeBounds } from "@/utils/keyframe";
 import PiPOverlay from "./pip-overlay";
 import { useShallowSelector } from "react-shallow-store";
 import { ClipContext } from "@/contexts/clip-context";
+import { KeyframeContext } from "@/contexts/keyframe-context";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -261,6 +262,14 @@ export const DualVideoPreview = forwardRef<
       setDualVideoSettings: state.setDualVideoSettings,
     })
   );
+  const {
+    setPrimaryBoundaryAspectOverride,
+    setSecondaryBoundaryAspectOverride,
+  } = useShallowSelector(KeyframeContext, (state) => ({
+    setPrimaryBoundaryAspectOverride: state.setPrimaryBoundaryAspectOverride,
+    setSecondaryBoundaryAspectOverride:
+      state.setSecondaryBoundaryAspectOverride,
+  }));
 
   const primaryPercentage = dualVideoSettings.primaryPanelPercentage || 50;
   const secondaryPercentage = 100 - primaryPercentage;
@@ -273,6 +282,12 @@ export const DualVideoPreview = forwardRef<
         ...prev,
         primaryPanelPercentage: Math.round(sizes[0]),
       }));
+
+      const primaryHeight = Math.round((canvasHeight * sizes[0]) / 100);
+      const secondaryHeight = Math.round((canvasHeight * sizes[1]) / 100);
+
+      setPrimaryBoundaryAspectOverride?.(`${canvasWidth}:${primaryHeight}`);
+      setSecondaryBoundaryAspectOverride?.(`${canvasWidth}:${secondaryHeight}`);
     }
   };
 

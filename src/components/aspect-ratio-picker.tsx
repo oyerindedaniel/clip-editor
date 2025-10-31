@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { useShallowSelector } from "react-shallow-store";
 import { ClipContext } from "@/contexts/clip-context";
+import { KeyframeContext } from "@/contexts/keyframe-context";
 import { PillToggle } from "@/components/ui/pill-toggle";
 
 type AspectRatioType = AspectRatio | null;
@@ -115,6 +116,11 @@ const AspectRatioPicker = ({
       setDualVideoSettings: state.setDualVideoSettings,
     })
   );
+  const { primaryBoundaryAspectOverride, secondaryBoundaryAspectOverride } =
+    useShallowSelector(KeyframeContext, (state) => ({
+      primaryBoundaryAspectOverride: state.primaryBoundaryAspectOverride,
+      secondaryBoundaryAspectOverride: state.secondaryBoundaryAspectOverride,
+    }));
 
   const handleApply = () => {
     if (localAspectRatio) {
@@ -187,6 +193,55 @@ const AspectRatioPicker = ({
           </div>
 
           <div className="grid gap-2">
+            <>
+              {primaryBoundaryAspectOverride && (
+                <div className="flex flex-col gap-1">
+                  <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
+                    primary
+                  </div>
+                  <Button
+                    onClick={() =>
+                      setLocalAspectRatio(primaryBoundaryAspectOverride)
+                    }
+                    variant={
+                      localAspectRatio === primaryBoundaryAspectOverride
+                        ? "default"
+                        : "outline"
+                    }
+                    className="w-full text-left block overflow-hidden border-subtle"
+                  >
+                    <span className="font-medium mr-2">Custom (Panel)</span>
+                    <Badge variant="secondary">
+                      {primaryBoundaryAspectOverride}
+                    </Badge>
+                  </Button>
+                </div>
+              )}
+              {secondaryBoundaryAspectOverride && (
+                <div className="flex flex-col gap-1">
+                  <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
+                    secondary
+                  </div>
+                  <Button
+                    onClick={() =>
+                      setLocalAspectRatio(secondaryBoundaryAspectOverride)
+                    }
+                    variant={
+                      localAspectRatio === secondaryBoundaryAspectOverride
+                        ? "default"
+                        : "outline"
+                    }
+                    className="w-full text-left block overflow-hidden border-subtle"
+                  >
+                    <span className="font-medium mr-2">Custom (Panel)</span>
+                    <Badge variant="secondary">
+                      {secondaryBoundaryAspectOverride}
+                    </Badge>
+                  </Button>
+                </div>
+              )}
+            </>
+
             {availableRatios.map((ratio) => (
               <Button
                 key={ratio.value}
@@ -234,7 +289,10 @@ const AspectRatioPicker = ({
             </div>
           )}
 
-          {onPadColorChange && cropMode === "letterbox" && (
+          {(onPadColorChange && cropMode === "letterbox") ||
+          (onPadColorChange &&
+            cropMode === "crop" &&
+            localAspectRatio !== "9:16") ? (
             <div className="grid gap-2">
               <Label>Background</Label>
               <div className="flex items-center space-x-2">
@@ -432,7 +490,7 @@ const AspectRatioPicker = ({
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           <div className="flex gap-2 pt-2">
             {visible && aspectRatio && (
