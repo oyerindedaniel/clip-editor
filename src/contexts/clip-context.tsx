@@ -60,7 +60,7 @@ export const DEFAULT_DUAL_VIDEO_SETTINGS = {
   layout: "vertical-letterbox",
   primaryAudio: "primary",
   normalizeAudio: true,
-  primaryVolume: 0.8,
+  primaryVolume: 0.2,
   secondaryVolume: 0.6,
   pip: DEFAULT_TRANSFORM,
   pipAspectRatio: "16:9",

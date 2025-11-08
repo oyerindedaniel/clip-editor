@@ -120,10 +120,14 @@ export function useBuildVideoControls(
         video.volume = clamped;
       },
 
-      getVolume: () => {
+      getVolume: (defaultValue = 0.8) => {
         const video = videoRef.current;
-        if (!video) return 0.8;
-        return video.volume;
+        if (!video) return defaultValue;
+        const clamped = Math.max(0, Math.min(video.volume, 1));
+        if (video.volume !== clamped) {
+          video.volume = clamped;
+        }
+        return clamped;
       },
     };
   }, [updateStoreTime, notifyStore, startLoop, onSeek]);

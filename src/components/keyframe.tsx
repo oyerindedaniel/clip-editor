@@ -365,10 +365,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
               );
               dragTimeRef.current = newTimeMs;
 
-              const newLeftPx = Math.min(
-                Math.max(0, newTimeMs * pxPerMs + scrollLeft),
-                container.scrollWidth
-              );
+              const newLeftPx = Math.max(0, newTimeMs * pxPerMs);
 
               const el = markerRef.current;
               if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;

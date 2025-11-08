@@ -20,19 +20,31 @@ export const ASPECT_RATIOS: Record<AspectRatio, number> = {
   "21:9": 21 / 9,
 };
 
-export function calculateHeight(params: {
+function resolveAspectRatioValue(ratio: AspectRatio): number {
+  const preset = ASPECT_RATIOS[ratio as keyof typeof ASPECT_RATIOS];
+  if (preset) return preset;
+
+  const pieces = String(ratio).split(":");
+  if (pieces.length !== 2) return NaN;
+
+  const w = Number(pieces[0]);
+  const h = Number(pieces[1]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || h === 0) return NaN;
+
+  return w / h;
+}
+
+export function getAspectRatioValue(ratio: AspectRatio): number {
+  const value = resolveAspectRatioValue(ratio);
+  if (!Number.isFinite(value)) return ASPECT_RATIOS["16:9"];
+  return value;
+}
+
+export function calculateHeight(input: {
   aspectRatio: AspectRatio;
   width: number;
 }): number {
-  const known = ASPECT_RATIOS[params.aspectRatio as keyof typeof ASPECT_RATIOS];
-  if (known) return params.width / known;
-  // parse custom
-  const [w, h] = String(params.aspectRatio).split(":");
-  const wn = Number(w);
-  const hn = Number(h);
-  if (!Number.isFinite(wn) || !Number.isFinite(hn) || hn === 0) {
-    return params.width; // fallback
-  }
-  const ratio = wn / hn;
-  return params.width / ratio;
+  const value = resolveAspectRatioValue(input.aspectRatio);
+  if (!Number.isFinite(value)) return input.width;
+  return input.width / value;
 }

@@ -105,17 +105,19 @@ const AspectRatioPicker = ({
   const [isOpen, setIsOpen] = useState(false);
   const [localAspectRatio, setLocalAspectRatio] =
     useState<AspectRatioType>(aspectRatio);
+  const [selectedOverride, setSelectedOverride] = useState<
+    "primary" | "secondary" | null
+  >(null);
 
   const availableRatios =
     screenSize === "16:9" ? aspectRatios169 : aspectRatios916;
 
-  const { dualVideoSettings, setDualVideoSettings } = useShallowSelector(
-    ClipContext,
-    (state) => ({
+  const { dualVideoSettings, setDualVideoSettings, secondaryClip } =
+    useShallowSelector(ClipContext, (state) => ({
       dualVideoSettings: state.dualVideoSettings,
       setDualVideoSettings: state.setDualVideoSettings,
-    })
-  );
+      secondaryClip: state.secondaryClip,
+    }));
   const { primaryBoundaryAspectOverride, secondaryBoundaryAspectOverride } =
     useShallowSelector(KeyframeContext, (state) => ({
       primaryBoundaryAspectOverride: state.primaryBoundaryAspectOverride,
@@ -193,54 +195,54 @@ const AspectRatioPicker = ({
           </div>
 
           <div className="grid gap-2">
-            <>
-              {primaryBoundaryAspectOverride && (
-                <div className="flex flex-col gap-1">
-                  <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
-                    primary
+            {!!secondaryClip && (
+              <>
+                {primaryBoundaryAspectOverride && (
+                  <div className="flex flex-col gap-1">
+                    <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
+                      primary
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setSelectedOverride("primary");
+                        setLocalAspectRatio(primaryBoundaryAspectOverride);
+                      }}
+                      variant={
+                        selectedOverride === "primary" ? "default" : "outline"
+                      }
+                      className="w-full text-left block overflow-hidden border-subtle"
+                    >
+                      <span className="font-medium mr-2">Custom (Panel)</span>
+                      <Badge variant="secondary">
+                        {primaryBoundaryAspectOverride}
+                      </Badge>
+                    </Button>
                   </div>
-                  <Button
-                    onClick={() =>
-                      setLocalAspectRatio(primaryBoundaryAspectOverride)
-                    }
-                    variant={
-                      localAspectRatio === primaryBoundaryAspectOverride
-                        ? "default"
-                        : "outline"
-                    }
-                    className="w-full text-left block overflow-hidden border-subtle"
-                  >
-                    <span className="font-medium mr-2">Custom (Panel)</span>
-                    <Badge variant="secondary">
-                      {primaryBoundaryAspectOverride}
-                    </Badge>
-                  </Button>
-                </div>
-              )}
-              {secondaryBoundaryAspectOverride && (
-                <div className="flex flex-col gap-1">
-                  <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
-                    secondary
+                )}
+                {secondaryBoundaryAspectOverride && (
+                  <div className="flex flex-col gap-1">
+                    <div className="px-1 py-1 text-[10px] uppercase tracking-wide text-foreground-muted">
+                      secondary
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setSelectedOverride("secondary");
+                        setLocalAspectRatio(secondaryBoundaryAspectOverride);
+                      }}
+                      variant={
+                        selectedOverride === "secondary" ? "default" : "outline"
+                      }
+                      className="w-full text-left block overflow-hidden border-subtle"
+                    >
+                      <span className="font-medium mr-2">Custom (Panel)</span>
+                      <Badge variant="secondary">
+                        {secondaryBoundaryAspectOverride}
+                      </Badge>
+                    </Button>
                   </div>
-                  <Button
-                    onClick={() =>
-                      setLocalAspectRatio(secondaryBoundaryAspectOverride)
-                    }
-                    variant={
-                      localAspectRatio === secondaryBoundaryAspectOverride
-                        ? "default"
-                        : "outline"
-                    }
-                    className="w-full text-left block overflow-hidden border-subtle"
-                  >
-                    <span className="font-medium mr-2">Custom (Panel)</span>
-                    <Badge variant="secondary">
-                      {secondaryBoundaryAspectOverride}
-                    </Badge>
-                  </Button>
-                </div>
-              )}
-            </>
+                )}
+              </>
+            )}
 
             {availableRatios.map((ratio) => (
               <Button
@@ -248,6 +250,7 @@ const AspectRatioPicker = ({
                 onClick={() => {
                   if (cropMode === "crop" && hasKeyframes) return;
                   setLocalAspectRatio(ratio.value);
+                  setSelectedOverride(null);
                 }}
                 disabled={
                   cropMode === "letterbox" ||
@@ -259,7 +262,9 @@ const AspectRatioPicker = ({
                 className="w-full text-left block overflow-hidden border-subtle"
               >
                 <span className="font-medium mr-2">{ratio.label}</span>
-                <Badge variant="secondary">{ratio.description}</Badge>
+                <Badge variant="secondary" className="">
+                  {ratio.description}
+                </Badge>
               </Button>
             ))}
           </div>
@@ -413,11 +418,13 @@ const AspectRatioPicker = ({
 
                   <div className="grid gap-2">
                     <Label htmlFor="bgOpacity">
-                      Background Opacity (
-                      {Math.round(
-                        (dualVideoSettings.backgroundOpacity ?? 0.3) * 100
-                      )}
-                      %)
+                      Background Opacity
+                      <span className="font-bold text-foreground-default">
+                        {Math.round(
+                          (dualVideoSettings.backgroundOpacity ?? 0.3) * 100
+                        )}
+                        %
+                      </span>
                     </Label>
                     <input
                       id="bgOpacity"
@@ -438,11 +445,13 @@ const AspectRatioPicker = ({
 
                   <div className="grid gap-2">
                     <Label htmlFor="bgBlur">
-                      Background Blur (
-                      {Math.round(
-                        (dualVideoSettings.backgroundBlur ?? 2) * 10
-                      ) / 10}
-                      px)
+                      Background Blur
+                      <span className="font-bold text-foreground-default">
+                        {Math.round(
+                          (dualVideoSettings.backgroundBlur ?? 2) * 10
+                        ) / 10}
+                        px
+                      </span>
                     </Label>
                     <input
                       id="bgBlur"

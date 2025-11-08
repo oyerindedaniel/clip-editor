@@ -26,6 +26,10 @@ import { TrimData } from "@/types/app";
 import { Playback } from "./video-controls";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import type { Color } from "./color-palette";
+import {
+  createBoundTrimData,
+  validateKeyframeBounds,
+} from "@/utils/keyframe-bounds";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -97,19 +101,10 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
 
     const repeatRef = useRef(defaultRepeat);
 
-    const validatedBounds = useMemo(() => {
-      const trimStartSec = msToSeconds(trimData.trimStart);
-      const trimEndSec = msToSeconds(trimData.trimEnd);
-
-      const clampedStart = Math.max(keyframeBounds.start, trimStartSec);
-      const clampedEnd = Math.min(keyframeBounds.end, trimEndSec);
-
-      if (clampedStart >= clampedEnd) {
-        return { start: trimStartSec, end: trimEndSec };
-      }
-
-      return { start: clampedStart, end: clampedEnd };
-    }, [keyframeBounds, trimData]);
+    const validatedBounds = useMemo(
+      () => validateKeyframeBounds(keyframeBounds, trimData),
+      [keyframeBounds, trimData]
+    );
 
     const startRef = useLatestValue(validatedBounds.start);
     const endRef = useLatestValue(validatedBounds.end);
@@ -151,6 +146,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         playing: externalPlaying,
         onTimeChange,
         onPlayingChange,
+        externalControls,
       });
 
     const transform = useInterpolatedTransform(
@@ -161,13 +157,10 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       targetAspect
     );
 
-    const seekTrimData = useMemo<TrimData>(() => {
-      return {
-        trimStart: secondsToMs(validatedBounds.start),
-        trimEnd: secondsToMs(validatedBounds.end),
-        timelineOffset: 0,
-      };
-    }, [validatedBounds]);
+    const seekTrimData = useMemo(
+      () => createBoundTrimData(keyframeBounds, trimData),
+      [keyframeBounds, trimData]
+    );
 
     const playState = getPlayingState(status);
 
@@ -216,13 +209,12 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     return (
       <div
         ref={forwardedRef}
-        className={cn("group", className)}
+        className={cn("group w-full h-full", className)}
         style={{
           ...style,
         }}
       >
-        <div>{renderedChild}</div>
-
+        <div className="w-full h-full">{renderedChild}</div>
         {!externalControls && (
           <>
             <div className="absolute top-2 left-2 z-20">

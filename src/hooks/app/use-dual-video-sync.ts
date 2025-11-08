@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TrimData } from "@/types/app";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import logger from "@/utils/logger";
 import { useStableHandler } from "../use-stable-handler";
 import { normalizeError } from "@/utils/error-utils";
 import { PlayingStatus } from "./use-video-controls-core";
+import { useLatestValue } from "../use-latest-value";
+import { flushSync } from "react-dom";
+import { debounce } from "@/utils/app";
 
 type UseDualVideoSyncArgs = {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -13,6 +16,7 @@ type UseDualVideoSyncArgs = {
   secondaryTrim: TrimData;
   onTimeUpdate?: (timelineMs: number) => void;
   enabled?: boolean;
+  defaultRepeat?: boolean
 };
 
 /**
@@ -27,46 +31,47 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     secondaryTrim,
     onTimeUpdate,
     enabled = false,
+    defaultRepeat = false
   } = args;
 
-  const RESUME_DEBOUNCE_MS = 50; // Debounce delay for resume operations to prevent race conditions
-  const WAITING_DEBOUNCE_MS = 300; // Only treat as stalled after 300ms of waiting
+  const SEEK_COOLDOWN_MS = 200; // Cooldown period after seek before drift detection
+  const BUFFERING_CLEAR_DEBOUNCE_MS = 300; // Keep buffering state longer to avoid flicker
+  const RESUME_DEBOUNCE_MS = 300; // Minimum time between resume attempts
 
-  type StalledState = { primary: boolean; secondary: boolean };
+  type State = { primary: boolean; secondary: boolean };
 
   const primaryMetaRef = useRef<VideoFrameCallbackMetadata | null>(null);
   const secondaryMetaRef = useRef<VideoFrameCallbackMetadata | null>(null);
   const primaryHandleRef = useRef<number | null>(null);
   const secondaryHandleRef = useRef<number | null>(null);
-  const stalledRef = useRef<StalledState>({ primary: false, secondary: false });
-  const resumeTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const waitingTimerRef = useRef<{
-    primary: NodeJS.Timeout | null;
-    secondary: NodeJS.Timeout | null;
-  }>({
-    primary: null,
-    secondary: null,
-  });
+
+  const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const isPlayingRef = useRef(false);
   const isSeekingRef = useRef(false);
-  const repeatRef = useRef(false);
+  const lastSeekTimeRef = useRef<number>(0);
+  const repeatRef = useRef(defaultRepeat);
   const playbackRateRef = useRef(1);
 
   const lastFrameRef = useRef<number | null>(null);
   const fpsEstimateRef = useRef<number | null>(null);
 
   const [isBuffering, setIsBuffering] = useState(false);
-  const isBufferingRef = useRef<StalledState>({
+  const isBufferingRef = useRef<State>({
     primary: false,
     secondary: false,
   });
+
+  const waitingForRecoveryRef = useRef(false);
+  const isResettingRef = useRef(false);
+
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
 
   const [hasError, setHasError] = useState(false);
   const [status, setStatus] = useState<PlayingStatus>("idle");
-  const [currentTimelineMs, setCurrentTimelineMs] = useState(0);
+  const currentTimelineMsRef = useRef(0);
 
   const [primaryBuffered, setPrimaryBuffered] = useState<TimeRanges | null>(
     null
@@ -75,112 +80,155 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     null
   );
 
-  const setBufferingState = useCallback((shouldBuffer: boolean) => {
-    if (bufferingTimeoutRef.current) {
-      clearTimeout(bufferingTimeoutRef.current);
-    }
+  const primaryTrimRef = useLatestValue(primaryTrim);
+  const secondaryTrimRef = useLatestValue(secondaryTrim);
 
-    if (shouldBuffer) {
-      setIsBuffering(true);
-    } else {
-      bufferingTimeoutRef.current = setTimeout(() => {
-        setIsBuffering(false);
-      }, 300);
-    }
-  }, []);
+  const setBufferingState = useCallback(
+    (shouldBuffer: boolean, immediate = false) => {
+      if (bufferingTimeoutRef.current) {
+        clearTimeout(bufferingTimeoutRef.current);
+      }
 
-  /** Convert media time to unified timeline position (for either video) */
-  const timelineFromMediaTime = useCallback(
-    (mediaSec: number, trim: TrimData) =>
-      Math.round(secondsToMs(mediaSec)) - trim.trimStart + trim.timelineOffset,
+      if (shouldBuffer) {
+        setIsBuffering(true);
+      } else {
+        if (immediate) {
+          setIsBuffering(false);
+        } else {
+          bufferingTimeoutRef.current = setTimeout(() => {
+            setIsBuffering(false);
+          }, BUFFERING_CLEAR_DEBOUNCE_MS);
+        }
+      }
+    },
     []
   );
 
+  /** Convert media time to unified timeline position (for either video) */
+  const timelineFromMediaTime = useStableHandler(
+    (mediaSec: number, trim: TrimData) =>
+      Math.round(secondsToMs(mediaSec)) - trim.trimStart + trim.timelineOffset
+  );
+
   /** Expected media time for secondary given timeline position */
-  const expectedSecondaryMediaSecForTimeline = useCallback(
+  const expectedSecondaryMediaSecForTimeline = useStableHandler(
     (timelineMs: number): number =>
       msToSeconds(
         timelineMs - secondaryTrim.timelineOffset + secondaryTrim.trimStart
-      ),
-    [secondaryTrim.timelineOffset, secondaryTrim.trimStart]
+      )
+  );
+
+  /** Check if primary video should be active at timeline position */
+  const isPrimaryActiveAtTimeline = useStableHandler(
+    (timelineMs: number): boolean => {
+      const end = primaryEndTimelineMs();
+      return timelineMs < end;
+    }
   );
 
   /** Check if secondary video should be active on timeline */
-  const isSecondaryActiveAtTimeline = useCallback(
+  const isSecondaryActiveAtTimeline = useStableHandler(
     (timelineMs: number): boolean => {
       const start = secondaryTrim.timelineOffset;
       const end = secondaryEndTimelineMs();
       return timelineMs >= start && timelineMs <= end;
-    },
-    [
-      secondaryTrim.timelineOffset,
-      secondaryTrim.trimEnd,
-      secondaryTrim.trimStart,
-    ]
+    }
   );
 
-  const primaryEndTimelineMs = useCallback(
+  const getActiveVideosAtTimeline = useStableHandler(
+    (timelineMs: number): { primary: boolean; secondary: boolean } => {
+      return {
+        primary: isPrimaryActiveAtTimeline(timelineMs),
+        secondary: isSecondaryActiveAtTimeline(timelineMs),
+      };
+    }
+  );
+
+  const primaryEndTimelineMs = useStableHandler(
     () =>
-      primaryTrim.timelineOffset +
-      (primaryTrim.trimEnd - primaryTrim.trimStart),
-    [primaryTrim]
+      primaryTrim.timelineOffset + (primaryTrim.trimEnd - primaryTrim.trimStart)
   );
 
-  const secondaryEndTimelineMs = useCallback(
+  const secondaryEndTimelineMs = useStableHandler(
     () =>
       secondaryTrim.timelineOffset +
-      (secondaryTrim.trimEnd - secondaryTrim.trimStart),
-    [secondaryTrim]
+      (secondaryTrim.trimEnd - secondaryTrim.trimStart)
   );
 
   /** Unified max end (timeline continues until both finished) */
-  const maxEndTimelineMs = useCallback(
-    () => Math.max(primaryEndTimelineMs(), secondaryEndTimelineMs()),
-    [primaryEndTimelineMs, secondaryEndTimelineMs]
+  const maxEndTimelineMs = useStableHandler(() =>
+    Math.max(primaryEndTimelineMs(), secondaryEndTimelineMs())
   );
 
   /** Perform seek operation on both videos */
-  const performSeek = useCallback(
-    (targetMs: number) => {
-      const clampedMs = Math.max(0, Math.min(targetMs, maxEndTimelineMs()));
+  const performSeek = useStableHandler((targetMs: number, isReset = false) => {
+    const clampedMs = Math.max(0, Math.min(targetMs, maxEndTimelineMs()));
 
-      isSeekingRef.current = true;
-      setCurrentTimelineMs(clampedMs);
+    const wasPlaying = isPlayingRef.current;
 
-      if (enabled) {
-        const primary = primaryVideoRef.current;
-        const secondary = secondaryVideoRef.current;
+    isSeekingRef.current = true;
+    lastSeekTimeRef.current = Date.now();
 
-        if (primary) {
-          const primaryTargetSec = msToSeconds(
-            clampedMs - primaryTrim.timelineOffset + primaryTrim.trimStart
-          );
-          primary.currentTime = Math.max(
-            0,
-            Math.min(primaryTargetSec, msToSeconds(primaryTrim.trimEnd))
-          );
+    if (isReset) {
+      isResettingRef.current = true;
+    }
+
+    if (enabled) {
+      const primary = primaryVideoRef.current;
+      const secondary = secondaryVideoRef.current;
+
+      if (primary) {
+        const primaryTargetSec = msToSeconds(
+          clampedMs - primaryTrim.timelineOffset + primaryTrim.trimStart
+        );
+        const clampedPrimarySec = Math.max(
+          msToSeconds(primaryTrim.trimStart),
+          Math.min(primaryTargetSec, msToSeconds(primaryTrim.trimEnd))
+        );
+
+        const withinTimeline = targetMs <= primaryEndTimelineMs();
+
+        if (withinTimeline) {
+          primary.currentTime = clampedPrimarySec;
         }
+      }
 
-        if (secondary) {
-          const secondaryTargetSec = msToSeconds(
-            clampedMs - secondaryTrim.timelineOffset + secondaryTrim.trimStart
-          );
-          secondary.currentTime = Math.max(
-            0,
-            Math.min(secondaryTargetSec, msToSeconds(secondaryTrim.trimEnd))
-          );
+      if (secondary) {
+        const secondaryTargetSec = msToSeconds(
+          clampedMs - secondaryTrim.timelineOffset + secondaryTrim.trimStart
+        );
+        const clampedSecondarySec = Math.max(
+          msToSeconds(secondaryTrim.trimStart),
+          Math.min(secondaryTargetSec, msToSeconds(secondaryTrim.trimEnd))
+        );
+
+        const withinTimeline = targetMs <= secondaryEndTimelineMs();
+
+        if (withinTimeline) {
+          secondary.currentTime = clampedSecondarySec;
         }
       }
 
       requestAnimationFrame(() => {
+        currentTimelineMsRef.current = clampedMs;
         isSeekingRef.current = false;
+
+        // Clear reset flag after one frame
+        if (isReset) {
+          requestAnimationFrame(() => {
+            isResettingRef.current = false;
+          });
+        }
+
+        if (wasPlaying) {
+          play();
+        }
       });
-    },
-    [enabled, primaryTrim, secondaryTrim, maxEndTimelineMs]
-  );
+    }
+  });
 
   /** Pause all playback */
-  const pauseAll = useCallback(() => {
+  const pauseAll = useStableHandler(() => {
     const primary = primaryVideoRef.current;
     const secondary = secondaryVideoRef.current;
 
@@ -201,9 +249,33 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     } catch (err) {
       logger.warn("Secondary pause failed:", err);
     }
-  }, []);
+  });
 
-  const stablePauseAll = useStableHandler(pauseAll);
+  /** Pause both videos without changing playing state - used during buffering */
+  const pauseAllPartial = useStableHandler(() => {
+    if (resumeTimeoutRef.current) {
+      clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = null;
+    }
+
+    const primary = primaryVideoRef.current;
+    const secondary = secondaryVideoRef.current;
+
+    try {
+      if (primary && !primary.paused) {
+        primary.pause();
+      }
+    } catch (err) {
+      logger.warn("Primary pause for buffering failed:", err);
+    }
+    try {
+      if (secondary && !secondary.paused) {
+        secondary.pause();
+      }
+    } catch (err) {
+      logger.warn("Secondary pause for buffering failed:", err);
+    }
+  });
 
   const cleanup = useCallback(() => {
     const primary = primaryVideoRef.current;
@@ -218,23 +290,13 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       secondaryHandleRef.current = null;
     }
 
-    if (resumeTimerRef.current) {
-      clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = null;
-    }
-
-    if (waitingTimerRef.current.primary) {
-      clearTimeout(waitingTimerRef.current.primary);
-      waitingTimerRef.current.primary = null;
-    }
-    if (waitingTimerRef.current.secondary) {
-      clearTimeout(waitingTimerRef.current.secondary);
-      waitingTimerRef.current.secondary = null;
+    if (resumeTimeoutRef.current) {
+      clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = null;
     }
 
     primaryMetaRef.current = null;
     secondaryMetaRef.current = null;
-    stalledRef.current = { primary: false, secondary: false };
     isPlayingRef.current = false;
     isSeekingRef.current = false;
     lastFrameRef.current = null;
@@ -247,7 +309,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
    * Render frame if both videos are properly aligned.
    * This is called from requestVideoFrameCallback and handles the core synchronization logic.
    */
-  const renderIfAligned = useCallback(
+  const renderIfAligned = useStableHandler(
     (
       primaryMeta: VideoFrameCallbackMetadata | null,
       secondaryMeta: VideoFrameCallbackMetadata | null,
@@ -259,13 +321,43 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       const secondary = secondaryVideoRef.current;
       if (!primary || !secondary) return;
 
-      const primaryEnded =
-        timelineFromMediaTime(primaryMeta?.mediaTime ?? 0, primaryTrim) >=
-        primaryEndTimelineMs();
+      if (isResettingRef.current) return;
 
-      const secondaryEnded =
+      if (isSeekingRef.current) return;
+
+      const currentMs = currentTimelineMsRef.current;
+      const activeVideos = getActiveVideosAtTimeline(currentMs);
+
+      // Buffer in ms to account for frame callback stopping slightly before video end
+      const VIDEO_END_BUFFER_MS = 100;
+
+      const primaryMetaEnded =
+        timelineFromMediaTime(primaryMeta?.mediaTime ?? 0, primaryTrim) >=
+        primaryEndTimelineMs() - VIDEO_END_BUFFER_MS;
+
+      const primaryEnded = primaryMetaEnded || !activeVideos.primary;
+
+      const secondaryMetaEnded =
         timelineFromMediaTime(secondaryMeta?.mediaTime ?? 0, secondaryTrim) >=
-        secondaryEndTimelineMs();
+        secondaryEndTimelineMs() - VIDEO_END_BUFFER_MS;
+
+      const secondaryEnded = secondaryMetaEnded || !activeVideos.secondary;
+
+      // Pause primary when it finishes
+      if (primaryEnded && !primary.paused) {
+        primary.pause();
+      }
+
+      // Pause secondary when it finishes
+      if (secondaryEnded && !secondary.paused) {
+        secondary.pause();
+      }
+
+      // If primary callback fired but primary shouldn't be active
+      if (!fromSecondary && !activeVideos.primary) return;
+
+      // If secondary callback fired but secondary shouldn't be active
+      if (fromSecondary && !activeVideos.secondary) return;
 
       // When secondary video's frame callback fires, only process if primary has already finished its segment.
       // This prevents secondary from driving the timeline while primary is still the active video.
@@ -275,31 +367,36 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       // This transfers timeline control to secondary video so it can finish its remaining segment.
       if (!fromSecondary && primaryEnded && !secondaryEnded) return;
 
-      // When both videos have completed their respective trimmed segments, no synchronization is needed.
-      // Exit early to avoid false drift detection between videos that are legitimately at different timeline positions.
-      if (primaryEnded && secondaryEnded) return;
-
       // Determine which video is driving the timeline
       const drivingMeta = primaryEnded ? secondaryMeta : primaryMeta;
       const drivingTrim = primaryEnded ? secondaryTrim : primaryTrim;
+
       if (!drivingMeta) return;
 
       // ---- FPS Estimation ----
+
+      const MIN_FPS = 1;
+      const MAX_FPS = 120;
+      const DEFAULT_FPS = 30;
+      const SMOOTHING_FACTOR = 0.1; // 10% of new value, 90% of previous
+
       // Track frame delta to estimate actual playback frame rate
       const now = drivingMeta.mediaTime;
       const last = lastFrameRef.current ?? now;
       const delta = now - last;
       lastFrameRef.current = now;
 
-      const prevFps = fpsEstimateRef.current ?? 30;
+      const prevFps = fpsEstimateRef.current ?? DEFAULT_FPS;
+
       if (delta > 0 && delta < 1) {
         const instantaneous = 1 / delta;
-        const clamped = Math.min(Math.max(instantaneous, 1), 120);
+        const clamped = Math.min(Math.max(instantaneous, MIN_FPS), MAX_FPS);
         // Exponential moving average for smooth FPS estimate
-        fpsEstimateRef.current = prevFps * 0.9 + clamped * 0.1;
+        fpsEstimateRef.current =
+          prevFps * (1 - SMOOTHING_FACTOR) + clamped * SMOOTHING_FACTOR;
       }
-      const fps = fpsEstimateRef.current ?? 30;
 
+      const fps = fpsEstimateRef.current ?? DEFAULT_FPS;
       const frameMs = 1000 / fps;
 
       // ---- Sync tuning constants ----
@@ -310,8 +407,53 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
         drivingTrim
       );
 
-      setCurrentTimelineMs(timelineMs);
+      // Can occur due to stale requestframecallback after both video ends then seek
+      if (timelineMs < 0) {
+        logger.warn(
+          `Negative timeline detected: ${timelineMs}ms, skipping frame`
+        );
+        return;
+      }
+
+      // console.log("----timelineMs", {
+      //   timelineMs,
+      //   primaryEnded,
+      //   secondaryEnded,
+      //   fromSecondary,
+      // });
+      currentTimelineMsRef.current = timelineMs;
+
       onTimeUpdate?.(timelineMs);
+
+      const end = maxEndTimelineMs();
+
+      if (timelineMs >= end || (primaryEnded && secondaryEnded)) {
+        logger.log("timeupdate: both segments complete");
+
+        if (repeatRef.current) {
+          if (!isSeekingRef.current) {
+            performSeek(0, true);
+          }
+        } else {
+          if (primaryHandleRef.current) {
+            primary.cancelVideoFrameCallback(primaryHandleRef.current);
+            primaryHandleRef.current = null;
+          }
+          if (secondaryHandleRef.current) {
+            secondary.cancelVideoFrameCallback(secondaryHandleRef.current);
+            secondaryHandleRef.current = null;
+          }
+
+          waitingForRecoveryRef.current = false;
+          pauseAll();
+          if (!isSeekingRef.current) {
+            performSeek(0, true);
+          }
+          setStatus("ended");
+        }
+      }
+
+      if (primaryEnded) return;
 
       // ---- If secondary not active in current segment ----
       // Only primary is playing, no sync needed
@@ -322,170 +464,97 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
 
       if (!secondaryMeta) return;
 
-      // ---- Sync validation ----
-      // Check if secondary video is where it should be relative to primary
+      const timeSinceSeek = Date.now() - lastSeekTimeRef.current;
+      const inSeekCooldown = timeSinceSeek < SEEK_COOLDOWN_MS;
+
+      const bothVideosActive = activeVideos.primary && activeVideos.secondary;
+
+      // Guard conditions - skip drift check if:
+      // 1. Currently seeking
+      // 2. Within cooldown period after a seek
+      // 3. Already in recovery mode
+      // 4. Both videos aren't active (e.g., seeking to position where one video doesn't exist)
+      // 5. Near segment boundaries (primaryEnded or secondaryEnded)
+      const shouldSkipDriftCheck =
+        isSeekingRef.current ||
+        inSeekCooldown ||
+        waitingForRecoveryRef.current ||
+        !bothVideosActive ||
+        primaryEnded ||
+        secondaryEnded;
+
+      if (shouldSkipDriftCheck) {
+        return;
+      }
+
+      // Sync validation - only performed when both videos should be in sync
       const expectedSec = expectedSecondaryMediaSecForTimeline(timelineMs);
       const actualSec = secondaryMeta.mediaTime;
       const driftMs = Math.abs((actualSec - expectedSec) * 1000);
 
       if (driftMs > RESYNC_THRESHOLD_MS) {
         logger.warn(
-          `Video drift detected: ${driftMs.toFixed(1)}ms, resyncing...`
+          `Video drift detected: ${driftMs.toFixed(
+            1
+          )}ms at timeline ${timelineMs}ms, resyncing...`
         );
-        stablePauseAll();
-        performSeek(timelineMs);
+        logger.info(
+          `Expected secondary: ${expectedSec.toFixed(
+            3
+          )}s, Actual: ${actualSec.toFixed(3)}s`
+        );
 
-        setTimeout(() => {
-          controls.play();
-        }, 50);
+        waitingForRecoveryRef.current = true;
+        pauseAllPartial();
+        performSeek(timelineMs);
       }
-    },
-    [
-      enabled,
-      timelineFromMediaTime,
-      isSecondaryActiveAtTimeline,
-      expectedSecondaryMediaSecForTimeline,
-      onTimeUpdate,
-      primaryTrim,
-      secondaryTrim,
-      primaryEndTimelineMs,
-      secondaryEndTimelineMs,
-      performSeek,
-      stablePauseAll,
-    ]
+    }
   );
 
   /** Attempt to resume playback after both videos are ready */
-  const attemptResume = useCallback(() => {
+  const attemptResume = useStableHandler(() => {
     if (!enabled) return;
-    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
 
-    resumeTimerRef.current = setTimeout(() => {
-      const primary = primaryVideoRef.current;
-      const secondary = secondaryVideoRef.current;
-      if (
-        !primary ||
-        !secondary ||
-        stalledRef.current.primary ||
-        stalledRef.current.secondary
-      )
-        return;
+    const primary = primaryVideoRef.current;
+    const secondary = secondaryVideoRef.current;
+    if (!primary || !secondary || waitingForRecoveryRef.current) return;
 
-      const end = maxEndTimelineMs();
-      if (currentTimelineMs >= end) {
-        performSeek(end);
-        setStatus("ended");
-        return;
-      }
+    const end = maxEndTimelineMs();
+    if (currentTimelineMsRef.current >= end) {
+      performSeek(end);
+      setStatus("ended");
+      return;
+    }
 
-      isPlayingRef.current = true;
-      setStatus("playing");
+    if (resumeTimeoutRef.current) {
+      clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = null;
+    }
 
-      Promise.all([
-        primary
-          .play()
-          .catch((err: unknown) =>
-            logger.warn("Primary play failed:", normalizeError(err).message)
-          ),
-        secondary
-          .play()
-          .catch((err: unknown) =>
-            logger.warn("Secondary play failed:", normalizeError(err).message)
-          ),
-      ]);
+    resumeTimeoutRef.current = setTimeout(() => {
+      isBufferingRef.current.primary = false;
+      isBufferingRef.current.secondary = false;
+      setBufferingState(false, true);
+
+      play();
+      resumeTimeoutRef.current = null;
     }, RESUME_DEBOUNCE_MS);
-  }, [enabled, currentTimelineMs, maxEndTimelineMs, performSeek]);
-
-  const stableAttemptResume = useStableHandler(attemptResume);
+  });
 
   useEffect(() => {
     if (!enabled) return;
 
     const primary = primaryVideoRef.current;
     const secondary = secondaryVideoRef.current;
+
     if (!primary || !secondary) return;
 
-    const onWaitPrimary = () => {
-      if (waitingTimerRef.current.primary) {
-        clearTimeout(waitingTimerRef.current.primary);
-      }
+    const onPlayPrimary = () => {};
 
-      waitingTimerRef.current.primary = setTimeout(() => {
-        if (primary && !primary.paused && primary.readyState < 3) {
-          stalledRef.current.primary = true;
-          stablePauseAll();
-          isBufferingRef.current.primary = true;
-          setBufferingState(true);
-        }
-      }, WAITING_DEBOUNCE_MS);
-    };
-
-    const onWaitSecondary = () => {
-      if (waitingTimerRef.current.secondary) {
-        clearTimeout(waitingTimerRef.current.secondary);
-      }
-
-      waitingTimerRef.current.secondary = setTimeout(() => {
-        if (secondary && !secondary.paused && secondary.readyState < 3) {
-          stalledRef.current.secondary = true;
-          stablePauseAll();
-          isBufferingRef.current.secondary = true;
-          setBufferingState(true);
-        }
-      }, WAITING_DEBOUNCE_MS);
-    };
-
-    const onPlayPrimary = () => {
-      if (waitingTimerRef.current.primary) {
-        clearTimeout(waitingTimerRef.current.primary);
-        waitingTimerRef.current.primary = null;
-      }
-      stalledRef.current.primary = false;
-      if (!stalledRef.current.secondary) stableAttemptResume();
-    };
-
-    const onPlaySecondary = () => {
-      if (waitingTimerRef.current.secondary) {
-        clearTimeout(waitingTimerRef.current.secondary);
-        waitingTimerRef.current.secondary = null;
-      }
-      stalledRef.current.secondary = false;
-      if (!stalledRef.current.primary) stableAttemptResume();
-    };
-
-    const onCanPlayPrimary = () => {
-      if (waitingTimerRef.current.primary) {
-        clearTimeout(waitingTimerRef.current.primary);
-        waitingTimerRef.current.primary = null;
-      }
-      stalledRef.current.primary = false;
-      isBufferingRef.current.primary = false;
-      if (!isBufferingRef.current.secondary) {
-        setBufferingState(false);
-      }
-
-      if (!stalledRef.current.secondary && isPlayingRef.current) {
-        stableAttemptResume();
-      }
-    };
-
-    const onCanPlaySecondary = () => {
-      if (waitingTimerRef.current.secondary) {
-        clearTimeout(waitingTimerRef.current.secondary);
-        waitingTimerRef.current.secondary = null;
-      }
-      stalledRef.current.secondary = false;
-      isBufferingRef.current.secondary = false;
-      if (!isBufferingRef.current.primary) {
-        setBufferingState(false);
-      }
-
-      if (!stalledRef.current.primary && isPlayingRef.current) {
-        stableAttemptResume();
-      }
-    };
+    const onPlaySecondary = () => {};
 
     const onError = () => {
+      pauseAll();
       setHasError(true);
       setBufferingState(false);
     };
@@ -504,14 +573,111 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       }
     };
 
-    const onStalledPrimary = () => {
+    const onCanPlayPrimary = () => {
+      isBufferingRef.current.primary = false;
+
+      // Only attempt resume if:
+      // 1. We're waiting for recovery
+      // 2. Secondary is also ready
+      // 3. Not at the end
+      // 4. User intended to be playing
+      if (
+        waitingForRecoveryRef.current &&
+        !isBufferingRef.current.secondary &&
+        currentTimelineMsRef.current < maxEndTimelineMs() &&
+        isPlayingRef.current
+      ) {
+        waitingForRecoveryRef.current = false;
+        attemptResume();
+        return;
+      }
+
+      if (!isBufferingRef.current.secondary) {
+        setBufferingState(false);
+      }
+    };
+
+    const onCanPlaySecondary = () => {
+      isBufferingRef.current.secondary = false;
+
+      if (
+        waitingForRecoveryRef.current &&
+        !isBufferingRef.current.primary &&
+        currentTimelineMsRef.current < maxEndTimelineMs() &&
+        isPlayingRef.current
+      ) {
+        waitingForRecoveryRef.current = false;
+        attemptResume();
+        return;
+      }
+
+      if (!isBufferingRef.current.primary) {
+        setBufferingState(false);
+      }
+    };
+
+    const onWaitPrimary = () => {
+      const isPrimaryActive = isPrimaryActiveAtTimeline(
+        currentTimelineMsRef.current
+      );
+
+      if (!isPrimaryActive) {
+        isBufferingRef.current.primary = false;
+        return;
+      }
+
       isBufferingRef.current.primary = true;
       setBufferingState(true);
+      pauseAllPartial();
+      waitingForRecoveryRef.current = true;
+    };
+
+    const onWaitSecondary = () => {
+      const isSecondaryActive = isSecondaryActiveAtTimeline(
+        currentTimelineMsRef.current
+      );
+
+      if (!isSecondaryActive) {
+        isBufferingRef.current.secondary = false;
+        return;
+      }
+
+      isBufferingRef.current.secondary = true;
+      setBufferingState(true);
+      pauseAllPartial();
+      waitingForRecoveryRef.current = true;
+    };
+
+    const onStalledPrimary = () => {
+      const isPrimaryActive = isPrimaryActiveAtTimeline(
+        currentTimelineMsRef.current
+      );
+
+      if (!isPrimaryActive) {
+        isBufferingRef.current.primary = false;
+        return;
+      }
+
+      isBufferingRef.current.primary = true;
+      setBufferingState(true);
+      pauseAllPartial();
+      waitingForRecoveryRef.current = true;
     };
 
     const onStalledSecondary = () => {
+      const isSecondaryActive = isSecondaryActiveAtTimeline(
+        currentTimelineMsRef.current
+      );
+
+      if (!isSecondaryActive) {
+        isBufferingRef.current.secondary = false;
+        return;
+      }
+
       isBufferingRef.current.secondary = true;
       setBufferingState(true);
+      pauseAllPartial();
+      waitingForRecoveryRef.current = true;
     };
 
     const onProgressPrimary = () => {
@@ -522,75 +688,50 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       setSecondaryBuffered(secondary.buffered);
     };
 
-    const handleTimeUpdate = () => {
-      if (!isPlayingRef.current) return;
+    const onReadyPrimary = () => {
+      const timelineMs = currentTimelineMsRef.current;
 
-      const primaryTimelineMs = timelineFromMediaTime(
-        primary.currentTime,
-        primaryTrim
+      const target = msToSeconds(
+        timelineMs -
+          primaryTrimRef.current?.timelineOffset +
+          primaryTrimRef.current?.trimStart
       );
-      const secondaryTimelineMs = timelineFromMediaTime(
-        secondary.currentTime,
-        secondaryTrim
+
+      const clamped = Math.max(
+        0,
+        Math.min(target, msToSeconds(primaryTrimRef.current?.trimEnd ?? 0))
       );
-      const end = maxEndTimelineMs();
 
-      const primaryEndMs = primaryEndTimelineMs();
-      const secondaryEndMs = secondaryEndTimelineMs();
-
-      // Pause individual videos when they reach their segment end
-      if (
-        primaryTimelineMs >= primaryEndMs &&
-        secondaryTimelineMs < secondaryEndMs
-      ) {
-        primary.pause();
-      }
-      if (
-        secondaryTimelineMs >= secondaryEndMs &&
-        primaryTimelineMs < primaryEndMs
-      ) {
-        secondary.pause();
-      }
-
-      // Check if both videos have finished
-      const currentTimelineMs = Math.max(
-        primaryTimelineMs,
-        secondaryTimelineMs
-      );
-      if (currentTimelineMs >= end) {
-        isPlayingRef.current = false;
-
-        if (primaryHandleRef.current) {
-          primary.cancelVideoFrameCallback(primaryHandleRef.current);
-          primaryHandleRef.current = null;
-        }
-        if (secondaryHandleRef.current) {
-          secondary.cancelVideoFrameCallback(secondaryHandleRef.current);
-          secondaryHandleRef.current = null;
-        }
-
-        setCurrentTimelineMs(end);
-        onTimeUpdate?.(end);
-
-        // Handle repeat or end
-        if (repeatRef.current) {
-          if (!isSeekingRef.current) {
-            performSeek(0);
-            // Auto-restart playback
-            setTimeout(() => {
-              controls.play();
-            }, 50);
-          }
-        } else {
-          if (!isSeekingRef.current) {
-            performSeek(0);
-          }
-          setStatus("ended");
-          pauseAll();
-        }
-      }
+      primary.currentTime = clamped;
     };
 
+    const onReadySecondary = () => {
+      const timelineMs = currentTimelineMsRef.current;
+
+      const target = msToSeconds(
+        timelineMs -
+          secondaryTrimRef.current?.timelineOffset +
+          secondaryTrimRef.current?.trimStart
+      );
+
+      const clamped = Math.max(
+        0,
+        Math.min(target, msToSeconds(secondaryTrimRef.current?.trimEnd ?? 0))
+      );
+
+      secondary.currentTime = clamped;
+    };
+
+    if (primary.readyState >= 2) {
+      onReadyPrimary();
+    }
+
+    if (secondary.readyState >= 2) {
+      onReadySecondary();
+    }
+
+    primary.addEventListener("loadeddata", onReadyPrimary);
+    secondary.addEventListener("loadeddata", onReadySecondary);
     primary.addEventListener("waiting", onWaitPrimary);
     secondary.addEventListener("waiting", onWaitSecondary);
     primary.addEventListener("playing", onPlayPrimary);
@@ -605,8 +746,6 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     secondary.addEventListener("stalled", onStalledSecondary);
     primary.addEventListener("progress", onProgressPrimary);
     secondary.addEventListener("progress", onProgressSecondary);
-    primary.addEventListener("timeupdate", handleTimeUpdate);
-    secondary.addEventListener("timeupdate", handleTimeUpdate);
 
     return () => {
       cleanup();
@@ -628,88 +767,89 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       secondary.removeEventListener("stalled", onStalledSecondary);
       primary.removeEventListener("progress", onProgressPrimary);
       secondary.removeEventListener("progress", onProgressSecondary);
-      primary.removeEventListener("timeupdate", handleTimeUpdate);
-      secondary.removeEventListener("timeupdate", handleTimeUpdate);
+      primary.removeEventListener("loadeddata", onReadyPrimary);
+      secondary.removeEventListener("loadeddata", onReadySecondary);
     };
-  }, [
-    enabled,
-    stablePauseAll,
-    stableAttemptResume,
-    cleanup,
-    performSeek,
-    pauseAll,
-    onTimeUpdate,
-    primaryTrim,
-    secondaryTrim,
-    maxEndTimelineMs,
-    primaryEndTimelineMs,
-    secondaryEndTimelineMs,
-    timelineFromMediaTime,
-  ]);
-
-  // Initialize video positions when enabled
-  useEffect(() => {
-    if (!enabled) return;
-
-    const primary = primaryVideoRef.current;
-    const secondary = secondaryVideoRef.current;
-    if (!primary || !secondary) return;
-
-    const timelineMs = currentTimelineMs;
-    const end = maxEndTimelineMs();
-
-    if (timelineMs >= end) {
-      performSeek(end);
-      pauseAll();
-      return;
-    }
-
-    const primaryTargetSec = msToSeconds(
-      timelineMs - primaryTrim.timelineOffset + primaryTrim.trimStart
-    );
-    const secondaryTargetSec = msToSeconds(
-      timelineMs - secondaryTrim.timelineOffset + secondaryTrim.trimStart
-    );
-
-    const primaryClamped = Math.max(
-      0,
-      Math.min(primaryTargetSec, msToSeconds(primaryTrim.trimEnd))
-    );
-    const secondaryClamped = Math.max(
-      0,
-      Math.min(secondaryTargetSec, msToSeconds(secondaryTrim.trimEnd))
-    );
-
-    primary.currentTime = primaryClamped;
-    secondary.currentTime = secondaryClamped;
-  }, [enabled]);
+  }, [enabled, cleanup]);
 
   const play = useCallback(() => {
     const primary = primaryVideoRef.current;
     const secondary = secondaryVideoRef.current;
-    if (!primary || !secondary) return;
+
+    if (!primary || !secondary) {
+      logger.warn("Cannot play: video elements not available");
+      return;
+    }
+
+    isBufferingRef.current.primary = false;
+    isBufferingRef.current.secondary = false;
+
+    const currentMs = currentTimelineMsRef.current;
+    const activeVideos = getActiveVideosAtTimeline(currentMs);
 
     isPlayingRef.current = true;
     setStatus("playing");
 
-    Promise.all([primary.play(), secondary.play()]).catch(() => {});
+    const playPromises: Promise<void>[] = [];
+
+    if (activeVideos.primary) {
+      const expectedPrimaryTime = msToSeconds(
+        currentMs - primaryTrim.timelineOffset + primaryTrim.trimStart
+      );
+      const clampedPrimaryTime = Math.max(
+        msToSeconds(primaryTrim.trimStart),
+        Math.min(expectedPrimaryTime, msToSeconds(primaryTrim.trimEnd))
+      );
+
+      if (Math.abs(primary.currentTime - clampedPrimaryTime) > 0.1) {
+        primary.currentTime = clampedPrimaryTime;
+      }
+    }
+
+    if (activeVideos.secondary) {
+      const expectedSecondaryTime = msToSeconds(
+        currentMs - secondaryTrim.timelineOffset + secondaryTrim.trimStart
+      );
+      const clampedSecondaryTime = Math.max(
+        msToSeconds(secondaryTrim.trimStart),
+        Math.min(expectedSecondaryTime, msToSeconds(secondaryTrim.trimEnd))
+      );
+
+      if (Math.abs(secondary.currentTime - clampedSecondaryTime) > 0.1) {
+        secondary.currentTime = clampedSecondaryTime;
+      }
+    }
+
+    if (activeVideos.primary && primary.paused) {
+      playPromises.push(
+        primary.play().catch((err) => {
+          logger.warn("Primary play failed:", normalizeError(err).message);
+        })
+      );
+    }
+
+    if (activeVideos.secondary && secondary.paused) {
+      playPromises.push(
+        secondary.play().catch((err) => {
+          logger.warn("Secondary play failed:", normalizeError(err).message);
+        })
+      );
+    }
+
+    Promise.all(playPromises);
 
     const primaryFrameCallback = (
       _: number,
       meta: VideoFrameCallbackMetadata
     ) => {
       primaryMetaRef.current = meta;
-      stalledRef.current.primary = false;
       renderIfAligned(meta, secondaryMetaRef.current);
 
       if (primaryHandleRef.current)
         primary.cancelVideoFrameCallback(primaryHandleRef.current);
-      if (isPlayingRef.current && !primary.paused && !primary.ended) {
-        primaryHandleRef.current =
-          primary.requestVideoFrameCallback(primaryFrameCallback);
-      } else {
-        primaryHandleRef.current = null;
-      }
+
+      primaryHandleRef.current =
+        primary.requestVideoFrameCallback(primaryFrameCallback);
     };
 
     const secondaryFrameCallback = (
@@ -717,50 +857,63 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       meta: VideoFrameCallbackMetadata
     ) => {
       secondaryMetaRef.current = meta;
-      stalledRef.current.secondary = false;
       renderIfAligned(primaryMetaRef.current, meta, true);
 
       if (secondaryHandleRef.current)
         secondary.cancelVideoFrameCallback(secondaryHandleRef.current);
-      if (isPlayingRef.current && !secondary.paused && !secondary.ended) {
-        secondaryHandleRef.current = secondary.requestVideoFrameCallback(
-          secondaryFrameCallback
-        );
-      } else {
-        secondaryHandleRef.current = null;
-      }
-    };
 
-    try {
-      primaryHandleRef.current =
-        primary.requestVideoFrameCallback(primaryFrameCallback);
-    } catch {}
-    try {
       secondaryHandleRef.current = secondary.requestVideoFrameCallback(
         secondaryFrameCallback
       );
-    } catch {}
-  }, [renderIfAligned]);
+    };
 
-  const pause = useCallback(() => {
-    isPlayingRef.current = false;
-    pauseAll();
-  }, [pauseAll]);
+    if (activeVideos.primary) {
+      if (primaryHandleRef.current) {
+        primary.cancelVideoFrameCallback(primaryHandleRef.current);
+        primaryHandleRef.current = null;
+      }
+      try {
+        primaryHandleRef.current =
+          primary.requestVideoFrameCallback(primaryFrameCallback);
+      } catch (err) {
+        logger.warn(
+          "Failed to start primary frame callback:",
+          normalizeError(err).message
+        );
+      }
+    }
+
+    if (activeVideos.secondary) {
+      if (secondaryHandleRef.current) {
+        secondary.cancelVideoFrameCallback(secondaryHandleRef.current);
+        secondaryHandleRef.current = null;
+      }
+      try {
+        secondaryHandleRef.current = secondary.requestVideoFrameCallback(
+          secondaryFrameCallback
+        );
+      } catch (err) {
+        logger.warn(
+          "Failed to start secondary frame callback:",
+          normalizeError(err).message
+        );
+      }
+    }
+  }, []);
 
   const controls = {
     play: () => {
-      if (!enabled) {
-        logger.warn("Dual sync not enabled");
-        return;
-      }
+      waitingForRecoveryRef.current = false;
       play();
     },
 
     pause: () => {
-      pause();
+      waitingForRecoveryRef.current = false;
+      pauseAll();
     },
 
     seek: (targetMs: number) => {
+      waitingForRecoveryRef.current = false;
       performSeek(targetMs);
     },
 
@@ -771,8 +924,10 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       }
 
       if (isPlayingRef.current) {
-        pause();
+        waitingForRecoveryRef.current = false;
+        pauseAll();
       } else {
+        waitingForRecoveryRef.current = false;
         play();
       }
     },
@@ -802,6 +957,44 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       playbackRateRef.current = rate;
       logger.info(`Playback rate set to ${rate}x`);
     },
+
+    setPrimaryVolume: (volume: number) => {
+      const video = primaryVideoRef.current;
+      if (!video) return;
+      const clamped = Math.max(0, Math.min(volume, 1));
+      if (video.volume !== clamped) {
+        video.volume = clamped;
+      }
+    },
+
+    getPrimaryVolume: (defaultValue = 0.8) => {
+      const video = primaryVideoRef.current;
+      if (!video) return defaultValue;
+      const clamped = Math.max(0, Math.min(video.volume, 1));
+      if (video.volume !== clamped) {
+        video.volume = clamped;
+      }
+      return clamped;
+    },
+
+    setSecondaryVolume: (volume: number) => {
+      const video = secondaryVideoRef.current;
+      if (!video) return;
+      const clamped = Math.max(0, Math.min(volume, 1));
+      if (video.volume !== clamped) {
+        video.volume = clamped;
+      }
+    },
+
+    getSecondaryVolume: (defaultValue = 0.8) => {
+      const video = secondaryVideoRef.current;
+      if (!video) return defaultValue;
+      const clamped = Math.max(0, Math.min(video.volume, 1));
+      if (video.volume !== clamped) {
+        video.volume = clamped;
+      }
+      return clamped;
+    },
   };
 
   return {
@@ -812,7 +1005,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     secondaryBuffered,
     hasError,
     status,
-    currentTimelineMs,
+    currentTimelineMs: currentTimelineMsRef.current,
     duration: maxEndTimelineMs(),
     repeat: repeatRef.current,
     playbackRate: playbackRateRef.current,

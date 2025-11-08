@@ -137,6 +137,26 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       }
     }, [playingStatus]);
 
+    React.useEffect(() => {
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          (e.target as HTMLElement).isContentEditable
+        ) {
+          return;
+        }
+
+        if (e.key === " " || e.key === "k" || e.key === "K") {
+          e.preventDefault();
+          togglePlay();
+        }
+      };
+
+      window.addEventListener("keydown", handleGlobalKeyDown);
+      return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    }, [togglePlay]);
+
     const contextValue = React.useMemo(
       () => ({
         playing,

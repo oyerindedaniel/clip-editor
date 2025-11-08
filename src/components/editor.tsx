@@ -73,7 +73,6 @@ import { useElementSize } from "@/hooks/use-element-size";
 import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
 import { LoaderIcon } from "@/icons/loader";
 import { cn } from "@/lib/utils";
-import { calculateHeight } from "@/utils/aspect-ratios";
 import KeyframeLists from "./keyframe-lists";
 import { AudioContext } from "@/contexts/audio-context";
 import KeyframeNameInput from "./keyframe-name-input";
@@ -538,7 +537,6 @@ const ClipEditor = ({
     } finally {
       // release buffer reference for GC
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      // @ts-ignore
       const _drop: null = null;
       setIsExporting(false);
     }
@@ -727,7 +725,10 @@ const ClipEditor = ({
                               }
                               secondaryVideoRef={pipVideoRef}
                             >
-                              <PiPOverlay containerRef={containerRef}>
+                              <PiPOverlay
+                                playerType={playerActive}
+                                containerRef={containerRef}
+                              >
                                 <video
                                   ref={pipVideoRef}
                                   src={
@@ -1095,8 +1096,6 @@ const ClipEditor = ({
                           secondaryVideoUrl={secondaryClip?.url}
                           playing={active === "renderer"}
                           keyframes={keyframes}
-                          primaryTrimData={primaryTrimRef.current}
-                          secondaryTrimData={secondaryTrimRef.current}
                           baseAspect="16:9"
                           targetAspect={boundaryAspectRatio ?? "9:16"}
                           cropMode={cropMode}
@@ -1104,6 +1103,8 @@ const ClipEditor = ({
                           canvasHeight={canvasSizeRef.current.height}
                           boundaryAspectRatio={boundaryAspectRatio}
                           padColor={padColor}
+                          active={active}
+                          playerType={playerActive}
                           className={classNames.renderer}
                           style={styles.renderer}
                         />

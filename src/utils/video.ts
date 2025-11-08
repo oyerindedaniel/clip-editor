@@ -1,12 +1,13 @@
 import { DEFAULT_CLIP_METADATA } from "@/constants/app";
 import type {
+  CropMode,
   Dimensions,
   ExportSettings,
   Overlay,
   Point,
   Settings,
 } from "@/types/app";
-import { ASPECT_RATIOS, AspectRatio } from "./aspect-ratios";
+import { AspectRatio, getAspectRatioValue } from "./aspect-ratios";
 
 /**
  * Calculate the visible bounding box of a video element inside its container.
@@ -171,8 +172,8 @@ function getOriginalBufferKey(): string {
 }
 
 function calculateAspectRatioScale(base: AspectRatio, target: AspectRatio) {
-  const baseRatio = ASPECT_RATIOS[base];
-  const targetRatio = ASPECT_RATIOS[target];
+  const baseRatio = getAspectRatioValue(base);
+  const targetRatio = getAspectRatioValue(target);
 
   const scale = targetRatio / baseRatio;
   const baseOrientation =
@@ -180,10 +181,8 @@ function calculateAspectRatioScale(base: AspectRatio, target: AspectRatio) {
   const targetOrientation =
     targetRatio > 1 ? "landscape" : targetRatio < 1 ? "portrait" : "square";
 
-  let mode: "letterbox" | "crop" | "stretch";
-  if (baseRatio === targetRatio) {
-    mode = "stretch";
-  } else if (
+  let mode: CropMode;
+  if (
     (baseRatio > targetRatio && baseOrientation === "landscape") ||
     (baseRatio < targetRatio && baseOrientation === "portrait")
   ) {

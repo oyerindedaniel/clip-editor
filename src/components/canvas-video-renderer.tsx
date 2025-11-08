@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
 import type { CropMode, BackgroundMode, BackgroundVideo } from "@/types/app";
-import { useLatestValue } from "@/hooks/use-latest-value";
 import type { Color } from "./color-palette";
 import {
   CANVAS_RENDERER_SYMBOL,
@@ -26,7 +25,6 @@ export interface CanvasVideoRendererProps {
   className?: string;
   color?: Color;
   renderEnabled?: boolean;
-  // Background settings for letterbox mode
   backgroundMode?: BackgroundMode;
   backgroundVideo?: BackgroundVideo;
   backgroundVideoRef?: React.RefObject<HTMLVideoElement | null>;
@@ -54,27 +52,17 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   backgroundBlur = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const transformRef = useLatestValue<InterpolatedResult>(transformData);
   const callbackIdRef = useRef<number | null>(null);
-
-  const widthRef = useLatestValue(width);
-  const heightRef = useLatestValue(height);
-  const variantRef = useLatestValue(variant);
-  const colorRef = useLatestValue(color);
-  const backgroundModeRef = useLatestValue(backgroundMode);
-  const backgroundAlignRef = useLatestValue(backgroundAlign);
-  const backgroundOpacityRef = useLatestValue(backgroundOpacity);
-  const backgroundBlurRef = useLatestValue(backgroundBlur);
 
   const drawBackground = (
     ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
+    w: number,
+    h: number,
     align: "left" | "center" | "right",
     opacity: number,
     blurPx: number
   ) => {
-    if (backgroundModeRef.current === "video" && backgroundVideoRef?.current) {
+    if (backgroundMode === "video" && backgroundVideoRef?.current) {
       const bgVideo = backgroundVideoRef.current;
       if (bgVideo.readyState >= 2) {
         const prevAlpha = ctx.globalAlpha;
@@ -83,31 +71,33 @@ const CanvasVideoRenderer: TaggedRendererComponent<
         ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
 
         const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
-        const canvasAR = width / height;
+        const canvasAR = w / h;
         let drawW: number, drawH: number, bgDx: number, bgDy: number;
+
         if (bgAR > canvasAR) {
-          drawH = height;
+          drawH = h;
           drawW = bgAR * drawH;
           if (align === "left") bgDx = 0;
-          else if (align === "right") bgDx = width - drawW;
-          else bgDx = (width - drawW) / 2;
+          else if (align === "right") bgDx = w - drawW;
+          else bgDx = (w - drawW) / 2;
           bgDy = 0;
         } else {
-          drawW = width;
+          drawW = w;
           drawH = drawW / bgAR;
           bgDx = 0;
-          bgDy = (height - drawH) / 2;
+          bgDy = (h - drawH) / 2;
         }
+
         ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
         ctx.globalAlpha = prevAlpha;
         ctx.filter = prevFilter;
       } else {
-        ctx.fillStyle = colorRef.current ?? "black";
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = color ?? "black";
+        ctx.fillRect(0, 0, w, h);
       }
     } else {
-      ctx.fillStyle = colorRef.current ?? "black";
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = color ?? "black";
+      ctx.fillRect(0, 0, w, h);
     }
   };
 
@@ -119,24 +109,22 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
     if (video.readyState < 2) return;
 
-    const transform = transformRef.current;
     const vw = video.videoWidth || 0;
     const vh = video.videoHeight || 0;
     if (vw <= 0 || vh <= 0) return;
 
-    ctx.clearRect(0, 0, widthRef.current, heightRef.current);
+    ctx.clearRect(0, 0, width, height);
 
-    // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
-    if (variantRef.current === "crop") {
-      // draw background if crop with non 9:16 aspect is in effect
+    if (variant === "crop") {
       drawBackground(
         ctx,
-        widthRef.current,
-        heightRef.current,
-        backgroundAlignRef.current,
-        backgroundOpacityRef.current ?? 0.3,
-        backgroundBlurRef.current ?? 0
+        width,
+        height,
+        backgroundAlign,
+        backgroundOpacity ?? 0.3,
+        backgroundBlur ?? 0
       );
+      const transform = transformData;
       const baseAR = transform.baseAR;
       const targetAR = transform.targetAR;
 
@@ -167,51 +155,52 @@ const CanvasVideoRenderer: TaggedRendererComponent<
         srcH,
         0,
         0,
-        widthRef.current,
-        heightRef.current
+        width,
+        height
       );
       return;
     }
 
-    // Fit/letterbox (default): shows full video with background, no transforms applied
-    {
-      const srcAR = vw / vh;
-      let destW = widthRef.current;
-      let destH = heightRef.current;
-      let dx = 0;
-      let dy = 0;
+    const srcAR = vw / vh;
+    let destW = width;
+    let destH = height;
+    let dx = 0;
+    let dy = 0;
 
-      if (srcAR > widthRef.current / heightRef.current) {
-        destW = widthRef.current;
-        destH = destW / srcAR;
-        dy = (heightRef.current - destH) / 2;
-      } else {
-        destH = heightRef.current;
-        destW = destH * srcAR;
+    if (srcAR > width / height) {
+      destW = width;
+      destH = destW / srcAR;
+      dy = (height - destH) / 2;
+    } else {
+      destH = height;
+      destW = destH * srcAR;
 
-        if (backgroundAlignRef.current === "left") {
-          dx = 0;
-        } else if (backgroundAlignRef.current === "right") {
-          dx = widthRef.current - destW;
-        } else {
-          dx = (widthRef.current - destW) / 2;
-        }
-      }
-
-      // Background fill or cover video
-      drawBackground(
-        ctx,
-        widthRef.current,
-        heightRef.current,
-        backgroundAlignRef.current,
-        backgroundOpacityRef.current ?? 0.3,
-        backgroundBlurRef.current ?? 0
-      );
-
-      ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
-      return;
+      if (backgroundAlign === "left") dx = 0;
+      else if (backgroundAlign === "right") dx = width - destW;
+      else dx = (width - destW) / 2;
     }
-  }, []);
+
+    drawBackground(
+      ctx,
+      width,
+      height,
+      backgroundAlign,
+      backgroundOpacity ?? 0.3,
+      backgroundBlur ?? 0
+    );
+
+    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
+  }, [
+    transformData,
+    width,
+    height,
+    variant,
+    backgroundAlign,
+    backgroundOpacity,
+    backgroundBlur,
+    color,
+    backgroundMode,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -245,21 +234,19 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       }
     };
 
-    if (video) {
-      drawFrame();
-      callbackIdRef.current =
-        video.requestVideoFrameCallback(videoFrameCallback);
-    } else {
-      drawFrame();
-    }
+    drawFrame();
+    callbackIdRef.current = video.requestVideoFrameCallback(videoFrameCallback);
+  }, [renderEnabled, width, height, drawFrame]);
 
+  useEffect(() => {
     return () => {
+      const video = videoRef.current;
       if (callbackIdRef.current !== null && video) {
         video.cancelVideoFrameCallback(callbackIdRef.current);
         callbackIdRef.current = null;
       }
     };
-  }, [renderEnabled, drawFrame]);
+  }, []);
 
   return <canvas ref={canvasRef} className={cn("", className)} />;
 };

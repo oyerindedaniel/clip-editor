@@ -117,13 +117,18 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
             <div className="absolute bottom-2 left-2 z-20">
               <Volume.Root
+                defaultValue={(() => {
+                  const video = primaryVideoRef?.current;
+                  const volume = dualVideoSettings.primaryVolume;
+
+                  if (video && video.volume !== volume) {
+                    video.volume = Math.max(0, Math.min(volume, 1));
+                  }
+                  return volume;
+                })()}
                 value={dualVideoSettings.primaryVolume}
                 onValueChange={(volume) => {
-                  const video = primaryVideoRef.current;
-                  if (!video) return;
-                  const clamped = Math.max(0, Math.min(volume, 1));
-                  video.volume = clamped;
-
+                  controls.setVolume(volume);
                   setDualVideoSettings({
                     ...dualVideoSettings,
                     primaryVolume: volume,
@@ -159,13 +164,18 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
               <div className="absolute top-2 left-2 z-20">
                 <Volume.Root
+                  defaultValue={(() => {
+                    const video = secondaryVideoRef?.current;
+                    const volume = dualVideoSettings.secondaryVolume;
+
+                    if (video && video.volume !== volume) {
+                      video.volume = Math.max(0, Math.min(volume, 1));
+                    }
+                    return volume;
+                  })()}
                   value={dualVideoSettings.secondaryVolume}
                   onValueChange={(volume) => {
-                    const video = secondaryVideoRef.current;
-                    if (!video) return;
-                    const clamped = Math.max(0, Math.min(volume, 1));
-                    video.volume = clamped;
-
+                    dualVideoControls.setSecondaryVolume(volume);
                     setDualVideoSettings({
                       ...dualVideoSettings,
                       secondaryVolume: volume,
@@ -214,6 +224,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
                 <Seek.Root
                   primaryVideoRef={primaryVideoRef}
+                  secondaryVideoRef={secondaryVideoRef}
                   primaryTrim={primaryTrim}
                   secondaryTrim={secondaryTrim}
                   primaryBuffered={primaryBuffered}
@@ -306,4 +317,4 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
 DualVideoPlayer.displayName = "DualVideoPlayer";
 
-export default DualVideoPlayer;
+export default React.memo(DualVideoPlayer);
