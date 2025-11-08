@@ -60,9 +60,16 @@ export const DEFAULT_DUAL_VIDEO_SETTINGS = {
   layout: "vertical-letterbox",
   primaryAudio: "primary",
   normalizeAudio: true,
-  primaryVolume: 0.8,
+  primaryVolume: 0.2,
   secondaryVolume: 0.6,
   pip: DEFAULT_TRANSFORM,
+  pipAspectRatio: "16:9",
+  backgroundMode: "pad-color",
+  backgroundVideo: "primary",
+  primaryPanelPercentage: 50,
+  backgroundAlign: "center",
+  backgroundOpacity: 0.3,
+  backgroundBlur: 2,
 } as const;
 
 export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
@@ -72,6 +79,7 @@ export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
 interface ClipProviderProps {
   children: ReactNode;
   videoId?: string;
+  isManual?: boolean;
 }
 
 export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {

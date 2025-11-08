@@ -48,9 +48,9 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({
   }, [objectUrl]);
 
   useEffect(() => {
-    registerImageOverlayRef(overlay.id, elementRef.current);
-    return () => registerImageOverlayRef(overlay.id, null);
-  }, []);
+    registerImageOverlayRef(overlay.id, elementRef.current, containerContext);
+    return () => registerImageOverlayRef(overlay.id, null, containerContext);
+  }, [registerImageOverlayRef, overlay.id, containerContext]);
 
   const resizeHandles = [
     { position: "nw", cursor: "nw-resize" },

@@ -2,7 +2,7 @@
 
 import React, { useEffect, forwardRef } from "react";
 import { cn } from "@/lib/utils";
-import type { S3ClipData, DualVideoClip } from "@/types/app";
+import type { ClipData, DualVideoClip } from "@/types/app";
 import { useShallowSelector } from "react-shallow-store";
 import { OverlaysContext } from "@/contexts/overlays-context";
 import { ClipContext } from "@/contexts/clip-context";
@@ -18,7 +18,7 @@ import { msToSeconds } from "@/utils/video";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
 
 interface DualVideoPlayerProps {
-  primaryClip: S3ClipData;
+  primaryClip: ClipData;
   duration: number;
   secondaryClip: DualVideoClip | null;
   className?: string;
@@ -32,13 +32,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
   ) => {
     const repeatRef = React.useRef(false);
 
-    const { setDualVideoRef, secondaryContainerRef } = useShallowSelector(
-      OverlaysContext,
-      (state) => ({
+    const { setDualVideoRef, secondaryContainerRef, activePersistentOverlays } =
+      useShallowSelector(OverlaysContext, (state) => ({
         setDualVideoRef: state.setDualVideoRef,
         secondaryContainerRef: state.secondaryContainerRef,
-      })
-    );
+        activePersistentOverlays: state.activePersistentOverlays,
+      }));
 
     const {
       primaryTrim,
@@ -99,12 +98,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       >
         <div
           ref={secondaryContainerRef}
-          className="relative flex flex-col items-center aspect-[9/16] w-full justify-center overflow-hidden bg-surface-secondary shadow-md group"
+          className="relative flex flex-col items-center justify-center aspect-[9/16] w-full  overflow-hidden bg-surface-secondary shadow-md group"
         >
           <div
             className={cn(
-              "relative overflow-hidden w-full flex h-1/2",
-              secondaryClip ? "items-end h-1/2" : "items-center h-1/2"
+              "relative overflow-hidden w-full flex",
+              secondaryClip ? "items-end h-1/2" : "items-stretch"
             )}
           >
             <video
@@ -113,23 +112,23 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               poster={"/thumbnails/video-thumb-2.webp"}
               playsInline
               preload="metadata"
-              className={cn(
-                "rounded-none",
-                secondaryClip
-                  ? "object-contain"
-                  : "object-contain w-full h-full"
-              )}
+              className={cn("rounded-none object-contain")}
             />
 
             <div className="absolute bottom-2 left-2 z-20">
               <Volume.Root
+                defaultValue={(() => {
+                  const video = primaryVideoRef?.current;
+                  const volume = dualVideoSettings.primaryVolume;
+
+                  if (video && video.volume !== volume) {
+                    video.volume = Math.max(0, Math.min(volume, 1));
+                  }
+                  return volume;
+                })()}
                 value={dualVideoSettings.primaryVolume}
                 onValueChange={(volume) => {
-                  const video = primaryVideoRef.current;
-                  if (!video) return;
-                  const clamped = Math.max(0, Math.min(volume, 1));
-                  video.volume = clamped;
-
+                  controls.setVolume(volume);
                   setDualVideoSettings({
                     ...dualVideoSettings,
                     primaryVolume: volume,
@@ -165,13 +164,18 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
               <div className="absolute top-2 left-2 z-20">
                 <Volume.Root
+                  defaultValue={(() => {
+                    const video = secondaryVideoRef?.current;
+                    const volume = dualVideoSettings.secondaryVolume;
+
+                    if (video && video.volume !== volume) {
+                      video.volume = Math.max(0, Math.min(volume, 1));
+                    }
+                    return volume;
+                  })()}
                   value={dualVideoSettings.secondaryVolume}
                   onValueChange={(volume) => {
-                    const video = secondaryVideoRef.current;
-                    if (!video) return;
-                    const clamped = Math.max(0, Math.min(volume, 1));
-                    video.volume = clamped;
-
+                    dualVideoControls.setSecondaryVolume(volume);
                     setDualVideoSettings({
                       ...dualVideoSettings,
                       secondaryVolume: volume,
@@ -209,6 +213,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
               playingStatus={dualStatus}
               isBuffering={isBufferingDualVideo}
               hasError={hasErrorDualVideo}
+              isDual
             >
               <Playback.Controls className="px-4">
                 <Playback.PlayToggle />
@@ -219,6 +224,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
                 <Seek.Root
                   primaryVideoRef={primaryVideoRef}
+                  secondaryVideoRef={secondaryVideoRef}
                   primaryTrim={primaryTrim}
                   secondaryTrim={secondaryTrim}
                   primaryBuffered={primaryBuffered}
@@ -274,7 +280,12 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                 primaryBuffered={buffered}
                 secondaryBuffered={null}
                 isPlaying={playState.isPlaying}
-                onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                onSeek={(timelineMs: number) => {
+                  const sourceTimeSec = msToSeconds(
+                    primaryTrim.trimStart + timelineMs
+                  );
+                  controls.seek(sourceTimeSec);
+                }}
               >
                 <Seek.Content>
                   <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
@@ -296,7 +307,9 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
           />
         </div>
 
-        <PersistentOverlays duration={duration} isDualVideo />
+        {activePersistentOverlays === "dual" && (
+          <PersistentOverlays duration={duration} isDualVideo />
+        )}
       </div>
     );
   }
@@ -304,4 +317,4 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
 
 DualVideoPlayer.displayName = "DualVideoPlayer";
 
-export default DualVideoPlayer;
+export default React.memo(DualVideoPlayer);

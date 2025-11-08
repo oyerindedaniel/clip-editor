@@ -1,6 +1,7 @@
 import { AspectRatioValue } from "@/components/aspect-ratio-selector";
 import type { Color } from "@/components/color-palette";
 import type { Transform } from "@/utils/transform";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 
 /**
  * Represents a marked clip segment in the recording.
@@ -25,6 +26,8 @@ export interface S3ClipMetadata {
   originalFilename?: string;
 }
 
+export type Point = { x: number; y: number };
+
 export type Dimensions = { width: number; height: number };
 
 export type ClipToolType = "clips" | "text" | "image" | "audio" | "dual";
@@ -32,6 +35,32 @@ export type ClipToolType = "clips" | "text" | "image" | "audio" | "dual";
 export interface S3ClipData {
   url: string;
   metadata: S3ClipMetadata;
+}
+
+export interface ManualClipMetadata {
+  clipId: string;
+  clipDurationMs: number;
+  clipStartTime: number;
+  clipEndTime: number;
+  originalFilename: string;
+  uploadTimestamp: string;
+  isManual: true;
+}
+
+export interface ManualClipData {
+  url: string;
+  metadata: ManualClipMetadata;
+  file: File;
+}
+
+export type ClipData = S3ClipData | ManualClipData;
+
+export function isManualClip(clip: ClipData): clip is ManualClipData {
+  return "isManual" in clip.metadata && clip.metadata.isManual === true;
+}
+
+export function isS3Clip(clip: ClipData): clip is S3ClipData {
+  return !isManualClip(clip);
 }
 
 export interface BaseOverlay {
@@ -139,6 +168,9 @@ export interface ClipMetadata extends Settings {
 export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
 export type AudioMixMode = "primary" | "secondary" | "mixed";
 
+export type BackgroundMode = "pad-color" | "video";
+export type BackgroundVideo = "primary" | "secondary";
+
 export interface DualVideoSettings {
   layout: DualVideoLayout;
   primaryAudio: AudioMixMode;
@@ -147,6 +179,16 @@ export interface DualVideoSettings {
   secondaryVolume: number;
   // Picture-in-Picture specific settings
   pip?: Transform;
+  pipAspectRatio?: AspectRatio;
+  // Background settings for letterbox mode
+  backgroundMode?: BackgroundMode;
+  backgroundVideo?: BackgroundVideo;
+  // Panel sizing for dual video layout
+  primaryPanelPercentage?: number; // 0-100, default 50
+  // Background position and opacity
+  backgroundAlign?: "left" | "center" | "right";
+  backgroundOpacity?: number; // 0..1
+  backgroundBlur?: number; // px
 }
 
 export interface DualVideoClip {

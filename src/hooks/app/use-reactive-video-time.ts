@@ -1,17 +1,20 @@
-import { useRef, useSyncExternalStore, useCallback } from "react";
+import { useRef, useSyncExternalStore, useCallback, useState } from "react";
+import { useRAF } from "@/hooks/use-raf";
 import {
   useBuildVideoControls,
   type PlayingStatus,
 } from "./use-video-controls-core";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 export interface UseReactiveVideoTimeOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  trimStartRef: React.RefObject<number>;
-  trimEndRef: React.RefObject<number>;
+  trimStartRef: React.RefObject<number>; // in secs
+  trimEndRef: React.RefObject<number>; // in secs
   repeatRef?: React.RefObject<boolean>;
   playing?: boolean;
   onTimeChange?: (time: number) => void;
   onPlayingChange?: (status: PlayingStatus) => void;
+  externalControls?: boolean;
 }
 
 interface ReactiveVideoState {
@@ -27,6 +30,10 @@ export interface ReactiveVideoControls {
   pause: () => void;
   toggle: () => void;
   seek: (time: number) => void;
+  getVolume: () => number;
+  setVolume: (volume: number) => void;
+  getPlaybackRate: () => number;
+  setPlaybackRate: (rate: number) => void;
 }
 
 export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
@@ -35,16 +42,23 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     trimStartRef,
     trimEndRef,
     repeatRef,
-    playing,
+    playing: externalPlaying = false,
     onTimeChange,
     onPlayingChange,
+    externalControls = false,
   } = opts;
+
+  const stableOnTimeChange = useStableHandler(onTimeChange!);
+  const stableOnPlayingChange = useStableHandler(onPlayingChange!);
+
+  // acts as our internal playing state
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
+  const isLoopingRef = useRef(false);
 
   const storeRef = useRef<{
     state: ReactiveVideoState;
     notify: () => void;
-    rafId: number | null;
-    startLoop: () => void;
     bufferingTimeout: ReturnType<typeof setTimeout> | null;
   }>({
     state: {
@@ -55,8 +69,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
       buffered: null,
     },
     notify: () => {},
-    rafId: null,
-    startLoop: () => {},
     bufferingTimeout: null,
   });
 
@@ -65,8 +77,6 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
       storeRef.current.notify = notify;
       const video = videoRef.current;
       if (!video) return () => {};
-
-      let isSubscribed = true;
 
       const updateState = (updates: Partial<ReactiveVideoState>) => {
         const prev = storeRef.current.state;
@@ -89,10 +99,10 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
           storeRef.current.notify();
 
           if (updates.time !== undefined) {
-            onTimeChange?.(next.time);
+            stableOnTimeChange?.(next.time);
           }
           if (updates.status !== undefined && prev.status !== next.status) {
-            onPlayingChange?.(next.status);
+            stableOnPlayingChange?.(next.status);
           }
         }
       };
@@ -116,74 +126,41 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
         }
       };
 
-      const loop = () => {
-        if (!isSubscribed) return;
-
-        const video = videoRef.current;
-        if (!video) return;
-
-        const trimStart = trimStartRef.current ?? 0;
-        const trimEnd = trimEndRef.current ?? video.duration ?? 0;
-        const repeat = repeatRef?.current ?? false;
-
-        let current = video.currentTime;
-        let status: ReactiveVideoState["status"];
-
-        if (video.paused && current === 0) {
-          status = "idle";
-        } else if (video.ended) {
-          status = "ended";
-        } else {
-          status = video.paused ? "paused" : "playing";
-        }
-
-        if (current < trimStart) {
-          video.currentTime = trimStart;
-          current = trimStart;
-        } else if (current > trimEnd) {
-          if (repeat) {
-            video.currentTime = trimStart;
-            current = trimStart;
-          } else {
-            video.pause();
-            video.currentTime = trimStart;
-            current = trimStart;
-            status = "ended";
-          }
-        }
-
-        updateState({ time: current, status });
-
-        if (playing && !video.paused) {
-          storeRef.current.rafId = requestAnimationFrame(loop);
-        } else {
-          storeRef.current.rafId = null;
-        }
-      };
-
-      const startLoop = () => {
-        if (storeRef.current.rafId !== null) return;
-        storeRef.current.rafId = requestAnimationFrame(loop);
-      };
-
-      storeRef.current.startLoop = startLoop;
-
-      const handleProgress = () => {
-        updateState({ buffered: video.buffered });
-      };
-
+      const handleProgress = () => updateState({ buffered: video.buffered });
       const handleWaiting = () => setBufferingState(true);
       const handleCanPlay = () => setBufferingState(false);
       const handleCanPlayThrough = () => setBufferingState(false);
       const handleStalled = () => setBufferingState(true);
+      const handleError = () =>
+        updateState({ hasError: true, isBuffering: false });
 
-      const handleError = () => {
-        updateState({
-          hasError: true,
-          isBuffering: false,
-        });
+      const handlePlay = () => {
+        isLoopingRef.current = false;
+        if (!externalControls) {
+          setIsVideoPlaying(true);
+        }
       };
 
+      const handlePause = () => {
+        // Ignore pause events when we're intentionally looping
+        if (isLoopingRef.current) {
+          return;
+        }
+
+        if (!externalControls) {
+          setIsVideoPlaying(false);
+        }
+      };
+
+      const handleEnded = () => {
+        if (!externalControls) {
+          setIsVideoPlaying(false);
+        }
+      };
+
+      video.addEventListener("play", handlePlay);
+      video.addEventListener("pause", handlePause);
+      video.addEventListener("ended", handleEnded);
       video.addEventListener("waiting", handleWaiting);
       video.addEventListener("canplay", handleCanPlay);
       video.addEventListener("canplaythrough", handleCanPlayThrough);
@@ -191,12 +168,18 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
       video.addEventListener("error", handleError);
       video.addEventListener("progress", handleProgress);
 
-      const initialCurrent = Math.max(
-        video.currentTime,
-        trimStartRef.current ?? 0
-      );
+      const initialTime = externalControls
+        ? video.currentTime
+        : Math.max(video.currentTime, trimStartRef.current ?? 0);
+
+      if (!externalControls) {
+        video.currentTime = initialTime;
+      }
+
+      const currentTimeForStatus = initialTime;
+
       let initialStatus: ReactiveVideoState["status"];
-      if (video.paused && initialCurrent === 0) {
+      if (video.paused && currentTimeForStatus === 0) {
         initialStatus = "idle";
       } else if (video.ended) {
         initialStatus = "ended";
@@ -204,25 +187,20 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
         initialStatus = video.paused ? "paused" : "playing";
       }
       updateState({
-        time: initialCurrent,
+        time: initialTime,
         status: initialStatus,
         buffered: video.buffered,
       });
 
-      if (playing && !video.paused) {
-        startLoop();
-      }
-
       return () => {
-        isSubscribed = false;
-        if (storeRef.current.rafId !== null) {
-          cancelAnimationFrame(storeRef.current.rafId);
-          storeRef.current.rafId = null;
-        }
         if (storeRef.current.bufferingTimeout) {
           clearTimeout(storeRef.current.bufferingTimeout);
           storeRef.current.bufferingTimeout = null;
         }
+
+        video.removeEventListener("play", handlePlay);
+        video.removeEventListener("pause", handlePause);
+        video.removeEventListener("ended", handleEnded);
         video.removeEventListener("waiting", handleWaiting);
         video.removeEventListener("canplay", handleCanPlay);
         video.removeEventListener("canplaythrough", handleCanPlayThrough);
@@ -231,8 +209,62 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
         video.removeEventListener("progress", handleProgress);
       };
     },
-    [playing, onTimeChange, onPlayingChange]
+    [externalControls, stableOnTimeChange, stableOnPlayingChange]
   );
+
+  // Global RAF just polls video.currentTime for UI state
+  // Canvas uses requestVideoFrameCallback for actual rendering
+  const video = videoRef.current;
+  const shouldPoll =
+    !!video && (externalControls ? externalPlaying : isVideoPlaying);
+
+  useRAF(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const trimStart = trimStartRef.current ?? 0;
+    const trimEnd = trimEndRef.current ?? video.duration ?? 0;
+    const repeat = repeatRef?.current ?? false;
+
+    let current = video.currentTime;
+    let status: ReactiveVideoState["status"];
+
+    if (video.paused && current === 0) {
+      status = "idle";
+    } else if (video.ended) {
+      status = "ended";
+    } else {
+      status = video.paused ? "paused" : "playing";
+    }
+
+    if (!externalControls) {
+      if (current < trimStart) {
+        video.currentTime = trimStart;
+        current = trimStart;
+      } else if (current > trimEnd) {
+        if (repeat) {
+          isLoopingRef.current = true;
+          video.currentTime = trimStart;
+          current = trimStart;
+          status = "playing";
+        } else {
+          isLoopingRef.current = false;
+          video.pause();
+          video.currentTime = trimStart;
+          current = trimStart;
+          status = "ended";
+        }
+      }
+    }
+
+    const prev = storeRef.current.state;
+    if (prev.time !== current || prev.status !== status) {
+      storeRef.current.state = { ...prev, time: current, status };
+      storeRef.current.notify();
+      if (prev.time !== current) stableOnTimeChange?.(current);
+      if (prev.status !== status) stableOnPlayingChange?.(status);
+    }
+  }, shouldPoll ?? false);
 
   const getSnapshot = () => storeRef.current.state;
   const getServerSnapshot = () => ({
@@ -252,13 +284,9 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
     updateStoreTime: (time) => {
       storeRef.current.state = { ...storeRef.current.state, time };
     },
-    notifyStore: () => {
-      storeRef.current.notify();
-    },
-    startLoop: () => {
-      storeRef.current.startLoop();
-    },
-    onSeek: onTimeChange,
+    notifyStore: () => storeRef.current.notify(),
+    startLoop: () => {},
+    onSeek: stableOnTimeChange,
   });
 
   return { ...state, controls };

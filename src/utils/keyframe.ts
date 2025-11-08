@@ -59,6 +59,11 @@ export type {
 
 export type SortOrder = "asc" | "desc";
 
+export interface KeyframeBounds {
+  start: number;
+  end: number;
+}
+
 export function filterKeyframesByTarget(
   keyframes: KeyframeData[],
   target: KeyframeTarget,
@@ -76,5 +81,22 @@ export function groupKeyframesByTarget(
   return {
     primary: filterKeyframesByTarget(keyframes, "primary", order),
     secondary: filterKeyframesByTarget(keyframes, "secondary", order),
+  };
+}
+
+export function getKeyframeBoundsForTarget(
+  keyframes: KeyframeData[],
+  target: KeyframeTarget
+): KeyframeBounds {
+  const filtered = filterKeyframesByTarget(keyframes, target);
+
+  if (filtered.length === 0) {
+    return { start: 0, end: 0 };
+  }
+
+  const times = filtered.map((kf) => kf.time);
+  return {
+    start: Math.min(...times),
+    end: Math.max(...times),
   };
 }

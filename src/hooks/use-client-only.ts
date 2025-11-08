@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
 
 export function useClientOnly() {
-  const isClient = typeof window !== "undefined";
-  const [hasMounted, setHasMounted] = useState(isClient);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (!isClient) {
-      setHasMounted(true);
-    }
-  }, [isClient]);
+    setIsClient(true);
+  }, []);
 
-  return hasMounted;
+  return isClient;
 }

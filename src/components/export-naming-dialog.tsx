@@ -47,7 +47,6 @@ interface ExportNamingDialogProps {
       | "audioCompressed"
     >
   ) => void;
-  isBufferDownloaded: boolean;
 }
 
 const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
@@ -55,7 +54,6 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
   onOpenChange,
   streamerName,
   onExport,
-  isBufferDownloaded,
 }) => {
   const streamerNameRef = useRef<HTMLInputElement | null>(null);
   const clipTitleRef = useRef<HTMLInputElement | null>(null);
@@ -631,24 +629,9 @@ const ExportNamingDialog: React.FC<ExportNamingDialogProps> = ({
           </div>
         </div>
         <DialogFooter>
-          <div className="flex items-center gap-2 w-full">
-            <Button
-              type="button"
-              onClick={handleExportClick}
-              disabled={!isBufferDownloaded}
-              className="flex-1"
-            >
-              Export Clip
-            </Button>
-            <InfoTooltip
-              content={
-                isBufferDownloaded
-                  ? "Export the video clip with your selected settings"
-                  : "Please wait for the video buffer to finish downloading before exporting"
-              }
-              disabled={isBufferDownloaded}
-            />
-          </div>
+          <Button type="button" onClick={handleExportClick} className="flex-1">
+            Export Clip
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

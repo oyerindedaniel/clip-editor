@@ -102,6 +102,14 @@ export function useStackedTransition<const K extends string>(
     });
   }, [animating, keys, defaultActive]);
 
+  const setActive = useCallback(
+    (key: K) => {
+      if (animating) return;
+      setInternalActive(key);
+    },
+    [animating]
+  );
+
   const shared =
     "absolute inset-0 w-full h-full overflow-hidden object-cover origin-center will-change-[transform,opacity,filter] backface-hidden";
 
@@ -151,6 +159,7 @@ export function useStackedTransition<const K extends string>(
     refs,
     classNames,
     styles,
+    setActive,
     toggle,
     active,
     present: presenceMap,

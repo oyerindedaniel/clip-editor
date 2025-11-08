@@ -9,15 +9,18 @@ import { getElementRef } from "@/lib/get-element-ref";
 import { PiP } from "./pip";
 import type { Video } from "@/components/video-preview";
 import { Volume } from "./volume";
+import { PIP_SETTINGS } from "@/constants/app";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 
 export interface PiPOverlayProps {
   children: Video;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  playerType: "primary" | "secondary";
 }
 
 export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
-  ({ children, containerRef }, forwardedRef) => {
-    const { dualVideoSettings: settings, setDualVideoSettings } =
+  ({ children, playerType, containerRef }, forwardedRef) => {
+    const { dualVideoSettings: settings, setDualVideoSettings: setSettings } =
       useShallowSelector(ClipContext, (state) => ({
         dualVideoSettings: state.dualVideoSettings,
         setDualVideoSettings: state.setDualVideoSettings,
@@ -55,7 +58,7 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
 
         const scale = Math.min(scaleX, scaleY);
 
-        setDualVideoSettings((prev) => ({
+        setSettings((prev) => ({
           ...prev,
           pip: {
             ...prev.pip,
@@ -74,18 +77,16 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
 
     if (settings.layout !== "pip") return null;
 
+    const pipAspectRatio = (settings.pipAspectRatio || "16:9") as AspectRatio;
+    const pipSettings = PIP_SETTINGS[pipAspectRatio];
+
     return (
       <PiP
+        key={pipAspectRatio}
         containerRef={containerRef}
-        aspectRatio="16:9"
-        initialPosition={{
-          width: 240,
-          height: 135,
-        }}
-        constraints={{
-          minWidth: 160,
-          minHeight: 90,
-        }}
+        aspectRatio={pipAspectRatio}
+        initialPosition={pipSettings.initialPosition}
+        constraints={pipSettings.constraints}
         onPositionChange={handlePositionChange}
       >
         <>
@@ -93,12 +94,35 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
 
           <Volume.Root
             orientation="horizontal"
-            defaultValue={settings.secondaryVolume}
-            onValueChangeAlways={(volume: number) => {
+            defaultValue={(() => {
+              const isPrimary = playerType === "primary";
+              const video = pipVideoRef?.current;
+              const volume = isPrimary
+                ? settings.secondaryVolume
+                : settings.primaryVolume;
+
+              if (video && video.volume !== volume) {
+                video.volume = Math.max(0, Math.min(volume, 1));
+              }
+              return volume;
+            })()}
+            value={
+              playerType === "primary"
+                ? settings.secondaryVolume
+                : settings.primaryVolume
+            }
+            onValueChange={(volume) => {
+              const isPrimary = playerType === "primary";
               const video = pipVideoRef.current;
-              if (!video) return;
               const clamped = Math.max(0, Math.min(volume, 1));
-              video.volume = clamped;
+              if (video) video.volume = clamped;
+
+              setSettings({
+                ...settings,
+                ...(isPrimary
+                  ? { secondaryVolume: volume }
+                  : { primaryVolume: volume }),
+              });
             }}
           >
             <Volume.Controls

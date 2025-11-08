@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import type { KeyframeData, KeyframeTarget } from "@/utils/keyframe";
+import type {
+  KeyframeBounds,
+  KeyframeData,
+  KeyframeTarget,
+} from "@/utils/keyframe";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
 import { TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
@@ -16,8 +20,6 @@ import { getScrollState } from "@/utils/timeline-utils";
 import { HitArea } from "./hit-area";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { msToSeconds, secondsToMs } from "@/utils/video";
-
-export type KeyframeBounds = { start: number; end: number };
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -363,10 +365,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
               );
               dragTimeRef.current = newTimeMs;
 
-              const newLeftPx = Math.min(
-                Math.max(0, newTimeMs * pxPerMs + scrollLeft),
-                container.scrollWidth
-              );
+              const newLeftPx = Math.max(0, newTimeMs * pxPerMs);
 
               const el = markerRef.current;
               if (el) el.style.transform = `translate3d(${newLeftPx}px,0,0)`;

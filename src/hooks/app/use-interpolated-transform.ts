@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { getEasingFunction } from "@/utils/keyframe";
-import { ASPECT_RATIOS, AspectRatio } from "@/utils/aspect-ratios";
+import { ASPECT_RATIOS, AspectRatio, getAspectRatioValue } from "@/utils/aspect-ratios";
 import { getScaleRange } from "@/utils/scale-range";
 import type { CropMode } from "@/types/app";
 import type { KeyframeData } from "@/utils/keyframe";
@@ -69,8 +69,8 @@ export function useInterpolatedTransform(
   targetAspectKey: AspectRatio
 ): InterpolatedResult {
   return useMemo(() => {
-    const baseAR = ASPECT_RATIOS[baseAspectKey];
-    const targetAR = ASPECT_RATIOS[targetAspectKey];
+    const baseAR = getAspectRatioValue(baseAspectKey);
+    const targetAR = getAspectRatioValue(targetAspectKey);
 
     // defaults
     if (!keyframes || keyframes.length === 0) {

@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, forwardRef } from "react";
+import React, { useMemo, useRef, forwardRef, useState } from "react";
 import { AspectRatio } from "@/utils/aspect-ratios";
-import type { KeyframeData } from "@/utils/keyframe";
+import type { KeyframeBounds, KeyframeData } from "@/utils/keyframe";
 import {
   ReactiveVideoControls,
   useReactiveVideoTime,
@@ -25,6 +25,11 @@ import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
 import { Playback } from "./video-controls";
 import { msToSeconds, secondsToMs } from "@/utils/video";
+import type { Color } from "./color-palette";
+import {
+  createBoundTrimData,
+  validateKeyframeBounds,
+} from "@/utils/keyframe-bounds";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -62,10 +67,15 @@ export interface VideoPreviewProps {
   className?: string;
   style?: React.CSSProperties;
 
-  keyframeBounds: {
-    start: number;
-    end: number;
-  };
+  // Keyframe bounds: relative to TRIMMED clip (0 = start of trim)
+  keyframeBounds: KeyframeBounds;
+
+  // Trim data: absolute positions in SOURCE video
+  trimData: TrimData;
+
+  externalControls?: boolean;
+
+  padColor?: Color;
 }
 
 export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
@@ -76,6 +86,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       targetAspect,
       variant,
       keyframes,
+      trimData,
       onTimeChange,
       playing: externalPlaying = false,
       onPlayingChange,
@@ -84,11 +95,19 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       children,
       className,
       style,
+      externalControls = false,
+      padColor,
     } = props;
 
     const repeatRef = useRef(defaultRepeat);
-    const startRef = useLatestValue(keyframeBounds.start);
-    const endRef = useLatestValue(keyframeBounds.end);
+
+    const validatedBounds = useMemo(
+      () => validateKeyframeBounds(keyframeBounds, trimData),
+      [keyframeBounds, trimData]
+    );
+
+    const startRef = useLatestValue(validatedBounds.start);
+    const endRef = useLatestValue(validatedBounds.end);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const composedRef = useComposedRefs(videoRef, getElementRef(source));
 
@@ -108,6 +127,16 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
       });
     }, [source]);
 
+    const filteredKeyframes = useMemo(() => {
+      if (!keyframes) return undefined;
+
+      return keyframes.filter((kf) => {
+        return (
+          kf.time >= validatedBounds.start && kf.time <= validatedBounds.end
+        );
+      });
+    }, [keyframes, validatedBounds]);
+
     const { time, status, controls, isBuffering, hasError, buffered } =
       useReactiveVideoTime({
         videoRef,
@@ -117,23 +146,21 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         playing: externalPlaying,
         onTimeChange,
         onPlayingChange,
+        externalControls,
       });
 
     const transform = useInterpolatedTransform(
-      keyframes,
+      filteredKeyframes,
       time,
       variant,
       baseAspect,
       targetAspect
     );
 
-    const trimData = useMemo<TrimData>(() => {
-      return {
-        trimStart: secondsToMs(keyframeBounds.start),
-        trimEnd: secondsToMs(keyframeBounds.end),
-        timelineOffset: 0,
-      };
-    }, [keyframeBounds.start, keyframeBounds.end]);
+    const seekTrimData = useMemo(
+      () => createBoundTrimData(keyframeBounds, trimData),
+      [keyframeBounds, trimData]
+    );
 
     const playState = getPlayingState(status);
 
@@ -182,94 +209,88 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
     return (
       <div
         ref={forwardedRef}
-        className={cn(
-          "relative overflow-hidden rounded-lg shadow-md w-full aspect-(--aspect-ratio) group",
-          className
-        )}
-        style={
-          {
-            "--aspect-ratio": targetAspect.replace(":", "/"),
-            ...style,
-          } as React.CSSProperties
-        }
+        className={cn("group w-full h-full", className)}
+        style={{
+          ...style,
+        }}
       >
-        <div
-          className={cn(
-            "absolute inset-0",
-            targetAspect !== "9:16" && "flex items-center justify-center"
-          )}
-        >
-          {renderedChild}
-        </div>
+        <div className="w-full h-full">{renderedChild}</div>
+        {!externalControls && (
+          <>
+            <div className="absolute top-2 left-2 z-20">
+              <Volume.Root
+                defaultValue={controls.getVolume()}
+                onValueChangeAlways={controls.setVolume}
+              >
+                <Volume.Controls variant="pill">
+                  <Volume.Button />
+                  <Volume.Slider>
+                    <Volume.Slider.Track>
+                      <Volume.Slider.Range />
+                      <Volume.Slider.Thumb />
+                    </Volume.Slider.Track>
+                  </Volume.Slider>
+                </Volume.Controls>
+              </Volume.Root>
+            </div>
 
-        <div className="absolute top-2 left-2 z-20">
-          <Volume.Root
-            defaultValue={controls.getVolume()}
-            onValueChangeAlways={controls.setVolume}
-          >
-            <Volume.Controls variant="pill">
-              <Volume.Button />
-              <Volume.Slider>
-                <Volume.Slider.Track>
-                  <Volume.Slider.Range />
-                  <Volume.Slider.Thumb />
-                </Volume.Slider.Track>
-              </Volume.Slider>
-            </Volume.Controls>
-          </Volume.Root>
-        </div>
-
-        <div className="flex items-center justify-center gap-2">
-          <Playback.Root
-            defaultPlaying={playState.isPlaying}
-            onPlayingChangeAlways={(shouldPlay) => {
-              if (shouldPlay) {
-                controls.play();
-              } else {
-                controls.pause();
-              }
-            }}
-            playingStatus={status}
-            isBuffering={isBuffering}
-            hasError={hasError}
-          >
-            <Playback.Controls className="flex items-center justify-between px-4">
-              <div className="flex items-center gap-3">
-                <Playback.PlayToggle />
-                <Playback.LoopToggle
-                  defaultLoop={repeatRef.current}
-                  onLoopChange={(value) => {
-                    repeatRef.current = value;
+            <div className="flex items-center justify-center gap-2">
+              <Playback.Root
+                defaultPlaying={playState.isPlaying}
+                onPlayingChangeAlways={(shouldPlay) => {
+                  if (shouldPlay) {
+                    controls.play();
+                  } else {
+                    controls.pause();
+                  }
+                }}
+                playingStatus={status}
+                isBuffering={isBuffering}
+                hasError={hasError}
+              >
+                <Playback.Controls className="flex items-center justify-between px-4">
+                  <div className="flex items-center gap-3">
+                    <Playback.PlayToggle />
+                    <Playback.LoopToggle
+                      defaultLoop={repeatRef.current}
+                      onLoopChange={(value) => {
+                        repeatRef.current = value;
+                      }}
+                    />
+                  </div>
+                  <Playback.RateControl
+                    defaultRate={controls.getPlaybackRate()}
+                    onRateChangeAlways={controls.setPlaybackRate}
+                  />
+                </Playback.Controls>
+                <Seek.Root
+                  primaryVideoRef={videoRef}
+                  primaryTrim={seekTrimData}
+                  secondaryTrim={null}
+                  isPlaying={playState.isPlaying}
+                  onSeek={(timeMs) => {
+                    const sourceTimeSec =
+                      msToSeconds(timeMs) + validatedBounds.start;
+                    controls.seek(sourceTimeSec);
                   }}
-                />
-              </div>
-              <Playback.RateControl
-                defaultRate={controls.getPlaybackRate()}
-                onRateChangeAlways={controls.setPlaybackRate}
-              />
-            </Playback.Controls>
-            <Seek.Root
-              primaryVideoRef={videoRef}
-              primaryTrim={trimData}
-              secondaryTrim={null}
-              isPlaying={playState.isPlaying}
-              onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
-              primaryBuffered={buffered}
-              secondaryBuffered={null}
-            >
-              <Seek.Content>
-                <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
-                {/* TODO: 58px height of Playback.Controls */}
-                <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
-                  <Seek.Buffer />
-                  <Seek.Progress />
-                  <Seek.Thumb />
-                </Seek.Track>
-                <Seek.Animator />
-              </Seek.Content>
-            </Seek.Root>
-          </Playback.Root>
-        </div>
+                  primaryBuffered={buffered}
+                  secondaryBuffered={null}
+                >
+                  <Seek.Content>
+                    <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
+                    {/* TODO: 58px height of Playback.Controls */}
+                    <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
+                      <Seek.Buffer />
+                      <Seek.Progress />
+                      <Seek.Thumb />
+                    </Seek.Track>
+                    <Seek.Animator />
+                  </Seek.Content>
+                </Seek.Root>
+              </Playback.Root>
+            </div>
+          </>
+        )}
 
         {/* Hidden video element kept mounted as a frame source for CanvasVideoRenderer to read and paint from */}
         {isChildCanvasRenderer

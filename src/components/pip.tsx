@@ -2,12 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, type AspectRatio } from "@/utils/aspect-ratios";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-
-const DEFAULT_PIP_WIDTH = 240;
-const DEFAULT_PIP_HEIGHT = 135;
-const DEFAULT_MIN_WIDTH = 160;
-const DEFAULT_MIN_HEIGHT = 90;
-const CONTAINER_PADDING = 16;
+import { PIP_SETTINGS } from "@/constants/app";
 
 interface PiPPosition {
   x: number;
@@ -75,14 +70,16 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
     const composedRefs = useComposedRefs(pipRef, forwardedRef);
 
     const aspectRatioValue = ASPECT_RATIOS[aspectRatio];
-    const minWidth = constraints?.minWidth ?? DEFAULT_MIN_WIDTH;
-    const minHeight = constraints?.minHeight ?? DEFAULT_MIN_HEIGHT;
+    const pipSettings = PIP_SETTINGS[aspectRatio];
+    const minWidth = constraints?.minWidth ?? pipSettings.constraints.minWidth;
+    const minHeight =
+      constraints?.minHeight ?? pipSettings.constraints.minHeight;
 
     const [position, setPosition] = React.useState<PiPPosition>(() => ({
       x: initialPosition?.x ?? 0,
       y: initialPosition?.y ?? 0,
-      width: initialPosition?.width ?? DEFAULT_PIP_WIDTH,
-      height: initialPosition?.height ?? DEFAULT_PIP_HEIGHT,
+      width: initialPosition?.width ?? pipSettings.initialPosition.width,
+      height: initialPosition?.height ?? pipSettings.initialPosition.height,
     }));
 
     const dragRef = React.useRef<DragState>({
@@ -118,6 +115,7 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
       if (!container || !pip) return;
 
       const { width, height } = position;
+      const CONTAINER_PADDING = 16;
       const x = CONTAINER_PADDING;
       const y = CONTAINER_PADDING;
 

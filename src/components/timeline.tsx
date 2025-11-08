@@ -101,7 +101,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const pxPerSecond = msToSecondsRate(pxPerMs);
-  const maxContentWidth = duration * pxPerMs;
+  const maxContentWidth = msToPx(duration, pxPerMs);
 
   const drawRuler = useCallback(() => {
     if (pxPerMs > 0) {
@@ -259,7 +259,7 @@ const Timeline: React.FC<TimelineProps> = ({
                 pxToMs(right, pxPerMs) - pxToMs(pxPerSecond, pxPerMs);
               const newStart = Math.max(0, Math.min(newTime, maxLeft));
               trimValuesRef.current.start = newStart;
-              leftHandle.style.left = `${newStart * pxPerMs}px`;
+              leftHandle.style.left = `${msToPx(newStart, pxPerMs)}px`;
               updateTooltipForHandle(handleType);
             } else {
               const left = parseFloat(leftHandle.style.left || "0");

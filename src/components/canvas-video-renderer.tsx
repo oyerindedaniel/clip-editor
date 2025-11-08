@@ -1,8 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { InterpolatedResult } from "@/hooks/app/use-interpolated-transform";
-import type { CropMode } from "@/types/app";
-import { useLatestValue } from "@/hooks/use-latest-value";
+import type { CropMode, BackgroundMode, BackgroundVideo } from "@/types/app";
 import type { Color } from "./color-palette";
 import {
   CANVAS_RENDERER_SYMBOL,
@@ -26,6 +25,12 @@ export interface CanvasVideoRendererProps {
   className?: string;
   color?: Color;
   renderEnabled?: boolean;
+  backgroundMode?: BackgroundMode;
+  backgroundVideo?: BackgroundVideo;
+  backgroundVideoRef?: React.RefObject<HTMLVideoElement | null>;
+  backgroundAlign?: "left" | "center" | "right";
+  backgroundOpacity?: number;
+  backgroundBlur?: number;
 }
 
 const CanvasVideoRenderer: TaggedRendererComponent<
@@ -39,12 +44,64 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   color,
   className,
   renderEnabled = true,
+  backgroundMode = "pad-color",
+  backgroundVideo = "primary",
+  backgroundVideoRef,
+  backgroundAlign = "center",
+  backgroundOpacity = 0.3,
+  backgroundBlur = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const transformRef = useLatestValue<InterpolatedResult>(transformData);
-  const rafIdRef = useRef<number | null>(null);
+  const callbackIdRef = useRef<number | null>(null);
 
-  const drawFrame = () => {
+  const drawBackground = (
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    align: "left" | "center" | "right",
+    opacity: number,
+    blurPx: number
+  ) => {
+    if (backgroundMode === "video" && backgroundVideoRef?.current) {
+      const bgVideo = backgroundVideoRef.current;
+      if (bgVideo.readyState >= 2) {
+        const prevAlpha = ctx.globalAlpha;
+        const prevFilter = ctx.filter ?? "none";
+        ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+        ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
+
+        const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
+        const canvasAR = w / h;
+        let drawW: number, drawH: number, bgDx: number, bgDy: number;
+
+        if (bgAR > canvasAR) {
+          drawH = h;
+          drawW = bgAR * drawH;
+          if (align === "left") bgDx = 0;
+          else if (align === "right") bgDx = w - drawW;
+          else bgDx = (w - drawW) / 2;
+          bgDy = 0;
+        } else {
+          drawW = w;
+          drawH = drawW / bgAR;
+          bgDx = 0;
+          bgDy = (h - drawH) / 2;
+        }
+
+        ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
+        ctx.globalAlpha = prevAlpha;
+        ctx.filter = prevFilter;
+      } else {
+        ctx.fillStyle = color ?? "black";
+        ctx.fillRect(0, 0, w, h);
+      }
+    } else {
+      ctx.fillStyle = color ?? "black";
+      ctx.fillRect(0, 0, w, h);
+    }
+  };
+
+  const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const video = videoRef.current;
@@ -52,15 +109,22 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
     if (video.readyState < 2) return;
 
-    const transform = transformRef.current;
     const vw = video.videoWidth || 0;
     const vh = video.videoHeight || 0;
     if (vw <= 0 || vh <= 0) return;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
     if (variant === "crop") {
+      drawBackground(
+        ctx,
+        width,
+        height,
+        backgroundAlign,
+        backgroundOpacity ?? 0.3,
+        backgroundBlur ?? 0
+      );
+      const transform = transformData;
       const baseAR = transform.baseAR;
       const targetAR = transform.targetAR;
 
@@ -97,31 +161,46 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       return;
     }
 
-    // Fit/letterbox (default): shows full video with black bars, no transforms applied
-    {
-      const srcAR = vw / vh;
-      let destW = width;
-      let destH = height;
-      let dx = 0;
-      let dy = 0;
+    const srcAR = vw / vh;
+    let destW = width;
+    let destH = height;
+    let dx = 0;
+    let dy = 0;
 
-      if (srcAR > width / height) {
-        destW = width;
-        destH = destW / srcAR;
-        dy = (height - destH) / 2;
-      } else {
-        destH = height;
-        destW = destH * srcAR;
-        dx = (width - destW) / 2;
-      }
+    if (srcAR > width / height) {
+      destW = width;
+      destH = destW / srcAR;
+      dy = (height - destH) / 2;
+    } else {
+      destH = height;
+      destW = destH * srcAR;
 
-      ctx.fillStyle = color ?? "black";
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
-      return;
+      if (backgroundAlign === "left") dx = 0;
+      else if (backgroundAlign === "right") dx = width - destW;
+      else dx = (width - destW) / 2;
     }
-  };
+
+    drawBackground(
+      ctx,
+      width,
+      height,
+      backgroundAlign,
+      backgroundOpacity ?? 0.3,
+      backgroundBlur ?? 0
+    );
+
+    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
+  }, [
+    transformData,
+    width,
+    height,
+    variant,
+    backgroundAlign,
+    backgroundOpacity,
+    backgroundBlur,
+    color,
+    backgroundMode,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -137,42 +216,37 @@ const CanvasVideoRenderer: TaggedRendererComponent<
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (!renderEnabled) {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-
       drawFrame();
       return;
     }
 
-    let mounted = true;
-
-    const loop = () => {
-      if (!mounted) return;
-      drawFrame();
-
-      const video = videoRef.current;
-      if (video && !video.ended) {
-        rafIdRef.current = requestAnimationFrame(loop);
-      }
-    };
-
     const video = videoRef.current;
-    if (video && !video.ended) {
-      rafIdRef.current = requestAnimationFrame(loop);
-    } else {
-      drawFrame();
-    }
+    if (!video) return;
 
-    return () => {
-      mounted = false;
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+    const videoFrameCallback = () => {
+      if (!renderEnabled) return;
+
+      drawFrame();
+
+      if (video) {
+        callbackIdRef.current =
+          video.requestVideoFrameCallback(videoFrameCallback);
       }
     };
-  }, [renderEnabled, width, height, variant, color]);
+
+    drawFrame();
+    callbackIdRef.current = video.requestVideoFrameCallback(videoFrameCallback);
+  }, [renderEnabled, width, height, drawFrame]);
+
+  useEffect(() => {
+    return () => {
+      const video = videoRef.current;
+      if (callbackIdRef.current !== null && video) {
+        video.cancelVideoFrameCallback(callbackIdRef.current);
+        callbackIdRef.current = null;
+      }
+    };
+  }, []);
 
   return <canvas ref={canvasRef} className={cn("", className)} />;
 };

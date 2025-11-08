@@ -9,13 +9,13 @@ import { DEFAULT_TRANSFORM } from "@/utils/transform";
 import { useStableHandler } from "@/hooks/use-stable-handler";
 import { equalTransform } from "@/utils/optimise";
 import {
-  ASPECT_RATIOS,
   AspectRatio,
   ScreenSize,
   DEFAULT_VIDEO_HEIGHT,
   DEFAULT_VIDEO_WIDTH,
   OVERLAY_SCALE_FACTOR,
   MIN_OVERLAY_WIDTH,
+  getAspectRatioValue,
 } from "@/utils/aspect-ratios";
 import type { Transform } from "@/utils/transform";
 import { useElementSize } from "@/hooks/use-element-size";
@@ -346,7 +346,7 @@ const BoundaryBoxOverlay = React.forwardRef<
     useBoundaryBoxContext();
 
   const composedRef = useComposedRefs(ref, overlayRef);
-  const targetAspectRatio = ASPECT_RATIOS[aspectRatio];
+  const targetAspectRatio = getAspectRatioValue(aspectRatio);
 
   const calculateInitialSize = React.useCallback(() => {
     const container = containerRef.current;
@@ -572,7 +572,7 @@ const BoundaryBoxResizable = React.forwardRef<HTMLDivElement, ResizableProps>(
     const { setTransform, aspectRatio, containerRef, overlayRef } =
       useBoundaryBoxContext();
 
-    const ratio = ASPECT_RATIOS[aspectRatio];
+    const ratio = getAspectRatioValue(aspectRatio);
     const resizeStateRef = React.useRef({
       isResizing: false,
       rafId: null as number | null,

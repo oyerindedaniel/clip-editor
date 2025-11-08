@@ -19,26 +19,24 @@ interface MainMediaProps {
 }
 
 const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
-  function MainMedia(
-    { mediaUrl, playerType: mediaType, setVideoRef },
-    forwardedRef
-  ) {
+  ({ mediaUrl, playerType: mediaType, setVideoRef }, forwardedRef) => {
     const videoPlayerId = React.useId();
     const controlsId = React.useId();
 
     const repeatRef = React.useRef(false);
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
-
     const composedRefs = useComposedRefs(videoRef, forwardedRef, setVideoRef);
 
     const {
       primaryTrim,
       secondaryTrim,
       dualVideoSettings: settings,
+      setDualVideoSettings: setSettings,
     } = useShallowSelector(ClipContext, (state) => ({
       primaryTrim: state.primaryTrim,
       secondaryTrim: state.secondaryTrim,
       dualVideoSettings: state.dualVideoSettings,
+      setDualVideoSettings: state.setDualVideoSettings,
     }));
 
     const { primaryVideoRef, secondaryVideoRef } = useShallowSelector(
@@ -84,6 +82,56 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
     const playState = getPlayingState(status);
 
+    const volumeControl = (
+      <Volume.Root
+        orientation="horizontal"
+        defaultValue={(() => {
+          const isPrimary = mediaType === "primary";
+          const video = videoRef?.current;
+          const volume = isPrimary
+            ? settings.primaryVolume
+            : settings.secondaryVolume;
+
+          if (video && video.volume !== volume) {
+            video.volume = Math.max(0, Math.min(volume, 1));
+          }
+          return volume;
+        })()}
+        value={
+          mediaType === "primary"
+            ? settings.primaryVolume
+            : settings.secondaryVolume
+        }
+        onValueChange={(volume) => {
+          const isPrimary = mediaType === "primary";
+          controls.setVolume(volume);
+          setSettings({
+            ...settings,
+            ...(isPrimary
+              ? { primaryVolume: volume }
+              : { secondaryVolume: volume }),
+          });
+        }}
+      >
+        <Volume.Controls
+          variant="pill"
+          className="!p-0 !border-none bg-transparent hover:!glass"
+        >
+          <Volume.Button
+            size="icon"
+            variant="glass"
+            aria-label={`${mediaType} volume`}
+          />
+          <Volume.Slider className="w-16">
+            <Volume.Slider.Track className="!glass">
+              <Volume.Slider.Range className="bg-white" />
+              <Volume.Slider.Thumb className="bg-white" />
+            </Volume.Slider.Track>
+          </Volume.Slider>
+        </Volume.Controls>
+      </Volume.Root>
+    );
+
     return (
       <>
         <video
@@ -112,34 +160,12 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
             playingStatus={dualStatus}
             isBuffering={isBufferingDualVideo}
             hasError={hasErrorDualVideo}
+            isDual
           >
             <Playback.Controls className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Playback.PlayToggle />
-                <Playback.Volume>
-                  <Volume.Root
-                    orientation="horizontal"
-                    defaultValue={controls.getVolume()}
-                    onValueChangeAlways={controls.setVolume}
-                  >
-                    <Volume.Controls
-                      variant="pill"
-                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
-                    >
-                      <Volume.Button
-                        size="icon"
-                        variant="glass"
-                        aria-label="Primary volume"
-                      />
-                      <Volume.Slider>
-                        <Volume.Slider.Track className="!glass">
-                          <Volume.Slider.Range className="bg-white" />
-                          <Volume.Slider.Thumb className="bg-white" />
-                        </Volume.Slider.Track>
-                      </Volume.Slider>
-                    </Volume.Controls>
-                  </Volume.Root>
-                </Playback.Volume>
+                <Playback.Volume>{volumeControl}</Playback.Volume>
               </div>
 
               <div className="w-full">
@@ -183,30 +209,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
             <Playback.Controls className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Playback.PlayToggle />
-                <Playback.Volume>
-                  <Volume.Root
-                    orientation="horizontal"
-                    defaultValue={controls.getVolume()}
-                    onValueChangeAlways={controls.setVolume}
-                  >
-                    <Volume.Controls
-                      variant="pill"
-                      className="py-0 pl-0 pr-3 !border-none bg-transparent hover:!glass"
-                    >
-                      <Volume.Button
-                        size="icon"
-                        variant="glass"
-                        aria-label="Primary volume"
-                      />
-                      <Volume.Slider className="w-16">
-                        <Volume.Slider.Track className="!glass">
-                          <Volume.Slider.Range className="bg-white" />
-                          <Volume.Slider.Thumb className="bg-white" />
-                        </Volume.Slider.Track>
-                      </Volume.Slider>
-                    </Volume.Controls>
-                  </Volume.Root>
-                </Playback.Volume>
+                <Playback.Volume>{volumeControl}</Playback.Volume>
               </div>
 
               <div className="w-full">
@@ -219,7 +222,14 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   primaryBuffered={buffered}
                   secondaryBuffered={null}
                   isPlaying={playState.isPlaying}
-                  onSeek={(timeMs) => controls.seek(msToSeconds(timeMs))}
+                  onSeek={(timelineMs: number) => {
+                    const trim =
+                      mediaType === "primary" ? primaryTrim : secondaryTrim;
+                    const sourceTimeSec = msToSeconds(
+                      trim.trimStart + timelineMs
+                    );
+                    controls.seek(sourceTimeSec);
+                  }}
                 />
               </div>
 

@@ -4,6 +4,7 @@ import type {
   TrimData,
   VideoFormat,
 } from "@/types/app";
+import type { AspectRatio } from "@/utils/aspect-ratios";
 
 export const DEFAULT_ASPECT_RATIO = "9:16";
 export const DEFAULT_CROP_MODE = "crop";
@@ -213,3 +214,44 @@ export const DEFAULT_TRIM_DATA: TrimData = {
   trimStart: 0,
   trimEnd: 0,
 };
+
+// PiP (Picture-in-Picture) constants based on aspect ratios
+export const PIP_SETTINGS: Record<
+  AspectRatio,
+  {
+    initialPosition: { width: number; height: number };
+    constraints: { minWidth: number; minHeight: number };
+  }
+> = {
+  "16:9": {
+    initialPosition: { width: 240, height: 135 },
+    constraints: { minWidth: 160, minHeight: 90 },
+  },
+  "9:16": {
+    initialPosition: { width: 135, height: 240 },
+    constraints: { minWidth: 90, minHeight: 160 },
+  },
+  "1:1": {
+    initialPosition: { width: 180, height: 180 },
+    constraints: { minWidth: 120, minHeight: 120 },
+  },
+  "4:3": {
+    initialPosition: { width: 200, height: 150 },
+    constraints: { minWidth: 133, minHeight: 100 },
+  },
+  "3:4": {
+    initialPosition: { width: 150, height: 200 },
+    constraints: { minWidth: 100, minHeight: 133 },
+  },
+  "21:9": {
+    initialPosition: { width: 280, height: 120 },
+    constraints: { minWidth: 187, minHeight: 80 },
+  },
+};
+
+export const BACKGROUND_ALIGN_MAP: Record<"left" | "center" | "right", number> =
+  {
+    left: 0,
+    center: 0.5,
+    right: 1,
+  };
