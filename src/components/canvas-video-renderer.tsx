@@ -238,6 +238,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
     if (!isMountedRef.current) {
       isMountedRef.current = true;
+      // Delay first drawFrame to ensure video.currentTime is set
       timeoutRef.current = setTimeout(() => {
         drawFrame();
         timeoutRef.current = null;
