@@ -163,8 +163,6 @@ export default function DualVideoControls({
       }
 
       try {
-        const buffer = await file.arrayBuffer();
-
         const tempVideo = document.createElement("video");
         const tempUrl = URL.createObjectURL(file);
         tempVideo.src = tempUrl;
@@ -180,7 +178,6 @@ export default function DualVideoControls({
         const newSecondaryClip: DualVideoClip = {
           id: `secondary_${Date.now()}`,
           url: tempUrl,
-          buffer,
           metadata,
           visible: true,
           trimStart: 0,
@@ -418,7 +415,6 @@ export default function DualVideoControls({
                   </Select>
                 </div>
 
-              
                 {settings.layout === "pip" && (
                   <div className="flex flex-col gap-3">
                     <label className="text-sm md:text-[0.8rem] text-foreground-subtle">

@@ -10,6 +10,7 @@ import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { msToSeconds } from "@/utils/video";
 import { useDualVideoSync } from "@/hooks/app/use-dual-video-sync";
 import { DualClockContext } from "@/contexts/dual-clock-context";
+import { MAIN_VIDEO_ID } from "@/constants/raf-ids";
 
 // Component for 16:9 main media
 interface MainMediaProps {
@@ -228,8 +229,10 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                     const sourceTimeSec = msToSeconds(
                       trim.trimStart + timelineMs
                     );
+
                     controls.seek(sourceTimeSec);
                   }}
+                  videoId={MAIN_VIDEO_ID}
                 />
               </div>
 

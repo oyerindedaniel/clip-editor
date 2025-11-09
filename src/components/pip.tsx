@@ -355,7 +355,7 @@ export const PiP = React.forwardRef<HTMLDivElement, PiPProps>(
       <div
         ref={composedRefs}
         className={cn(
-          "absolute will-change-transform pointer-events-auto z-20",
+          "absolute left-0 top-0 will-change-transform pointer-events-auto z-20",
           "border-2 border-primary/60 rounded-lg",
           "backdrop-blur-sm bg-surface-secondary/80"
         )}

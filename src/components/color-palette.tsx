@@ -9,6 +9,12 @@ import { DEFAULT_COLORS } from "@/constants/app";
 
 export type Color = (typeof DEFAULT_COLORS)[number];
 
+export const isWhiteColor = (color: string | undefined): boolean => {
+  if (!color) return false;
+  const normalized = color.toLowerCase().trim();
+  return normalized === "#ffffff";
+};
+
 interface ColorPaletteProps {
   id: string;
   value?: Color;

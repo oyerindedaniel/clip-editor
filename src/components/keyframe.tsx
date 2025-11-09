@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useControllableState } from "@/hooks/use-controllable-state";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
-import type {
-  KeyframeBounds,
-  KeyframeData,
-  KeyframeTarget,
-} from "@/utils/keyframe";
+import type { KeyframeData } from "@/utils/keyframe";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
 import { TimelineTooltip } from "./timeline-tooltip";
 import { getState, useAnimatePresence } from "@/hooks/use-animate-presence";
@@ -30,9 +26,6 @@ interface KeyframeContextValue {
   deleteKeyframe: (id: string) => void;
   getKeyframe: (id: string) => KeyframeData | undefined;
   updateColors: (id: string, color: Color) => void;
-  getKeyframeBounds: (
-    keyframes: KeyframeData[]
-  ) => Record<KeyframeTarget, KeyframeBounds>;
   maxTime: number;
 }
 
@@ -79,46 +72,6 @@ function KeyframeRoot({
     onChange: onCurrentKeyframeIdChange,
   });
 
-  const getKeyframeBounds = React.useCallback(
-    (keyframes: KeyframeData[]): Record<KeyframeTarget, KeyframeBounds> => {
-      if (keyframes.length === 0) {
-        return {
-          primary: { start: 0, end: 0 },
-          secondary: { start: 0, end: 0 },
-        };
-      }
-
-      const grouped: Record<KeyframeTarget, KeyframeData[]> = {
-        primary: [],
-        secondary: [],
-      };
-
-      for (let i = 0; i < keyframes.length; i++) {
-        const kf = keyframes[i];
-        grouped[kf.target].push(kf);
-      }
-
-      const result: Record<KeyframeTarget, KeyframeBounds> = {
-        primary: { start: 0, end: 0 },
-        secondary: { start: 0, end: 0 },
-      };
-
-      (Object.keys(grouped) as KeyframeTarget[]).forEach((target) => {
-        const frames = grouped[target];
-        if (frames.length === 0) return;
-
-        const sorted = frames.slice().sort((a, b) => a.time - b.time);
-        result[target] = {
-          start: sorted[0].time,
-          end: sorted[sorted.length - 1].time,
-        };
-      });
-
-      return result;
-    },
-    []
-  );
-
   const addKeyframe = React.useCallback(
     (data: Omit<KeyframeData, "id">) => {
       const id = `kf-${Date.now()}-${Math.random()
@@ -135,7 +88,7 @@ function KeyframeRoot({
         return [...prev, newKeyframe];
       });
 
-      setCurrentKeyframeId(id);
+      // setCurrentKeyframeId(id);
       return id;
     },
     [setKeyframes, setCurrentKeyframeId]
@@ -185,7 +138,6 @@ function KeyframeRoot({
       getKeyframe,
       updateColors,
       maxTime,
-      getKeyframeBounds,
     }),
     [
       keyframes,
@@ -197,7 +149,6 @@ function KeyframeRoot({
       getKeyframe,
       updateColors,
       maxTime,
-      getKeyframeBounds,
     ]
   );
 

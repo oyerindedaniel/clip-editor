@@ -10,7 +10,7 @@ import { PiP } from "./pip";
 import type { Video } from "@/components/video-preview";
 import { Volume } from "./volume";
 import { PIP_SETTINGS } from "@/constants/app";
-import type { AspectRatio } from "@/utils/aspect-ratios";
+import { getAspectRatioValue, type AspectRatio } from "@/utils/aspect-ratios";
 
 export interface PiPOverlayProps {
   children: Video;
@@ -43,6 +43,16 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
         controls: false,
       });
     }, [children, composedRefs]);
+
+    const pipAspectRatio = (settings.pipAspectRatio || "16:9") as AspectRatio;
+
+    const aspectValue = React.useMemo(
+      () => getAspectRatioValue(pipAspectRatio),
+      [pipAspectRatio]
+    );
+
+    const volumeOrientation = aspectValue < 1 ? "vertical" : "horizontal";
+    const pipSettings = PIP_SETTINGS[pipAspectRatio];
 
     const handlePositionChange = React.useCallback(
       (position: { x: number; y: number; width: number; height: number }) => {
@@ -77,9 +87,6 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
 
     if (settings.layout !== "pip") return null;
 
-    const pipAspectRatio = (settings.pipAspectRatio || "16:9") as AspectRatio;
-    const pipSettings = PIP_SETTINGS[pipAspectRatio];
-
     return (
       <PiP
         key={pipAspectRatio}
@@ -93,7 +100,7 @@ export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(
           {clonedVideo}
 
           <Volume.Root
-            orientation="horizontal"
+            orientation={volumeOrientation}
             defaultValue={(() => {
               const isPrimary = playerType === "primary";
               const video = pipVideoRef?.current;

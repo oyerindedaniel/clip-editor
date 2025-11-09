@@ -42,6 +42,7 @@ interface PlaybackContextValue {
   hasError: boolean;
 
   isDual: boolean;
+  noGlass: boolean;
 }
 
 const PlaybackContext = React.createContext<PlaybackContextValue | null>(null);
@@ -69,6 +70,7 @@ interface PlaybackRootProps {
   hasError: boolean;
 
   isDual?: boolean;
+  noGlass?: boolean;
 }
 
 const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
@@ -85,6 +87,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       isBuffering = false,
       hasError = false,
       isDual = false,
+      noGlass = false,
       ...props
     },
     _
@@ -175,6 +178,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         isBuffering,
         hasError,
         isDual,
+        noGlass,
       }),
       [
         playing,
@@ -192,6 +196,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
         controlsId,
         isBuffering,
         hasError,
+        noGlass,
       ]
     );
 
@@ -310,7 +315,7 @@ interface PlayToggleProps extends React.ComponentPropsWithoutRef<"button"> {}
 
 const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
   ({ className, ...props }, ref) => {
-    const { playing, togglePlay, playToggleId } = usePlayback();
+    const { playing, togglePlay, playToggleId, noGlass } = usePlayback();
 
     // (Space/K to toggle play)
     const handleKeyDown = React.useCallback(
@@ -332,8 +337,12 @@ const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
             onClick={togglePlay}
             onKeyDown={handleKeyDown}
             size="icon"
-            variant="glass"
-            className={cn("pointer-events-auto", className)}
+            variant={noGlass ? "pill" : "glass"}
+            className={cn(
+              "pointer-events-auto",
+
+              className
+            )}
             aria-label={playing ? "Pause video" : "Play video"}
             aria-pressed={playing}
             type="button"
@@ -346,7 +355,13 @@ const PlayToggle = React.forwardRef<HTMLButtonElement, PlayToggleProps>(
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="!glass" role="tooltip">
+        <TooltipContent
+          side="top"
+          className={cn(
+            noGlass ? "!bg-surface-secondary/70 !backdrop-blur-sm" : "!glass"
+          )}
+          role="tooltip"
+        >
           {playing ? "Pause (Space)" : "Play (Space)"}
         </TooltipContent>
       </Tooltip>
@@ -374,7 +389,7 @@ const LoopToggle = React.forwardRef<HTMLButtonElement, LoopToggleProps>(
     },
     ref
   ) => {
-    const { loopToggleId } = usePlayback();
+    const { loopToggleId, noGlass } = usePlayback();
 
     const [loop, setLoop] = useControllableStateWithCallback({
       defaultValue: defaultLoop,
@@ -404,12 +419,16 @@ const LoopToggle = React.forwardRef<HTMLButtonElement, LoopToggleProps>(
             ref={ref}
             id={loopToggleId}
             size="icon"
-            variant="glass"
+            variant={noGlass ? "pill" : "glass"}
             aria-pressed={loop}
             aria-label={loop ? "Disable loop playback" : "Enable loop playback"}
             onClick={toggleLoop}
             onKeyDown={handleKeyDown}
-            className={cn("pointer-events-auto", className)}
+            className={cn(
+              "pointer-events-auto",
+
+              className
+            )}
             type="button"
             {...props}
           >
@@ -419,7 +438,13 @@ const LoopToggle = React.forwardRef<HTMLButtonElement, LoopToggleProps>(
             />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="glass" role="tooltip">
+        <TooltipContent
+          side="top"
+          className={cn(
+            noGlass ? "!bg-surface-secondary/70 !backdrop-blur-sm" : "glass"
+          )}
+          role="tooltip"
+        >
           {loop ? "Loop enabled" : "Loop disabled"}
         </TooltipContent>
       </Tooltip>
@@ -450,7 +475,7 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
     },
     ref
   ) => {
-    const { rateControlId } = usePlayback();
+    const { rateControlId, noGlass } = usePlayback();
 
     const [rate, setRate] = useControllableStateWithCallback({
       defaultValue: defaultRate,
@@ -512,8 +537,8 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
         rates.map((r) => (
           <Button
             key={r}
-            size="icon"
-            variant="glass"
+            size="sm"
+            variant={noGlass ? "pill" : "glass"}
             onClick={() => handleSelect(r)}
             className={cn(
               "pointer-events-auto",
@@ -527,7 +552,7 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
             {r}x
           </Button>
         )),
-      [rates, rate, handleSelect]
+      [rates, rate, handleSelect, noGlass]
     );
 
     return (
@@ -544,8 +569,8 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
-              className="h-8 w-fit pointer-events-auto"
-              variant="glass"
+              className={cn("h-8 w-fit pointer-events-auto")}
+              variant={noGlass ? "pill" : "glass"}
               aria-label={`Playback speed: ${rate}x. Click to change speed`}
               aria-haspopup="menu"
               aria-expanded={open}
@@ -557,7 +582,10 @@ const RateControl = React.forwardRef<HTMLDivElement, RateControlProps>(
           <PopoverContent
             side="top"
             align="center"
-            className="!glass w-fit py-2 px-1 flex flex-col justify-center gap-1 pointer-events-auto"
+            className={cn(
+              "w-fit py-2 px-2 flex flex-col justify-center gap-1 pointer-events-auto",
+              noGlass ? "bg-surface-secondary/90 backdrop-blur-sm" : "!glass"
+            )}
             role="menu"
             aria-label="Playback speed options"
           >

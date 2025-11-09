@@ -6,10 +6,10 @@ import {
   type KeyframeData,
 } from "@/utils/keyframe";
 import CanvasVideoRenderer from "./canvas-video-renderer";
-import type { Color } from "./color-palette";
+import { isWhiteColor, type Color } from "./color-palette";
 import { VideoPreview, type Video } from "./video-preview";
 import type { CropMode, TrimData } from "@/types/app";
-import { calculateHeight, type AspectRatio } from "@/utils/aspect-ratios";
+import { type AspectRatio } from "@/utils/aspect-ratios";
 import type { PlayingStatus } from "@/hooks/app/use-video-controls-core";
 import { cn } from "@/lib/utils";
 import { Volume } from "./volume";
@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/resizable";
 import { composeRefs } from "@/lib/compose-refs";
 import { getElementRef } from "@/lib/get-element-ref";
-import { DualClockProvider } from "@/contexts/dual-clock-context";
 import {
   createBoundTrimData,
   createDualBoundTrimData,
@@ -81,14 +80,17 @@ const DualVideoPreviewEditor = forwardRef<
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  const { dualVideoSettings, primaryTrim, secondaryTrim } = useShallowSelector(
-    ClipContext,
-    (state) => ({
-      dualVideoSettings: state.dualVideoSettings,
-      primaryTrim: state.primaryTrim,
-      secondaryTrim: state.secondaryTrim,
-    })
-  );
+  const {
+    dualVideoSettings,
+    setDualVideoSettings,
+    primaryTrim,
+    secondaryTrim,
+  } = useShallowSelector(ClipContext, (state) => ({
+    dualVideoSettings: state.dualVideoSettings,
+    setDualVideoSettings: state.setDualVideoSettings,
+    primaryTrim: state.primaryTrim,
+    secondaryTrim: state.secondaryTrim,
+  }));
   const {
     setPrimaryBoundaryAspectOverride,
     setSecondaryBoundaryAspectOverride,
@@ -127,6 +129,8 @@ const DualVideoPreviewEditor = forwardRef<
 
   const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
 
+  const isPadColorWhite = isWhiteColor(padColor);
+
   const primaryKeyframeBounds = useMemo(
     () => getKeyframeBoundsForTarget(keyframes, "primary"),
     [keyframes]
@@ -147,12 +151,14 @@ const DualVideoPreviewEditor = forwardRef<
     [primaryKeyframeBounds, primaryTrim]
   );
 
+  const isPIP = dualVideoSettings.layout === "pip";
+
   const pipSync = useDualVideoSync({
     primaryVideoRef,
     secondaryVideoRef,
     primaryTrim: primaryBoundTrimData,
     secondaryTrim: secondaryTrim,
-    enabled: true,
+    enabled: isPIP,
   });
 
   if (active !== "renderer") return null;
@@ -185,121 +191,155 @@ const DualVideoPreviewEditor = forwardRef<
   }
 
   return (
-    <DualClockProvider
-      primaryVideoRef={primaryVideoRef}
-      secondaryVideoRef={secondaryVideoRef}
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative overflow-hidden bg-surface-secondary shadow-md w-full aspect-[9/16]",
+        className
+      )}
+      style={{
+        ...style,
+      }}
     >
-      <div
-        ref={containerRef}
-        className={cn(
-          "relative overflow-hidden bg-surface-secondary shadow-md w-full aspect-[9/16]",
-          className
-        )}
-        style={{
-          ...style,
-        }}
+      <VideoPreview
+        ref={forwardedRef}
+        playing={playing}
+        source={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
+        baseAspect={baseAspect}
+        targetAspect={targetAspect}
+        variant={cropMode}
+        keyframes={filterKeyframesByTarget(keyframes, "primary")}
+        keyframeBounds={primaryKeyframeBounds}
+        trimData={primaryTrim}
+        externalControls={isPIP}
+        padColor={padColor}
       >
-        <VideoPreview
-          ref={forwardedRef}
-          playing={playing}
-          source={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
-          baseAspect={baseAspect}
-          targetAspect={targetAspect}
-          variant={cropMode}
-          keyframes={filterKeyframesByTarget(keyframes, "primary")}
-          keyframeBounds={primaryKeyframeBounds}
-          trimData={primaryTrim}
-          externalControls={dualVideoSettings.layout === "pip"}
+        {({ transform, variant, videoRef }) => (
+          <CanvasVideoRenderer
+            renderEnabled={playing}
+            videoRef={videoRef}
+            transformData={transform}
+            variant={variant}
+            width={canvasWidth}
+            height={canvasHeight}
+            color={padColor}
+            backgroundMode={dualVideoSettings.backgroundMode}
+            backgroundVideo={dualVideoSettings.backgroundVideo}
+            backgroundVideoRef={backgroundVideoRef}
+            backgroundAlign={dualVideoSettings.backgroundAlign}
+            backgroundOpacity={dualVideoSettings.backgroundOpacity}
+            backgroundBlur={dualVideoSettings.backgroundBlur}
+          />
+        )}
+      </VideoPreview>
+
+      {isPIP && secondaryVideoUrl && (
+        <PiPOverlay playerType={playerType} containerRef={containerRef}>
+          <video ref={secondaryVideoRef} src={secondaryVideoUrl} />
+        </PiPOverlay>
+      )}
+
+      {isPIP && (
+        <Playback.Root
+          defaultPlaying={pipSync.status === "playing"}
+          onPlayingChangeAlways={(shouldPlay) => {
+            if (shouldPlay) {
+              pipSync.controls.play();
+            } else {
+              pipSync.controls.pause();
+            }
+          }}
+          playingStatus={pipSync.status}
+          isBuffering={pipSync.isBuffering}
+          hasError={pipSync.hasError}
+          isDual
+          noGlass={isPadColorWhite}
         >
-          {({ transform, variant, videoRef }) => (
-            <CanvasVideoRenderer
-              renderEnabled={playing}
-              videoRef={videoRef}
-              transformData={transform}
-              variant={variant}
-              width={canvasWidth}
-              height={calculateHeight({
-                aspectRatio: boundaryAspectRatio ?? "9:16",
-                width: canvasWidth,
-              })}
-              color={padColor}
-              className={cn({
-                "absolute top-1/2 -translate-y-1/2": targetAspect !== "9:16",
-              })}
-              backgroundMode={dualVideoSettings.backgroundMode}
-              backgroundVideo={dualVideoSettings.backgroundVideo}
-              backgroundVideoRef={backgroundVideoRef}
-              backgroundAlign={dualVideoSettings.backgroundAlign}
-              backgroundOpacity={dualVideoSettings.backgroundOpacity}
-              backgroundBlur={dualVideoSettings.backgroundBlur}
-            />
-          )}
-        </VideoPreview>
+          {isPIP && (
+            <Volume.Root
+              defaultValue={(() => {
+                const video = primaryVideoRef?.current;
+                const volume = dualVideoSettings.primaryVolume;
 
-        {dualVideoSettings.layout === "pip" && secondaryVideoUrl && (
-          <PiPOverlay playerType={playerType} containerRef={containerRef}>
-            <video ref={secondaryVideoRef} src={secondaryVideoUrl} />
-          </PiPOverlay>
-        )}
-
-        {dualVideoSettings.layout === "pip" && (
-          <Playback.Root
-            defaultPlaying={pipSync.status === "playing"}
-            onPlayingChangeAlways={(shouldPlay) => {
-              if (shouldPlay) {
-                pipSync.controls.play();
-              } else {
-                pipSync.controls.pause();
-              }
-            }}
-            playingStatus={pipSync.status}
-            isBuffering={pipSync.isBuffering}
-            hasError={pipSync.hasError}
-            isDual
-          >
-            <Playback.Controls className="flex items-center justify-between px-4 w-full">
-              <div className="flex items-center gap-3">
-                <Playback.PlayToggle />
-                <Playback.LoopToggle
-                  defaultLoop={defaultRepeat}
-                  onLoopChangeAlways={(value) => {
-                    pipSync.controls.setRepeat(value);
-                  }}
-                />
-              </div>
-              <Playback.RateControl
-                defaultRate={1}
-                onRateChangeAlways={pipSync.controls.setPlayback}
-              />
-            </Playback.Controls>
-
-            <Seek.Root
-              primaryVideoRef={primaryVideoRef}
-              secondaryVideoRef={secondaryVideoRef}
-              primaryTrim={primaryBoundTrimData}
-              secondaryTrim={secondaryTrim}
-              isPlaying={pipSync.status === "playing"}
-              onSeek={(timeMs) => {
-                pipSync.controls.seek(timeMs);
+                if (video && video.volume !== volume) {
+                  video.volume = Math.max(0, Math.min(volume, 1));
+                }
+                return volume;
+              })()}
+              value={dualVideoSettings.primaryVolume}
+              onValueChange={(volume) => {
+                pipSync.controls.setPrimaryVolume(volume);
+                setDualVideoSettings({
+                  ...dualVideoSettings,
+                  primaryVolume: volume,
+                });
               }}
-              primaryBuffered={pipSync.primaryBuffered}
-              secondaryBuffered={pipSync.secondaryBuffered}
             >
-              <Seek.Content>
-                <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
-                {/* TODO: 58px height of Playback.Controls */}
-                <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
-                  <Seek.Buffer />
-                  <Seek.Progress />
-                  <Seek.Thumb />
-                </Seek.Track>
-                <Seek.Animator />
-              </Seek.Content>
-            </Seek.Root>
-          </Playback.Root>
-        )}
-      </div>
-    </DualClockProvider>
+              <Volume.Controls
+                variant="pill"
+                className={cn(
+                  "absolute bottom-[70px] left-4",
+                  isPadColorWhite &&
+                    "!backdrop-blur-none !bg-surface-secondary/90"
+                )}
+              >
+                <Volume.Button aria-label="Primary volume" />
+                <Volume.Slider>
+                  <Volume.Slider.Track>
+                    <Volume.Slider.Range />
+                    <Volume.Slider.Thumb />
+                  </Volume.Slider.Track>
+                </Volume.Slider>
+              </Volume.Controls>
+            </Volume.Root>
+          )}
+
+          <Playback.Controls className="flex items-center justify-between px-4 w-full">
+            <div className="flex items-center gap-3">
+              <Playback.PlayToggle />
+              <Playback.LoopToggle
+                defaultLoop={defaultRepeat}
+                onLoopChangeAlways={(value) => {
+                  pipSync.controls.setRepeat(value);
+                }}
+              />
+            </div>
+            <Playback.RateControl
+              defaultRate={1}
+              onRateChangeAlways={pipSync.controls.setPlayback}
+            />
+          </Playback.Controls>
+
+          <Seek.Root
+            primaryVideoRef={primaryVideoRef}
+            secondaryVideoRef={secondaryVideoRef}
+            primaryTrim={primaryBoundTrimData}
+            secondaryTrim={secondaryTrim}
+            isPlaying={pipSync.status === "playing"}
+            onSeek={pipSync.controls.seek}
+            primaryBuffered={pipSync.primaryBuffered}
+            secondaryBuffered={pipSync.secondaryBuffered}
+          >
+            <Seek.Content>
+              <Seek.TimeDisplay
+                className={cn(
+                  "absolute top-4 translate-y right-4",
+                  isPadColorWhite &&
+                    "!bg-surface-secondary/70 !backdrop-blur-sm"
+                )}
+              />
+              {/* TODO: 58px height of Playback.Controls */}
+              <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
+                <Seek.Buffer />
+                <Seek.Progress />
+                <Seek.Thumb />
+              </Seek.Track>
+              <Seek.Animator />
+            </Seek.Content>
+          </Seek.Root>
+        </Playback.Root>
+      )}
+    </div>
   );
 });
 
@@ -347,6 +387,8 @@ export const DualVideoPreview = forwardRef<
     className,
     style,
   } = props;
+
+  const isPadColorWhite = isWhiteColor(padColor);
 
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -452,12 +494,12 @@ export const DualVideoPreview = forwardRef<
             keyframes={primaryKeyframes}
             keyframeBounds={primaryKeyframeBounds}
             trimData={primaryTrimData}
-            playing
+            playing={playing}
             externalControls
           >
             {({ transform, videoRef }) => (
               <CanvasVideoRenderer
-                renderEnabled
+                renderEnabled={playing}
                 videoRef={videoRef}
                 transformData={transform}
                 variant={variant}
@@ -468,37 +510,42 @@ export const DualVideoPreview = forwardRef<
             )}
           </VideoPreview>
 
-          <div className="absolute bottom-2 left-2 z-20">
-            <Volume.Root
-              defaultValue={(() => {
-                const video = primaryVideoRef?.current;
-                const volume = dualVideoSettings.primaryVolume;
+          <Volume.Root
+            defaultValue={(() => {
+              const video = primaryVideoRef?.current;
+              const volume = dualVideoSettings.primaryVolume;
 
-                if (video && video.volume !== volume) {
-                  video.volume = Math.max(0, Math.min(volume, 1));
-                }
-                return volume;
-              })()}
-              value={dualVideoSettings.primaryVolume}
-              onValueChange={(volume) => {
-                sync.controls.setPrimaryVolume(volume);
-                setDualVideoSettings({
-                  ...dualVideoSettings,
-                  primaryVolume: volume,
-                });
-              }}
+              if (video && video.volume !== volume) {
+                video.volume = Math.max(0, Math.min(volume, 1));
+              }
+              return volume;
+            })()}
+            value={dualVideoSettings.primaryVolume}
+            onValueChange={(volume) => {
+              sync.controls.setPrimaryVolume(volume);
+              setDualVideoSettings({
+                ...dualVideoSettings,
+                primaryVolume: volume,
+              });
+            }}
+          >
+            <Volume.Controls
+              variant="pill"
+              className={cn(
+                "absolute bottom-2 left-2 z-20",
+                isPadColorWhite &&
+                  "!backdrop-blur-none !bg-surface-secondary/90"
+              )}
             >
-              <Volume.Controls variant="pill">
-                <Volume.Button aria-label="Primary volume" />
-                <Volume.Slider>
-                  <Volume.Slider.Track>
-                    <Volume.Slider.Range />
-                    <Volume.Slider.Thumb />
-                  </Volume.Slider.Track>
-                </Volume.Slider>
-              </Volume.Controls>
-            </Volume.Root>
-          </div>
+              <Volume.Button aria-label="Primary volume" />
+              <Volume.Slider>
+                <Volume.Slider.Track>
+                  <Volume.Slider.Range />
+                  <Volume.Slider.Thumb />
+                </Volume.Slider.Track>
+              </Volume.Slider>
+            </Volume.Controls>
+          </Volume.Root>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
@@ -522,12 +569,12 @@ export const DualVideoPreview = forwardRef<
             keyframes={secondaryKeyframes}
             keyframeBounds={secondaryKeyframeBounds}
             trimData={secondaryTrimData}
-            playing
+            playing={playing}
             externalControls
           >
             {({ transform, videoRef }) => (
               <CanvasVideoRenderer
-                renderEnabled
+                renderEnabled={playing}
                 videoRef={videoRef}
                 transformData={transform}
                 variant={variant}
@@ -537,37 +584,43 @@ export const DualVideoPreview = forwardRef<
               />
             )}
           </VideoPreview>
-          <div className="absolute top-2 left-2 z-20">
-            <Volume.Root
-              defaultValue={(() => {
-                const video = secondaryVideoRef?.current;
-                const volume = dualVideoSettings.secondaryVolume;
 
-                if (video && video.volume !== volume) {
-                  video.volume = Math.max(0, Math.min(volume, 1));
-                }
-                return volume;
-              })()}
-              value={dualVideoSettings.secondaryVolume}
-              onValueChange={(volume) => {
-                sync.controls.setSecondaryVolume(volume);
-                setDualVideoSettings({
-                  ...dualVideoSettings,
-                  secondaryVolume: volume,
-                });
-              }}
+          <Volume.Root
+            defaultValue={(() => {
+              const video = secondaryVideoRef?.current;
+              const volume = dualVideoSettings.secondaryVolume;
+
+              if (video && video.volume !== volume) {
+                video.volume = Math.max(0, Math.min(volume, 1));
+              }
+              return volume;
+            })()}
+            value={dualVideoSettings.secondaryVolume}
+            onValueChange={(volume) => {
+              sync.controls.setSecondaryVolume(volume);
+              setDualVideoSettings({
+                ...dualVideoSettings,
+                secondaryVolume: volume,
+              });
+            }}
+          >
+            <Volume.Controls
+              variant="pill"
+              className={cn(
+                "absolute top-2 left-2 z-20",
+                isPadColorWhite &&
+                  "!backdrop-blur-none !bg-surface-secondary/90"
+              )}
             >
-              <Volume.Controls variant="pill">
-                <Volume.Button aria-label="Secondary volume" />
-                <Volume.Slider>
-                  <Volume.Slider.Track>
-                    <Volume.Slider.Range />
-                    <Volume.Slider.Thumb />
-                  </Volume.Slider.Track>
-                </Volume.Slider>
-              </Volume.Controls>
-            </Volume.Root>
-          </div>
+              <Volume.Button aria-label="Secondary volume" />
+              <Volume.Slider>
+                <Volume.Slider.Track>
+                  <Volume.Slider.Range />
+                  <Volume.Slider.Thumb />
+                </Volume.Slider.Track>
+              </Volume.Slider>
+            </Volume.Controls>
+          </Volume.Root>
         </ResizablePanel>
       </ResizablePanelGroup>
 
@@ -584,6 +637,7 @@ export const DualVideoPreview = forwardRef<
         isBuffering={sync.isBuffering}
         hasError={sync.hasError}
         isDual
+        noGlass={isPadColorWhite}
       >
         <Playback.Controls className="flex items-center justify-between px-4 w-full">
           <div className="flex items-center gap-3">
@@ -607,14 +661,17 @@ export const DualVideoPreview = forwardRef<
           primaryTrim={primaryBoundTrimData}
           secondaryTrim={secondaryBoundTrimData}
           isPlaying={sync.status === "playing"}
-          onSeek={(timeMs) => {
-            sync.controls.seek(timeMs);
-          }}
+          onSeek={sync.controls.seek}
           primaryBuffered={sync.primaryBuffered}
           secondaryBuffered={sync.secondaryBuffered}
         >
           <Seek.Content>
-            <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
+            <Seek.TimeDisplay
+              className={cn(
+                "absolute top-4 translate-y right-4",
+                isPadColorWhite && "!bg-surface-secondary/70 !backdrop-blur-sm"
+              )}
+            />
             {/* TODO: 58px height of Playback.Controls */}
             <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
               <Seek.Buffer />

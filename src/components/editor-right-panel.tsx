@@ -31,11 +31,14 @@ import {
 import { KeyframeContext } from "@/contexts/keyframe-context";
 import KeyframePanelLists from "@/components/keyframe-panel-lists";
 import { startTransition } from "react";
+import { globalRAF } from "@/lib/raf-manager";
+import { MAIN_VIDEO_ID, RAF_IDS } from "@/constants/raf-ids";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
   duration: number;
   clipData: S3ClipData;
+  activeVideoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 const STORAGE_KEY = getStorageKey("lastActiveSections");
@@ -44,6 +47,7 @@ export function EditorRightPanel({
   isVideoLoaded,
   duration,
   clipData,
+  activeVideoRef,
 }: EditorRightPanelProps) {
   const [activeSections, setActiveSections] = useState<string[]>(() => {
     if (typeof window === "undefined") {
@@ -230,7 +234,19 @@ export function EditorRightPanel({
             <KeyframePanelLists
               keyframes={keyframes}
               currentKeyframeId={currentKeyframeId}
-              onKeyframeSelect={(id) => setCurrentKeyframeId(id)}
+              onKeyframeSelect={(id) => {
+                const keyframe = keyframes.find(
+                  (keyframe) => keyframe.id === id
+                );
+                if (keyframe) {
+                  const video = activeVideoRef?.current;
+                  if (video) {
+                    video.currentTime = keyframe.time;
+                    globalRAF.trigger(RAF_IDS.seekProgress(MAIN_VIDEO_ID));
+                  }
+                  setCurrentKeyframeId(id);
+                }
+              }}
               onKeyframeRemove={(id) => {
                 setKeyframes((prev) => prev.filter((x) => x.id !== id));
                 if (currentKeyframeId === id) {

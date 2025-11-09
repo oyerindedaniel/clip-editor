@@ -289,14 +289,12 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
           ref={composedRefs}
           data-state={state}
           className={cn(
-            "relative flex gap-2",
+            "relative flex gap-2 bg-surface-secondary/90",
             orientation === "horizontal"
               ? "flex-row items-center justify-center"
               : "flex-col items-center justify-center [&>[data-slot=volume-button]]:order-2",
-            variant === "pill" &&
-              "bg-surface-secondary/70 w-fit backdrop-blur-sm rounded-full p-1",
-            variant === "soft" &&
-              "bg-surface-secondary/50 w-fit backdrop-blur-sm rounded-md p-1",
+            variant === "pill" && "w-fit backdrop-blur-sm rounded-full p-1",
+            variant === "soft" && "w-fit backdrop-blur-sm rounded-md p-1",
             variant !== "default" &&
               (orientation === "horizontal"
                 ? "data-[state=open]:animate-[expand-width_250ms_linear_forwards] data-[state=closed]:animate-[collapse-width_250ms_linear_forwards]"

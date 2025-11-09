@@ -24,12 +24,13 @@ import { cn } from "@/lib/utils";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { TrimData } from "@/types/app";
 import { Playback } from "./video-controls";
-import { msToSeconds, secondsToMs } from "@/utils/video";
+import { msToSeconds } from "@/utils/video";
 import type { Color } from "./color-palette";
 import {
   createBoundTrimData,
   validateKeyframeBounds,
 } from "@/utils/keyframe-bounds";
+import { isWhiteColor } from "./color-palette";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -217,22 +218,23 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         <div className="w-full h-full">{renderedChild}</div>
         {!externalControls && (
           <>
-            <div className="absolute top-2 left-2 z-20">
-              <Volume.Root
-                defaultValue={controls.getVolume()}
-                onValueChangeAlways={controls.setVolume}
+            <Volume.Root
+              defaultValue={controls.getVolume()}
+              onValueChangeAlways={controls.setVolume}
+            >
+              <Volume.Controls
+                className="absolute top-2 left-2 z-20"
+                variant="pill"
               >
-                <Volume.Controls variant="pill">
-                  <Volume.Button />
-                  <Volume.Slider>
-                    <Volume.Slider.Track>
-                      <Volume.Slider.Range />
-                      <Volume.Slider.Thumb />
-                    </Volume.Slider.Track>
-                  </Volume.Slider>
-                </Volume.Controls>
-              </Volume.Root>
-            </div>
+                <Volume.Button />
+                <Volume.Slider>
+                  <Volume.Slider.Track>
+                    <Volume.Slider.Range />
+                    <Volume.Slider.Thumb />
+                  </Volume.Slider.Track>
+                </Volume.Slider>
+              </Volume.Controls>
+            </Volume.Root>
 
             <div className="flex items-center justify-center gap-2">
               <Playback.Root
@@ -247,13 +249,14 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
                 playingStatus={status}
                 isBuffering={isBuffering}
                 hasError={hasError}
+                noGlass={isWhiteColor(padColor)}
               >
                 <Playback.Controls className="flex items-center justify-between px-4">
                   <div className="flex items-center gap-3">
                     <Playback.PlayToggle />
                     <Playback.LoopToggle
                       defaultLoop={repeatRef.current}
-                      onLoopChange={(value) => {
+                      onLoopChangeAlways={(value) => {
                         repeatRef.current = value;
                       }}
                     />
@@ -277,7 +280,13 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
                   secondaryBuffered={null}
                 >
                   <Seek.Content>
-                    <Seek.TimeDisplay className="absolute top-4 translate-y right-4" />
+                    <Seek.TimeDisplay
+                      className={cn(
+                        "absolute top-4 translate-y right-4",
+                        isWhiteColor(padColor) &&
+                          "!bg-surface-secondary/70 !backdrop-blur-sm"
+                      )}
+                    />
                     {/* TODO: 58px height of Playback.Controls */}
                     <Seek.Track className="absolute w-[85%] bottom-[58px] translate-y-1/2 left-1/2 -translate-x-1/2">
                       <Seek.Buffer />

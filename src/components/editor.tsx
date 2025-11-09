@@ -19,7 +19,7 @@ import {
 } from "@/utils/video";
 import AspectRatioPicker from "./aspect-ratio-picker";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { DEFAULT_CLIP_METADATA, DEFAULT_COLORS } from "@/constants/app";
+import { DEFAULT_COLORS, DEFAULT_CLIP_METADATA } from "@/constants/app";
 import Timeline from "@/components/timeline";
 import TimelineSkeleton from "@/components/timeline-skeleton";
 import ExportNamingDialog from "./export-naming-dialog";
@@ -68,7 +68,6 @@ import { KEYFRAME_EASINGS } from "@/utils/keyframe";
 import { roundToDecimals } from "@/utils/app";
 import type { KeyframeEasing } from "@/utils/keyframe";
 import ColorPalette, { Color } from "./color-palette";
-import type { CropMode } from "@/types/app";
 import { useElementSize } from "@/hooks/use-element-size";
 import { useStackedTransition } from "@/hooks/app/use-stacked-transition";
 import { LoaderIcon } from "@/icons/loader";
@@ -82,6 +81,9 @@ import { DualClockProvider } from "@/contexts/dual-clock-context";
 import DualVideoPreviewEditor from "./dual-video-preview";
 import { EditPageSkeleton } from "./edit-skeleton";
 import { withProgressToast } from "@/lib/with-progress-toast";
+import { globalRAF } from "@/lib/raf-manager";
+import { MAIN_VIDEO_ID, RAF_IDS } from "@/constants/raf-ids";
+import { getClipBuffer } from "@/utils/buffer";
 
 interface ClipEditorProps {
   clipData: ClipData | null;
@@ -101,13 +103,6 @@ const ClipEditor = ({
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [toolPanelOpen, setToolPanelOpen] = useState(false);
   const [panelSide, setPanelSide] = useState<EditorSide>("right");
-
-  const [cropMode, setCropMode] = useState<CropMode>(
-    DEFAULT_CLIP_METADATA.cropMode
-  );
-  const [padColor, setPadColor] = useState<Color>(
-    DEFAULT_CLIP_METADATA.padColor
-  );
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const keyframeTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -156,6 +151,8 @@ const ClipEditor = ({
     primaryDualVideoRef,
     secondaryDualVideoRef,
     pipVideoRef,
+    cropMode,
+    padColor,
   } = useShallowSelector(ClipContext, (state) => ({
     primaryTrimRef: state.primaryTrimRef,
     secondaryTrimRef: state.secondaryTrimRef,
@@ -169,6 +166,8 @@ const ClipEditor = ({
     primaryDualVideoRef: state.primaryDualVideoRef,
     secondaryDualVideoRef: state.secondaryDualVideoRef,
     pipVideoRef: state.pipVideoRef,
+    cropMode: state.cropMode,
+    padColor: state.padColor,
   }));
 
   const { audioTracksRef } = useShallowSelector(AudioContext, (state) => ({
@@ -408,7 +407,7 @@ const ClipEditor = ({
     };
   }, [adjustOverlayBounds, primaryUrl]);
 
-  const handleExport = async (
+  const handleExport = async function (
     outputName: string,
     {
       preset,
@@ -432,7 +431,7 @@ const ClipEditor = ({
       | "audioBitrateKbps"
       | "audioCompressed"
     >
-  ) => {
+  ) {
     // TODO: review video this definety wrong
     const video = activeVideoRef.current;
     if (
@@ -446,15 +445,14 @@ const ClipEditor = ({
     setIsExporting(true);
 
     try {
-      let bufferData: ArrayBuffer | null = null;
-      if (isManualClip(currentClipData)) {
-        bufferData = await currentClipData.file.arrayBuffer();
-      } else {
-        const response = await fetch(primaryUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch clip: ${response.statusText}`);
-        }
-        bufferData = await response.arrayBuffer();
+      const primaryBuffer: ArrayBuffer | null = await getClipBuffer(
+        currentClipData,
+        primaryUrl
+      );
+
+      let secondaryBuffer: ArrayBuffer | null = null;
+      if (secondaryClip) {
+        secondaryBuffer = await getClipBuffer(secondaryClip, secondaryClip.url);
       }
 
       const { width: clientWidth, height: clientHeight } =
@@ -472,13 +470,15 @@ const ClipEditor = ({
       const exportData: ClipExportData = {
         id: currentClipData.metadata.clipId,
         outputName,
-        textOverlays: textOverlaysRef.current.filter(
-          (overlay) => overlay.visible
-        ),
-        imageOverlays: imageOverlaysRef.current.filter(
-          (overlay) => overlay.visible
-        ),
-        audioTracks: audioTracksRef.current.filter((track) => track.visible),
+        textOverlays: textOverlaysRef.current.filter(function (overlay) {
+          return overlay.visible;
+        }),
+        imageOverlays: imageOverlaysRef.current.filter(function (overlay) {
+          return overlay.visible;
+        }),
+        audioTracks: audioTracksRef.current.filter(function (track) {
+          return track.visible;
+        }),
         exportSettings: {
           preset,
           crf,
@@ -490,7 +490,7 @@ const ClipEditor = ({
           audioBitrateKbps,
           audioCompressed,
           convertAspectRatio: primaryClipMetaDataRef.current.aspectRatio,
-          cropMode: primaryClipMetaDataRef.current.cropMode,
+          cropMode: cropMode,
         },
         clientDisplaySize,
         targetResolution: targetResolutionDimensions,
@@ -498,16 +498,20 @@ const ClipEditor = ({
           primaryClip: {
             id: currentClipData.metadata.clipId,
             url: primaryUrl,
-            buffer: bufferData!,
+            buffer: primaryBuffer,
             metadata: currentClipData.metadata,
             ...primaryClipMetaDataRef.current,
+            cropMode: cropMode,
+            padColor: padColor,
             ...primaryTrimRef.current,
             visible: true,
           },
           ...(secondaryClip && {
             secondaryClip: {
               ...secondaryClip,
+              buffer: secondaryBuffer,
               ...secondaryTrimRef.current,
+              visible: true,
             },
           }),
           settings: dualVideoSettingsRef.current,
@@ -518,7 +522,9 @@ const ClipEditor = ({
 
       const processedBlob = await withProgressToast<Blob>(
         "Exporting clip",
-        () => processClipForExport(exportData),
+        function () {
+          return processClipForExport(exportData);
+        },
         `export-${currentClipData.metadata.clipId}`
       );
 
@@ -603,10 +609,6 @@ const ClipEditor = ({
                           visible={boundaryVisible}
                           onVisibleChange={setBoundaryVisible}
                           disabled={!isVideoLoaded || isExporting}
-                          cropMode={cropMode}
-                          onCropModeChange={setCropMode}
-                          padColor={padColor}
-                          onPadColorChange={(color) => setPadColor(color)}
                           hasSecondaryClip={!!secondaryClip}
                           hasKeyframes={!!keyframes?.length}
                           onClearKeyframes={() => {
@@ -648,7 +650,18 @@ const ClipEditor = ({
                               keyframes={keyframes}
                               currentKeyframeId={currentKeyframeId}
                               onKeyframeSelect={(id) => {
-                                setCurrentKeyframeId(id);
+                                const keyframe = getKeyframe(id);
+                                if (keyframe) {
+                                  const video = activeVideoRef.current;
+                                  if (video) {
+                                    video.currentTime = keyframe.time;
+                                    globalRAF.trigger(
+                                      RAF_IDS.seekProgress(MAIN_VIDEO_ID)
+                                    );
+                                  }
+                                  setCurrentKeyframeId(id);
+                                  setBoundaryTransform(keyframe.transform);
+                                }
                               }}
                               onKeyframeRemove={(id) => {
                                 deleteKeyframe(id);
@@ -699,10 +712,10 @@ const ClipEditor = ({
                           });
                         }
                       }}
-                      currentKeyframe={
+                      keyframeTranform={
                         currentKeyframeId
-                          ? getKeyframe(currentKeyframeId)
-                          : undefined
+                          ? getKeyframe(currentKeyframeId)?.transform
+                          : null
                       }
                     >
                       {({
@@ -1217,6 +1230,7 @@ const ClipEditor = ({
                 isVideoLoaded={isVideoLoaded}
                 duration={duration}
                 clipData={currentClipData}
+                activeVideoRef={activeVideoRef}
               />
             </EditorPanel.Body>
           </EditorPanel.Content>
