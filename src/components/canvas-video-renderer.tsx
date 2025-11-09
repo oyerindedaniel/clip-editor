@@ -55,53 +55,56 @@ const CanvasVideoRenderer: TaggedRendererComponent<
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const callbackIdRef = useRef<number | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const isMountedRef = useRef(false);
 
-  const drawBackground = (
-    ctx: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    align: "left" | "center" | "right",
-    opacity: number,
-    blurPx: number
-  ) => {
-    if (backgroundMode === "video" && backgroundVideoRef?.current) {
-      const bgVideo = backgroundVideoRef.current;
-      if (bgVideo.readyState >= 2) {
-        const prevAlpha = ctx.globalAlpha;
-        const prevFilter = ctx.filter ?? "none";
-        ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-        ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
+  const drawBackground = useStableHandler(
+    (
+      ctx: CanvasRenderingContext2D,
+      w: number,
+      h: number,
+      align: "left" | "center" | "right",
+      opacity: number,
+      blurPx: number
+    ) => {
+      if (backgroundMode === "video" && backgroundVideoRef?.current) {
+        const bgVideo = backgroundVideoRef.current;
+        if (bgVideo.readyState >= 2) {
+          const prevAlpha = ctx.globalAlpha;
+          const prevFilter = ctx.filter ?? "none";
+          ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+          ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
 
-        const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
-        const canvasAR = w / h;
-        let drawW: number, drawH: number, bgDx: number, bgDy: number;
+          const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
+          const canvasAR = w / h;
+          let drawW: number, drawH: number, bgDx: number, bgDy: number;
 
-        if (bgAR > canvasAR) {
-          drawH = h;
-          drawW = bgAR * drawH;
-          if (align === "left") bgDx = 0;
-          else if (align === "right") bgDx = w - drawW;
-          else bgDx = (w - drawW) / 2;
-          bgDy = 0;
+          if (bgAR > canvasAR) {
+            drawH = h;
+            drawW = bgAR * drawH;
+            if (align === "left") bgDx = 0;
+            else if (align === "right") bgDx = w - drawW;
+            else bgDx = (w - drawW) / 2;
+            bgDy = 0;
+          } else {
+            drawW = w;
+            drawH = drawW / bgAR;
+            bgDx = 0;
+            bgDy = (h - drawH) / 2;
+          }
+
+          ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
+          ctx.globalAlpha = prevAlpha;
+          ctx.filter = prevFilter;
         } else {
-          drawW = w;
-          drawH = drawW / bgAR;
-          bgDx = 0;
-          bgDy = (h - drawH) / 2;
+          ctx.fillStyle = color ?? "black";
+          ctx.fillRect(0, 0, w, h);
         }
-
-        ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
-        ctx.globalAlpha = prevAlpha;
-        ctx.filter = prevFilter;
       } else {
         ctx.fillStyle = color ?? "black";
         ctx.fillRect(0, 0, w, h);
       }
-    } else {
-      ctx.fillStyle = color ?? "black";
-      ctx.fillRect(0, 0, w, h);
     }
-  };
+  );
 
   const drawFrame = useStableHandler(() => {
     const canvas = canvasRef.current;
@@ -233,11 +236,15 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       }
     };
 
-    // Delay first drawFrame to ensure video.currentTime is set
-    timeoutRef.current = setTimeout(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      timeoutRef.current = setTimeout(() => {
+        drawFrame();
+        timeoutRef.current = null;
+      }, 50);
+    } else {
       drawFrame();
-      timeoutRef.current = null;
-    }, 50);
+    }
 
     callbackIdRef.current = video.requestVideoFrameCallback(videoFrameCallback);
   }, [renderEnabled, width, height, drawFrame]);

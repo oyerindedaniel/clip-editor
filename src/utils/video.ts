@@ -211,10 +211,10 @@ function randomInt(max: number): number {
 }
 
 function generateVideoId(size?: number): string {
-  var length: number =
+  const length: number =
     typeof size === "number" && size > 0 ? size : DEFAULT_SIZE;
-  var result: string = "";
-  var i: number;
+  let result: string = "";
+  let i: number;
 
   for (i = 0; i < length; i++) {
     result += ALPHABET[randomInt(ALPHABET_LENGTH)];
