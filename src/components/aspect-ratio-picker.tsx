@@ -16,8 +16,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { cn } from "@/lib/utils";
-import ColorPalette, { Color } from "@/components/color-palette";
-import type { CropMode, BackgroundMode, BackgroundVideo } from "@/types/app";
+import ColorPalette, { type Color } from "@/components/color-palette";
+import type { BackgroundVideo, CropMode } from "@/types/app";
 import type {
   ScreenSize,
   AspectRatio169,
@@ -48,10 +48,6 @@ interface AspectRatioPickerProps {
   visible: boolean;
   onVisibleChange: (visible: boolean) => void;
   disabled?: boolean;
-  cropMode?: CropMode;
-  onCropModeChange?: (mode: CropMode) => void;
-  padColor?: Color;
-  onPadColorChange?: (color: Color) => void;
   // Background settings
   hasSecondaryClip?: boolean;
   // keyframe constraints
@@ -92,10 +88,6 @@ const AspectRatioPicker = ({
   visible,
   onVisibleChange,
   disabled = false,
-  cropMode,
-  onCropModeChange,
-  padColor,
-  onPadColorChange,
   hasSecondaryClip = false,
   hasKeyframes = false,
   onClearKeyframes,
@@ -112,12 +104,23 @@ const AspectRatioPicker = ({
   const availableRatios =
     screenSize === "16:9" ? aspectRatios169 : aspectRatios916;
 
-  const { dualVideoSettings, setDualVideoSettings, secondaryClip } =
-    useShallowSelector(ClipContext, (state) => ({
-      dualVideoSettings: state.dualVideoSettings,
-      setDualVideoSettings: state.setDualVideoSettings,
-      secondaryClip: state.secondaryClip,
-    }));
+  const {
+    dualVideoSettings,
+    setDualVideoSettings,
+    secondaryClip,
+    cropMode,
+    setCropMode,
+    padColor,
+    setPadColor,
+  } = useShallowSelector(ClipContext, (state) => ({
+    dualVideoSettings: state.dualVideoSettings,
+    setDualVideoSettings: state.setDualVideoSettings,
+    secondaryClip: state.secondaryClip,
+    cropMode: state.cropMode,
+    setCropMode: state.setCropMode,
+    padColor: state.padColor,
+    setPadColor: state.setPadColor,
+  }));
   const { primaryBoundaryAspectOverride, secondaryBoundaryAspectOverride } =
     useShallowSelector(KeyframeContext, (state) => ({
       primaryBoundaryAspectOverride: state.primaryBoundaryAspectOverride,
@@ -136,6 +139,7 @@ const AspectRatioPicker = ({
     onAspectRatioChange(null);
     onVisibleChange(false);
     setLocalAspectRatio(null);
+    setSelectedOverride(null);
     // when clearing after using crop with keyframes, also clear keyframes
     if (cropMode === "crop" && hasKeyframes && onClearKeyframes) {
       onClearKeyframes();
@@ -155,8 +159,9 @@ const AspectRatioPicker = ({
 
   // If switching to letterbox, disable and clear any aspect ratio selection
   useEffect(() => {
-    if (cropMode === "letterbox" && localAspectRatio) {
+    if (cropMode === "letterbox") {
       setLocalAspectRatio(null);
+      setSelectedOverride(null);
       onAspectRatioChange(null);
       onVisibleChange(false);
     }
@@ -210,7 +215,8 @@ const AspectRatioPicker = ({
                       variant={
                         selectedOverride === "primary" ? "default" : "outline"
                       }
-                      className="w-full text-left block overflow-hidden border-subtle"
+                      disabled={cropMode === "letterbox"}
+                      className="justify-start overflow-hidden border-subtle"
                     >
                       <span className="font-medium mr-2">Custom (Panel)</span>
                       <Badge variant="secondary">
@@ -232,7 +238,8 @@ const AspectRatioPicker = ({
                       variant={
                         selectedOverride === "secondary" ? "default" : "outline"
                       }
-                      className="w-full text-left block overflow-hidden border-subtle"
+                      disabled={cropMode === "letterbox"}
+                      className="justify-start overflow-hidden border-subtle"
                     >
                       <span className="font-medium mr-2">Custom (Panel)</span>
                       <Badge variant="secondary">
@@ -248,18 +255,14 @@ const AspectRatioPicker = ({
               <Button
                 key={ratio.value}
                 onClick={() => {
-                  if (cropMode === "crop" && hasKeyframes) return;
-                  setLocalAspectRatio(ratio.value);
                   setSelectedOverride(null);
+                  setLocalAspectRatio(ratio.value);
                 }}
-                disabled={
-                  cropMode === "letterbox" ||
-                  (cropMode === "crop" && hasKeyframes)
-                }
+                disabled={cropMode === "letterbox"}
                 variant={
                   localAspectRatio === ratio.value ? "default" : "outline"
                 }
-                className="w-full text-left block overflow-hidden border-subtle"
+                className="justify-start overflow-hidden border-subtle"
               >
                 <span className="font-medium mr-2">{ratio.label}</span>
                 <Badge variant="secondary" className="">
@@ -269,35 +272,31 @@ const AspectRatioPicker = ({
             ))}
           </div>
 
-          {onCropModeChange && (
-            <div className="grid gap-2">
-              <Label>Crop Mode</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {cropModes.map((mode) => (
-                  <Button
-                    key={mode.value}
-                    onClick={() => onCropModeChange(mode.value as CropMode)}
-                    className={cn(
-                      "flex items-center justify-center gap-1 rounded-3xl p-2 text-sm md:text-[0.8rem] border",
-                      cropMode === mode.value
-                        ? "bg-primary/20 text-primary border-primary"
-                        : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
-                    )}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    {mode.icon}
-                    <span className="font-medium">{mode.label}</span>
-                  </Button>
-                ))}
-              </div>
+          <div className="grid gap-2">
+            <Label>Crop Mode</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {cropModes.map((mode) => (
+                <Button
+                  key={mode.value}
+                  onClick={() => setCropMode(mode.value as CropMode)}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-3xl p-2 text-sm md:text-[0.8rem] border",
+                    cropMode === mode.value
+                      ? "bg-primary/20 text-primary border-primary"
+                      : "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary border-subtle"
+                  )}
+                  variant="ghost"
+                  size="sm"
+                >
+                  {mode.icon}
+                  <span className="font-medium">{mode.label}</span>
+                </Button>
+              ))}
             </div>
-          )}
+          </div>
 
-          {(onPadColorChange && cropMode === "letterbox") ||
-          (onPadColorChange &&
-            cropMode === "crop" &&
-            localAspectRatio !== "9:16") ? (
+          {cropMode === "letterbox" ||
+          (cropMode === "crop" && localAspectRatio !== "9:16") ? (
             <div className="grid gap-2">
               <Label>Background</Label>
               <div className="flex items-center space-x-2">
@@ -478,7 +477,7 @@ const AspectRatioPicker = ({
                   <ColorPalette
                     id="padColor"
                     value={padColor ?? DEFAULT_CLIP_METADATA.padColor}
-                    onChange={(c) => onPadColorChange(c)}
+                    onChange={(color) => setPadColor(color)}
                   >
                     <Button
                       type="button"

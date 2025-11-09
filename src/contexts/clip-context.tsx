@@ -13,15 +13,17 @@ import type {
   DualVideoSettings,
   ClipMetadata,
   TrimData,
+  CropMode,
 } from "@/types/app";
 import { type StoreApi, useContextStore } from "react-shallow-store";
-import { DEFAULT_TRIM_DATA } from "@/constants/app";
+import { DEFAULT_TRIM_DATA, DEFAULT_CLIP_METADATA } from "@/constants/app";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { useVideoRefs } from "@/hooks/app/use-video-refs";
 import { getStorageKey } from "@/utils/app";
 import logger from "@/utils/logger";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import { DEFAULT_TRANSFORM } from "@/utils/transform";
+import type { Color } from "@/components/color-palette";
 
 type ClipContextValue = {
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
@@ -47,6 +49,10 @@ type ClipContextValue = {
   pipVideoRef: ReturnType<typeof useVideoRefs>["pipVideoRef"];
   clearTrimData: () => { primaryTrim: TrimData; secondaryTrim: TrimData };
   canClearTrim: boolean;
+  cropMode: CropMode;
+  setCropMode: React.Dispatch<React.SetStateAction<CropMode>>;
+  padColor: Color;
+  setPadColor: React.Dispatch<React.SetStateAction<Color>>;
 };
 
 type StoredTrimData = {
@@ -89,6 +95,14 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
 
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
     DEFAULT_DUAL_VIDEO_SETTINGS
+  );
+
+  const [cropMode, setCropMode] = useState<CropMode>(
+    DEFAULT_CLIP_METADATA.cropMode
+  );
+
+  const [padColor, setPadColor] = useState<Color>(
+    DEFAULT_CLIP_METADATA.padColor
   );
 
   const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
@@ -301,6 +315,10 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       pipVideoRef,
       clearTrimData,
       canClearTrim,
+      cropMode,
+      setCropMode,
+      padColor,
+      setPadColor,
     }),
     [
       secondaryClip,
@@ -319,6 +337,10 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       secondaryVideoRef,
       clearTrimData,
       canClearTrim,
+      cropMode,
+      setCropMode,
+      padColor,
+      setPadColor,
     ]
   );
 

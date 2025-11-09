@@ -8,9 +8,10 @@ import { useStableHandler } from "@/hooks/use-stable-handler";
 import { HitArea } from "./hit-area";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { formatTime } from "@/utils/app";
-import { useLatestValue } from "@/hooks/use-latest-value";
-import { useRAF } from "@/hooks/use-raf";
-import { secondsToMs } from "@/utils/video";
+import { useRAF, useRAFTrigger } from "@/hooks/use-raf";
+import { generateVideoId, secondsToMs } from "@/utils/video";
+import { RAF_IDS } from "@/constants/raf-ids";
+import { globalRAF } from "@/lib/raf-manager";
 
 interface SeekContextValue {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -36,6 +37,8 @@ interface SeekContextValue {
   seekSliderId: string;
   currentTimeId: string;
   durationId: string;
+
+  rafId: string;
 }
 
 const SeekContext = React.createContext<SeekContextValue | null>(null);
@@ -58,6 +61,7 @@ interface SeekRootProps {
   primaryBuffered?: TimeRanges | null;
   secondaryBuffered?: TimeRanges | null;
   children: React.ReactNode;
+  videoId?: string;
 }
 
 function SeekRoot({
@@ -70,6 +74,7 @@ function SeekRoot({
   primaryBuffered,
   secondaryBuffered,
   children,
+  videoId,
 }: SeekRootProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState<number | null>(null);
@@ -99,7 +104,11 @@ function SeekRoot({
 
   const timelineDurationMs = calculateTimelineDuration();
 
-  const context = React.useMemo(
+  const rafId = videoId
+    ? RAF_IDS.seekProgress(videoId)
+    : RAF_IDS.seekProgress(generateVideoId(5));
+
+  const context = React.useMemo<SeekContextValue>(
     () => ({
       primaryVideoRef,
       secondaryVideoRef,
@@ -123,6 +132,7 @@ function SeekRoot({
       seekSliderId,
       currentTimeId,
       durationId,
+      rafId,
     }),
     [
       primaryVideoRef,
@@ -139,6 +149,7 @@ function SeekRoot({
       seekSliderId,
       currentTimeId,
       durationId,
+      rafId,
     ]
   );
 
@@ -211,6 +222,7 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
       timelineDurationMs,
       progressRef,
       onSeek,
+      rafId,
     } = useSeekContext();
     const composedRefs = useComposedRefs(forwardedRef, _trackRef);
 
@@ -257,8 +269,9 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         }
 
         stableOnSeek(newTimeMs);
+        globalRAF.trigger(rafId);
       },
-      [timelineDurationMs]
+      [timelineDurationMs, rafId]
     );
 
     const ariaValueNow = Math.round(progressRef.current * 100);
@@ -354,6 +367,7 @@ const SeekThumb = React.forwardRef<HTMLDivElement, SeekThumbProps>(
           )}
           role="presentation"
           aria-hidden="true"
+          onClick={(e) => e.stopPropagation()}
           {...props}
         />
       </HitArea>
@@ -364,6 +378,7 @@ SeekThumb.displayName = "SeekThumb";
 
 function SeekAnimator() {
   const {
+    rafId,
     primaryVideoRef,
     secondaryVideoRef,
     primaryTrim,
@@ -384,7 +399,6 @@ function SeekAnimator() {
     setHoverTime,
   } = useSeekContext();
 
-  const isDraggingRef = useLatestValue(isDragging);
   const visualUpdateRef = React.useRef<number>(0);
   const stableOnSeek = useStableHandler(onSeek);
 
@@ -551,11 +565,12 @@ function SeekAnimator() {
    * Global RAF handles updates during playback
    * Only updates when playing AND not dragging
    */
-  useRAF(() => {
-    if (!isDraggingRef.current) {
-      updateProgress();
-    }
-  }, isPlaying);
+  useRAF(() => updateProgress(), isPlaying && !isDragging, rafId);
+
+  // Trigger handler - always available for manual triggers
+  useRAFTrigger(rafId, () => {
+    updateProgress();
+  });
 
   /**
    * Update once when playback stops (not handled by RAF when !isPlaying)

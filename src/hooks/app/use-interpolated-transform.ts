@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { getEasingFunction } from "@/utils/keyframe";
-import { ASPECT_RATIOS, AspectRatio, getAspectRatioValue } from "@/utils/aspect-ratios";
+import { AspectRatio, getAspectRatioValue } from "@/utils/aspect-ratios";
 import { getScaleRange } from "@/utils/scale-range";
 import type { CropMode } from "@/types/app";
 import type { KeyframeData } from "@/utils/keyframe";
 
 export type InterpolatedResult = {
-  x: number; // normalized 0..1 center
-  y: number; // normalized 0..1 center
+  x: number; // normalized 0..1
+  y: number; // normalized 0..1
   scale: number; // final clamped scale
   // helpful CSS-ready strings (percent)
   clipPath: string; // inset(...) percent string

@@ -19,6 +19,7 @@ const buttonVariants = cva(
           "bg-surface-secondary text-foreground-default hover:bg-surface-tertiary",
         tertiary:
           "bg-surface-tertiary text-foreground-subtle hover:bg-surface-secondary",
+        pill: "bg-surface-secondary/70 backdrop-blur-sm text-foreground-default hover:bg-surface-hover",
         ghost: "text-foreground-default hover:bg-surface-hover",
         link: "text-primary underline-offset-4 hover:underline",
         glass:

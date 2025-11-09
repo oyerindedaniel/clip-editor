@@ -201,6 +201,28 @@ function calculateAspectRatioScale(base: AspectRatio, target: AspectRatio) {
   };
 }
 
+const ALPHABET: string =
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const ALPHABET_LENGTH: number = ALPHABET.length;
+const DEFAULT_SIZE: number = 10;
+
+function randomInt(max: number): number {
+  return Math.floor(Math.random() * max);
+}
+
+function generateVideoId(size?: number): string {
+  const length: number =
+    typeof size === "number" && size > 0 ? size : DEFAULT_SIZE;
+  let result: string = "";
+  let i: number;
+
+  for (i = 0; i < length; i++) {
+    result += ALPHABET[randomInt(ALPHABET_LENGTH)];
+  }
+
+  return result;
+}
+
 export {
   getVideoBoundingBox,
   getOverlayNormalizedCoords,
@@ -213,4 +235,5 @@ export {
   getBufferKey,
   getOriginalBufferKey,
   calculateAspectRatioScale,
+  generateVideoId,
 };

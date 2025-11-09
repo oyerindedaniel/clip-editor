@@ -8,7 +8,7 @@ import type { KeyframeBounds } from "@/utils/keyframe";
 export function validateKeyframeBounds(
   keyframeBounds: KeyframeBounds,
   trimData: TrimData
-): { start: number; end: number } {
+): KeyframeBounds {
   const trimStartSec = msToSeconds(trimData.trimStart);
   const trimEndSec = msToSeconds(trimData.trimEnd);
 
@@ -50,8 +50,8 @@ export function createDualBoundTrimData(
 ): {
   primaryBoundTrimData: TrimData;
   secondaryBoundTrimData: TrimData;
-  primaryValidatedBounds: { start: number; end: number };
-  secondaryValidatedBounds: { start: number; end: number };
+  primaryValidatedBounds: KeyframeBounds;
+  secondaryValidatedBounds: KeyframeBounds;
 } {
   const primaryValidatedBounds = validateKeyframeBounds(
     primaryKeyframeBounds,

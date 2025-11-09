@@ -61,6 +61,7 @@ function useBoundaryBoxContext() {
 interface BoundaryBoxMethods {
   updatePosition: (x: number, y: number) => void;
   updateScale: (scale: number) => void;
+  applyExternalTransform: (value: Transform) => void;
 }
 
 export interface BoundaryBoxRootProps {
@@ -79,7 +80,7 @@ export interface BoundaryBoxRootProps {
   visible?: boolean;
   defaultVisible?: boolean;
   onVisibleChange?: (v: boolean) => void;
-  currentKeyframe?: { transform: Transform } | undefined;
+  keyframeTranform?: Transform | null;
 }
 
 export function BoundaryBoxRoot({
@@ -96,7 +97,7 @@ export function BoundaryBoxRoot({
   visible: controlledVisible,
   defaultVisible = false,
   onVisibleChange,
-  currentKeyframe,
+  keyframeTranform,
 }: BoundaryBoxRootProps) {
   const [aspectRatio, setAspectRatio] = useControllableState<AspectRatio>({
     defaultValue:
@@ -232,7 +233,7 @@ export function BoundaryBoxRoot({
   );
 
   React.useEffect(() => {
-    if (!currentKeyframe?.transform || !visible) return;
+    if (!keyframeTranform || !visible) return;
 
     const overlay = overlayRef.current;
     const container = containerRef.current;
@@ -241,22 +242,37 @@ export function BoundaryBoxRoot({
     const rafId = requestAnimationFrame(() => {
       if (!overlayRef.current || !containerRef.current) return;
 
-      const { x, y, width, height } = currentKeyframe.transform;
+      const { x, y, width, height } = keyframeTranform;
 
       overlay.style.transform = `translate3d(${x}px, ${y}px, 0)`;
       overlay.style.width = `${width}px`;
       overlay.style.height = `${height}px`;
 
-      stableSetTransform(currentKeyframe.transform);
+      stableSetTransform(keyframeTranform);
     });
 
     return () => cancelAnimationFrame(rafId);
-  }, [currentKeyframe, visible]);
+  }, [keyframeTranform, visible]);
 
-  const methods = React.useMemo(
+  const applyExternalTransform = (value: Transform) => {
+    const overlay = overlayRef.current;
+    const container = containerRef.current;
+    if (!overlay || !container) return;
+
+    overlay.style.transform = `translate3d(${value.x}px, ${value.y}px, 0)`;
+    overlay.style.width = `${value.width}px`;
+    overlay.style.height = `${value.height}px`;
+
+    if (!equalTransform(transform, value)) {
+      setTransform(value);
+    }
+  };
+
+  const methods = React.useMemo<BoundaryBoxMethods>(
     () => ({
       updatePosition,
       updateScale,
+      applyExternalTransform,
     }),
     [updatePosition, updateScale]
   );

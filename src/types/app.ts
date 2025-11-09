@@ -194,7 +194,7 @@ export interface DualVideoSettings {
 export interface DualVideoClip {
   id: string;
   url: string;
-  buffer: ArrayBuffer | null;
+  buffer?: ArrayBuffer | null;
   metadata: S3ClipMetadata;
   timelineOffset: number; // When this clip starts on the timeline (milliseconds from timeline start)
   trimStart: number; // Where to start within this clip's source video (milliseconds)

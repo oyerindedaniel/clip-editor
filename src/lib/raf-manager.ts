@@ -8,24 +8,68 @@ type RAFCallback = (time: number, deltaTime: number) => void;
  */
 class RAFManager {
   private callbacks = new Map<string, RAFCallback>();
+  private triggerHandlers = new Map<string, RAFCallback>();
   private rafId: number | null = null;
   private lastTime = 0;
   private idCounter = 0;
 
-  subscribe(callback: RAFCallback): () => void {
-    const id = `raf_${++this.idCounter}`;
-    this.callbacks.set(id, callback);
+  /**
+   * Subscribe with optional user-provided ID.
+   * If no ID provided, auto-generates one.
+   * If ID already exists, it will be overwritten.
+   */
+  subscribe(callback: RAFCallback, id?: string): () => void {
+    const finalId = id ?? `raf_auto_${++this.idCounter}`;
+    this.callbacks.set(finalId, callback);
 
     if (this.rafId === null) {
       this.start();
     }
 
     return () => {
-      this.callbacks.delete(id);
+      this.callbacks.delete(finalId);
       if (this.callbacks.size === 0) {
         this.stop();
       }
     };
+  }
+
+  /**
+   * Register a trigger handler that exists independently of RAF subscription.
+   * Use this when you want manual triggers but don't want RAF loop running.
+   */
+  registerTriggerHandler(id: string, callback: RAFCallback): () => void {
+    this.triggerHandlers.set(id, callback);
+    return () => {
+      this.triggerHandlers.delete(id);
+    };
+  }
+
+  /**
+   * Manually trigger a specific callback by ID.
+   * Only works if the RAF was registered with an explicit ID.
+   */
+  trigger(id: string): void {
+    // First try active RAF callback
+    let callback = this.callbacks.get(id);
+
+    // Fallback to trigger handler
+    if (!callback) {
+      callback = this.triggerHandlers.get(id);
+    }
+
+    if (!callback) {
+      logger.warn(`RAF trigger called for non-existent id: ${id}`);
+      return;
+    }
+
+    try {
+      const now = performance.now();
+      const deltaTime = now - this.lastTime || 16;
+      callback(now, deltaTime);
+    } catch (err) {
+      logger.error("RAF manual trigger error:", err);
+    }
   }
 
   private start(): void {

@@ -216,7 +216,8 @@ export function useReactiveVideoTime(opts: UseReactiveVideoTimeOptions) {
   // Canvas uses requestVideoFrameCallback for actual rendering
   const video = videoRef.current;
   const shouldPoll =
-    !!video && (externalControls ? externalPlaying : isVideoPlaying);
+    !!video &&
+    (externalControls ? externalPlaying : isVideoPlaying && externalPlaying);
 
   useRAF(() => {
     const video = videoRef.current;

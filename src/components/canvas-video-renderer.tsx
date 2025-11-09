@@ -7,6 +7,7 @@ import {
   CANVAS_RENDERER_SYMBOL,
   TaggedRendererComponent,
 } from "@/utils/renderer";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 /**
  * CanvasVideoRendererProps
@@ -53,55 +54,59 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const callbackIdRef = useRef<number | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const isMountedRef = useRef(false);
 
-  const drawBackground = (
-    ctx: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    align: "left" | "center" | "right",
-    opacity: number,
-    blurPx: number
-  ) => {
-    if (backgroundMode === "video" && backgroundVideoRef?.current) {
-      const bgVideo = backgroundVideoRef.current;
-      if (bgVideo.readyState >= 2) {
-        const prevAlpha = ctx.globalAlpha;
-        const prevFilter = ctx.filter ?? "none";
-        ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-        ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
+  const drawBackground = useStableHandler(
+    (
+      ctx: CanvasRenderingContext2D,
+      w: number,
+      h: number,
+      align: "left" | "center" | "right",
+      opacity: number,
+      blurPx: number
+    ) => {
+      if (backgroundMode === "video" && backgroundVideoRef?.current) {
+        const bgVideo = backgroundVideoRef.current;
+        if (bgVideo.readyState >= 2) {
+          const prevAlpha = ctx.globalAlpha;
+          const prevFilter = ctx.filter ?? "none";
+          ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+          ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
 
-        const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
-        const canvasAR = w / h;
-        let drawW: number, drawH: number, bgDx: number, bgDy: number;
+          const bgAR = bgVideo.videoWidth / bgVideo.videoHeight;
+          const canvasAR = w / h;
+          let drawW: number, drawH: number, bgDx: number, bgDy: number;
 
-        if (bgAR > canvasAR) {
-          drawH = h;
-          drawW = bgAR * drawH;
-          if (align === "left") bgDx = 0;
-          else if (align === "right") bgDx = w - drawW;
-          else bgDx = (w - drawW) / 2;
-          bgDy = 0;
+          if (bgAR > canvasAR) {
+            drawH = h;
+            drawW = bgAR * drawH;
+            if (align === "left") bgDx = 0;
+            else if (align === "right") bgDx = w - drawW;
+            else bgDx = (w - drawW) / 2;
+            bgDy = 0;
+          } else {
+            drawW = w;
+            drawH = drawW / bgAR;
+            bgDx = 0;
+            bgDy = (h - drawH) / 2;
+          }
+
+          ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
+          ctx.globalAlpha = prevAlpha;
+          ctx.filter = prevFilter;
         } else {
-          drawW = w;
-          drawH = drawW / bgAR;
-          bgDx = 0;
-          bgDy = (h - drawH) / 2;
+          ctx.fillStyle = color ?? "black";
+          ctx.fillRect(0, 0, w, h);
         }
-
-        ctx.drawImage(bgVideo, bgDx, bgDy, drawW, drawH);
-        ctx.globalAlpha = prevAlpha;
-        ctx.filter = prevFilter;
       } else {
         ctx.fillStyle = color ?? "black";
         ctx.fillRect(0, 0, w, h);
       }
-    } else {
-      ctx.fillStyle = color ?? "black";
-      ctx.fillRect(0, 0, w, h);
     }
-  };
+  );
 
-  const drawFrame = useCallback(() => {
+  const drawFrame = useStableHandler(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const video = videoRef.current;
@@ -115,6 +120,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
 
     ctx.clearRect(0, 0, width, height);
 
+    // Crop: maintains target aspect ratio, crops excess, applies scale as zoom
     if (variant === "crop") {
       drawBackground(
         ctx,
@@ -124,43 +130,49 @@ const CanvasVideoRenderer: TaggedRendererComponent<
         backgroundOpacity ?? 0.3,
         backgroundBlur ?? 0
       );
+
       const transform = transformData;
       const baseAR = transform.baseAR;
       const targetAR = transform.targetAR;
+      const scale = transform.scale ?? 1;
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
 
       let srcW: number, srcH: number;
-
       if (baseAR > targetAR) {
-        srcH = vh / transform.scale;
+        srcH = vh / scale;
         srcW = srcH * targetAR;
       } else {
-        srcW = vw / transform.scale;
+        srcW = vw / scale;
         srcH = srcW / targetAR;
       }
 
       if (srcW > vw) srcW = vw;
       if (srcH > vh) srcH = vh;
 
-      const sx = transform.x * vw;
-      const sy = transform.y * vh;
+      const sx = clampToRange(transform.x * vw, 0, vw - srcW);
+      const sy = clampToRange(transform.y * vh, 0, vh - srcH);
 
-      const clampedSx = clampToRange(sx, 0, Math.max(0, vw - srcW));
-      const clampedSy = clampToRange(sy, 0, Math.max(0, vh - srcH));
+      const destW = width;
+      const destH = width / targetAR;
 
-      ctx.drawImage(
-        video,
-        clampedSx,
-        clampedSy,
-        srcW,
-        srcH,
-        0,
-        0,
-        width,
-        height
-      );
+      let dx = 0;
+      if (backgroundAlign === "center") {
+        dx = (width - destW) / 2;
+      } else if (backgroundAlign === "right") {
+        dx = width - destW;
+      } else {
+        dx = 0;
+      }
+
+      const dy = (height - destH) / 2;
+
+      ctx.drawImage(video, sx, sy, srcW, srcH, dx, dy, destW, destH);
       return;
     }
 
+    // Fit/letterbox (default): shows full video with background, no transforms applied
     const srcAR = vw / vh;
     let destW = width;
     let destH = height;
@@ -190,17 +202,7 @@ const CanvasVideoRenderer: TaggedRendererComponent<
     );
 
     ctx.drawImage(video, 0, 0, vw, vh, dx, dy, destW, destH);
-  }, [
-    transformData,
-    width,
-    height,
-    variant,
-    backgroundAlign,
-    backgroundOpacity,
-    backgroundBlur,
-    color,
-    backgroundMode,
-  ]);
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -234,12 +236,27 @@ const CanvasVideoRenderer: TaggedRendererComponent<
       }
     };
 
-    drawFrame();
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      // Delay first drawFrame to ensure video.currentTime is set
+      timeoutRef.current = setTimeout(() => {
+        drawFrame();
+        timeoutRef.current = null;
+      }, 50);
+    } else {
+      drawFrame();
+    }
+
     callbackIdRef.current = video.requestVideoFrameCallback(videoFrameCallback);
   }, [renderEnabled, width, height, drawFrame]);
 
   useEffect(() => {
     return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
       const video = videoRef.current;
       if (callbackIdRef.current !== null && video) {
         video.cancelVideoFrameCallback(callbackIdRef.current);
