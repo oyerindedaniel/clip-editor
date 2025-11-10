@@ -23,10 +23,6 @@ interface SeekContextValue {
   primaryBuffered?: TimeRanges | null;
   secondaryBuffered?: TimeRanges | null;
   timelineDurationMs: number;
-  isDragging: boolean;
-  setIsDragging: (v: boolean) => void;
-  hoverTime: number | null;
-  setHoverTime: (v: number | null) => void;
   progressRef: React.RefObject<number>;
   _bufferRef: React.RefObject<HTMLDivElement | null>;
   _progressRef: React.RefObject<HTMLDivElement | null>;
@@ -76,8 +72,6 @@ function SeekRoot({
   children,
   videoId,
 }: SeekRootProps) {
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [hoverTime, setHoverTime] = React.useState<number | null>(null);
   const progressRef = React.useRef(0);
 
   const _bufferRef = React.useRef<HTMLDivElement | null>(null);
@@ -119,10 +113,7 @@ function SeekRoot({
       primaryBuffered,
       secondaryBuffered,
       timelineDurationMs,
-      isDragging,
-      setIsDragging,
-      hoverTime,
-      setHoverTime,
+
       progressRef,
       _bufferRef,
       _progressRef,
@@ -144,8 +135,7 @@ function SeekRoot({
       primaryBuffered,
       secondaryBuffered,
       timelineDurationMs,
-      isDragging,
-      hoverTime,
+
       seekSliderId,
       currentTimeId,
       durationId,
@@ -230,31 +220,32 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
 
     const handleKeyDown = React.useCallback(
       (e: React.KeyboardEvent<HTMLDivElement>) => {
-        const currentProgress = progressRef.current;
+        const currentProgress = progressRef.current ?? 0;
         const currentTimeMs = currentProgress * timelineDurationMs;
         let newTimeMs = currentTimeMs;
 
-        // Arrow keys: 5 second increments
-        // Page Up/Down: 10 second increments
-        // Home/End: Jump to start/end
+        // Step sizes (2% and 5% of total duration)
+        const smallStep = timelineDurationMs * 0.02;
+        const largeStep = timelineDurationMs * 0.05;
+
         switch (e.key) {
           case "ArrowRight":
           case "ArrowUp":
             e.preventDefault();
-            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + 5000);
+            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + smallStep);
             break;
           case "ArrowLeft":
           case "ArrowDown":
             e.preventDefault();
-            newTimeMs = Math.max(0, currentTimeMs - 5000);
+            newTimeMs = Math.max(0, currentTimeMs - smallStep);
             break;
           case "PageUp":
             e.preventDefault();
-            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + 10000);
+            newTimeMs = Math.min(timelineDurationMs, currentTimeMs + largeStep);
             break;
           case "PageDown":
             e.preventDefault();
-            newTimeMs = Math.max(0, currentTimeMs - 10000);
+            newTimeMs = Math.max(0, currentTimeMs - largeStep);
             break;
           case "Home":
             e.preventDefault();
@@ -284,7 +275,7 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         buffer={10}
         variant="y"
         className={cn(
-          "relative cursor-pointer pointer-events-auto rounded-full bg-primary/40 h-[5px]",
+          "group/track relative cursor-pointer pointer-events-auto rounded-full bg-primary/40 h-[5px]",
           className
         )}
         ref={composedRefs}
@@ -363,6 +354,8 @@ const SeekThumb = React.forwardRef<HTMLDivElement, SeekThumbProps>(
           ref={composedRefs}
           className={cn(
             "absolute top-1/2 left-0 size-3 rounded-full bg-primary shadow-lg pointer-events-auto will-change-transform",
+            "before:absolute before:inset-0 before:rounded-full before:bg-current before:opacity-0",
+            "group-hover/track:before:opacity-30 before:transition-opacity before:duration-200 before:ease-out",
             className
           )}
           role="presentation"
@@ -386,7 +379,7 @@ function SeekAnimator() {
     primaryBuffered,
     secondaryBuffered,
     isPlaying,
-    isDragging,
+
     timelineDurationMs,
     onSeek,
     progressRef,
@@ -395,12 +388,13 @@ function SeekAnimator() {
     _thumbRef,
     currentTimeRef,
     _trackRef,
-    setIsDragging,
-    setHoverTime,
   } = useSeekContext();
 
   const visualUpdateRef = React.useRef<number>(0);
   const stableOnSeek = useStableHandler(onSeek);
+
+  const [isDragging, setIsDragging] = React.useState(false);
+  const isDraggingRef = React.useRef(false);
 
   /**
    * Calculate current normalized timeline position from video times
@@ -627,6 +621,7 @@ function SeekAnimator() {
 
     const handlePointerDown = (e: PointerEvent) => {
       e.preventDefault();
+      isDraggingRef.current = true;
       setIsDragging(true);
 
       trackElement.setPointerCapture(e.pointerId);
@@ -636,12 +631,10 @@ function SeekAnimator() {
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
-
-      setHoverTime(normalizedTimeMs);
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
+      if (!isDraggingRef.current) return;
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
       debouncedSeek(normalizedTimeMs);
@@ -651,8 +644,9 @@ function SeekAnimator() {
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      if (!isDragging) return;
+      if (!isDraggingRef.current) return;
       trackElement.releasePointerCapture(e.pointerId);
+      isDraggingRef.current = false;
       setIsDragging(false);
     };
 
@@ -666,14 +660,11 @@ function SeekAnimator() {
       document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [
-    isDragging,
     timelineDurationMs,
     getTimeFromPosition,
     debouncedSeek,
     scheduleVisualUpdate,
-    setIsDragging,
-    setHoverTime,
-    _trackRef,
+    stableOnSeek,
   ]);
 
   return null;

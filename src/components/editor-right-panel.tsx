@@ -32,7 +32,7 @@ import { KeyframeContext } from "@/contexts/keyframe-context";
 import KeyframePanelLists from "@/components/keyframe-panel-lists";
 import { startTransition } from "react";
 import { globalRAF } from "@/lib/raf-manager";
-import { MAIN_VIDEO_ID, RAF_IDS } from "@/constants/raf-ids";
+import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 
 interface EditorRightPanelProps {
   isVideoLoaded: boolean;
@@ -242,7 +242,7 @@ export function EditorRightPanel({
                   const video = activeVideoRef?.current;
                   if (video) {
                     video.currentTime = keyframe.time;
-                    globalRAF.trigger(RAF_IDS.seekProgress(MAIN_VIDEO_ID));
+                    globalRAF.trigger(RAF_IDS.seekProgress(VIDEO_IDS.main));
                   }
                   setCurrentKeyframeId(id);
                 }

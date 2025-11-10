@@ -14,6 +14,9 @@ import type { KeyframeData } from "@/utils/keyframe";
 import { Input } from "@/components/ui/input";
 import { useFilteredKeyframes } from "@/hooks/app/use-filtered-keyframes";
 import { DEFAULT_COLORS } from "@/constants/app";
+import { useShallowSelector } from "react-shallow-store";
+import { ClipContext } from "@/contexts/clip-context";
+import { secondsToMs, msToSeconds } from "@/utils/video";
 
 interface KeyframeListsProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframes: KeyframeData[];
@@ -122,6 +125,26 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
   onKeyframeSelect,
   onKeyframeRemove,
 }) => {
+  const { primaryTrim, secondaryTrim } = useShallowSelector(
+    ClipContext,
+    (state) => ({
+      primaryTrim: state.primaryTrim,
+      secondaryTrim: state.secondaryTrim,
+    })
+  );
+
+  const normalizeKeyframeTime = React.useCallback(
+    (keyframe: KeyframeData): number => {
+      const timeMs = secondsToMs(keyframe.time);
+      const trim = keyframe.target === "primary" ? primaryTrim : secondaryTrim;
+      if (!trim) return keyframe.time;
+
+      const normalizedMs = Math.max(0, timeMs - trim.trimStart);
+      return msToSeconds(normalizedMs);
+    },
+    [primaryTrim, secondaryTrim]
+  );
+
   return (
     <>
       {(["primary", "secondary"] as const).map((section) => {
@@ -134,57 +157,60 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
               {section}
             </div>
 
-            {keyframes.map((keyframe) => (
-              <div
-                key={keyframe.id}
-                className={cn(
-                  "group relative w-full h-8 rounded-3xl border",
-                  "bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
-                  currentKeyframeId === keyframe.id &&
-                    "ring-1 ring-primary/40 border-primary/50"
-                )}
-              >
-                <button
-                  onClick={() => onKeyframeSelect(keyframe.id)}
-                  className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
+            {keyframes.map((keyframe) => {
+              const normalizedTime = normalizeKeyframeTime(keyframe);
+              return (
+                <div
+                  key={keyframe.id}
+                  className={cn(
+                    "group relative w-full h-8 rounded-3xl border",
+                    "bg-surface-secondary hover:bg-surface-hover border-subtle overflow-hidden",
+                    currentKeyframeId === keyframe.id &&
+                      "ring-1 ring-primary/40 border-primary/50"
+                  )}
                 >
-                  <span
-                    className="h-3 w-3 rounded-full border bg-(--color)"
-                    style={
-                      {
-                        "--color": (keyframe.color ||
-                          DEFAULT_COLORS[2]) as string,
-                      } as React.CSSProperties
-                    }
-                  />
-                  <span className="text-sm md:text-[0.8rem] font-medium tracking-tight text-foreground-default">
-                    {keyframe.time.toFixed(1)}s
-                  </span>
-                  <span className="ml-auto text-[10px] text-foreground-muted">
-                    {keyframe.name || keyframe.id.replace(/^keyframe-/, "#")}
-                  </span>
-                </button>
-
-                {onKeyframeRemove && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onKeyframeRemove(keyframe.id);
-                    }}
-                    aria-label="Remove keyframe"
-                    className={cn(
-                      "absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer",
-                      "opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0",
-                      "transition-all duration-200 ease-out",
-                      "bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm",
-                      "h-5 rounded-full px-2 py-0 text-[10px] leading-none shadow-sm"
-                    )}
+                    onClick={() => onKeyframeSelect(keyframe.id)}
+                    className="absolute inset-0 cursor-pointer flex items-center gap-3 px-3 text-left w-full h-full"
                   >
-                    Remove
+                    <span
+                      className="h-3 w-3 rounded-full border bg-(--color)"
+                      style={
+                        {
+                          "--color": (keyframe.color ||
+                            DEFAULT_COLORS[2]) as string,
+                        } as React.CSSProperties
+                      }
+                    />
+                    <span className="text-sm md:text-[0.8rem] font-medium tracking-tight text-foreground-default">
+                      {normalizedTime.toFixed(1)}s
+                    </span>
+                    <span className="ml-auto text-[10px] text-foreground-muted">
+                      {keyframe.name || keyframe.id.replace(/^keyframe-/, "#")}
+                    </span>
                   </button>
-                )}
-              </div>
-            ))}
+
+                  {onKeyframeRemove && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onKeyframeRemove(keyframe.id);
+                      }}
+                      aria-label="Remove keyframe"
+                      className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer",
+                        "opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0",
+                        "transition-all duration-200 ease-out",
+                        "bg-error/90 hover:bg-error text-foreground-on-accent backdrop-blur-sm",
+                        "h-5 rounded-full px-2 py-0 text-[10px] leading-none shadow-sm"
+                      )}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })}

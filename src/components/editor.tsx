@@ -82,7 +82,7 @@ import DualVideoPreviewEditor from "./dual-video-preview";
 import { EditPageSkeleton } from "./edit-skeleton";
 import { withProgressToast } from "@/lib/with-progress-toast";
 import { globalRAF } from "@/lib/raf-manager";
-import { MAIN_VIDEO_ID, RAF_IDS } from "@/constants/raf-ids";
+import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 import { getClipBuffer } from "@/utils/buffer";
 
 interface ClipEditorProps {
@@ -656,7 +656,7 @@ const ClipEditor = ({
                                   if (video) {
                                     video.currentTime = keyframe.time;
                                     globalRAF.trigger(
-                                      RAF_IDS.seekProgress(MAIN_VIDEO_ID)
+                                      RAF_IDS.seekProgress(VIDEO_IDS.main)
                                     );
                                   }
                                   setCurrentKeyframeId(id);

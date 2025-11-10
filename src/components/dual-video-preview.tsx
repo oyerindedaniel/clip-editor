@@ -31,6 +31,7 @@ import {
   createBoundTrimData,
   createDualBoundTrimData,
 } from "@/utils/keyframe-bounds";
+import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 
 interface BaseDualVideoProps {
   keyframes: KeyframeData[];
@@ -159,9 +160,11 @@ const DualVideoPreviewEditor = forwardRef<
     primaryTrim: primaryBoundTrimData,
     secondaryTrim: secondaryTrim,
     enabled: isPIP,
+    seekProgressRafId:
+      isPIP && secondaryVideoUrl
+        ? RAF_IDS.seekProgress(VIDEO_IDS.dualVideoPreviewPip)
+        : undefined,
   });
-
-  if (active !== "renderer") return null;
 
   if (useDualMode && secondaryVideoUrl && secondaryTrim) {
     return (
@@ -319,6 +322,7 @@ const DualVideoPreviewEditor = forwardRef<
             onSeek={pipSync.controls.seek}
             primaryBuffered={pipSync.primaryBuffered}
             secondaryBuffered={pipSync.secondaryBuffered}
+            videoId={VIDEO_IDS.dualVideoPreviewPip}
           >
             <Seek.Content>
               <Seek.TimeDisplay
@@ -442,6 +446,7 @@ export const DualVideoPreview = forwardRef<
     secondaryTrim: secondaryBoundTrimData,
     defaultRepeat,
     enabled: true,
+    seekProgressRafId: RAF_IDS.seekProgress(VIDEO_IDS.dualVideoPreview),
   });
 
   const primaryPercentage = dualVideoSettings.primaryPanelPercentage || 50;
@@ -664,6 +669,7 @@ export const DualVideoPreview = forwardRef<
           onSeek={sync.controls.seek}
           primaryBuffered={sync.primaryBuffered}
           secondaryBuffered={sync.secondaryBuffered}
+          videoId={VIDEO_IDS.dualVideoPreview}
         >
           <Seek.Content>
             <Seek.TimeDisplay
