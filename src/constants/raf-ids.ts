@@ -8,6 +8,7 @@ export type RAFId = (typeof RAF_IDS)[keyof typeof RAF_IDS];
 
 export const VIDEO_IDS = Object.freeze({
   main: generateVideoId(5),
+  dualVideoMainPip: generateVideoId(5),
   dualVideoPlayer: generateVideoId(5),
   dualVideoPreview: generateVideoId(5),
   dualVideoPreviewPip: generateVideoId(5),
