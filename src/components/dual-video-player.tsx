@@ -16,6 +16,7 @@ import { useConstrainedVideo } from "@/hooks/app/use-constrained-video";
 import { useLatestValue } from "@/hooks/use-latest-value";
 import { msToSeconds } from "@/utils/video";
 import { getPlayingState } from "@/hooks/app/use-video-controls-core";
+import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 
 interface DualVideoPlayerProps {
   primaryClip: ClipData;
@@ -84,6 +85,9 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
       primaryTrim,
       secondaryTrim,
       enabled: !!secondaryClip,
+      seekProgressRafId: secondaryClip
+        ? RAF_IDS.seekProgress(VIDEO_IDS.dualVideoPlayer)
+        : undefined,
     });
 
     useEffect(() => {
@@ -231,6 +235,7 @@ export const DualVideoPlayer = forwardRef<HTMLDivElement, DualVideoPlayerProps>(
                   secondaryBuffered={secondaryBuffered}
                   isPlaying={dualStatus === "playing"}
                   onSeek={dualVideoControls.seek}
+                  videoId={VIDEO_IDS.dualVideoPlayer}
                 >
                   <Seek.Content>
                     <Seek.TimeDisplay className="absolute top-1/2 -translate-y-1/2 right-4" />

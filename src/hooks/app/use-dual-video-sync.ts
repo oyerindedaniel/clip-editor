@@ -6,8 +6,8 @@ import { useStableHandler } from "../use-stable-handler";
 import { normalizeError } from "@/utils/error-utils";
 import { PlayingStatus } from "./use-video-controls-core";
 import { useLatestValue } from "../use-latest-value";
-import { flushSync } from "react-dom";
-import { debounce } from "@/utils/app";
+
+import { globalRAF } from "@/lib/raf-manager";
 
 type UseDualVideoSyncArgs = {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -17,6 +17,7 @@ type UseDualVideoSyncArgs = {
   onTimeUpdate?: (timelineMs: number) => void;
   enabled?: boolean;
   defaultRepeat?: boolean;
+  seekProgressRafId?: string;
 };
 
 /**
@@ -32,6 +33,7 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     onTimeUpdate,
     enabled = false,
     defaultRepeat = false,
+    seekProgressRafId,
   } = args;
 
   const SEEK_COOLDOWN_MS = 200; // Cooldown period after seek before drift detection
@@ -82,6 +84,9 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
 
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
+
+  const primaryReadyRef = useRef(false);
+  const secondaryReadyRef = useRef(false);
 
   const setBufferingState = useCallback(
     (shouldBuffer: boolean, immediate = false) => {
@@ -722,6 +727,15 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       );
 
       primary.currentTime = clamped;
+      primaryReadyRef.current = true;
+
+      if (
+        seekProgressRafId &&
+        primaryReadyRef.current &&
+        secondaryReadyRef.current
+      ) {
+        globalRAF.trigger(seekProgressRafId);
+      }
     };
 
     const onReadySecondary = () => {
@@ -739,7 +753,19 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
       );
 
       secondary.currentTime = clamped;
+      secondaryReadyRef.current = true;
+
+      if (
+        seekProgressRafId &&
+        primaryReadyRef.current &&
+        secondaryReadyRef.current
+      ) {
+        globalRAF.trigger(seekProgressRafId);
+      }
     };
+
+    primaryReadyRef.current = false;
+    secondaryReadyRef.current = false;
 
     if (primary.readyState >= 2) {
       onReadyPrimary();
@@ -769,6 +795,8 @@ export function useDualVideoSync(args: UseDualVideoSyncArgs) {
     return () => {
       cleanup();
 
+      primaryReadyRef.current = false;
+      secondaryReadyRef.current = false;
       primary.removeEventListener("waiting", onWaitPrimary);
       secondary.removeEventListener("waiting", onWaitSecondary);
       primary.removeEventListener("playing", onPlayPrimary);

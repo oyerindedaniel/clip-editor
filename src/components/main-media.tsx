@@ -10,7 +10,7 @@ import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { msToSeconds } from "@/utils/video";
 import { useDualVideoSync } from "@/hooks/app/use-dual-video-sync";
 import { DualClockContext } from "@/contexts/dual-clock-context";
-import { MAIN_VIDEO_ID } from "@/constants/raf-ids";
+import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 
 // Component for 16:9 main media
 interface MainMediaProps {
@@ -63,6 +63,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
       primaryTrim,
       secondaryTrim,
       enabled: settings.layout === "pip",
+      seekProgressRafId: RAF_IDS.seekProgress(VIDEO_IDS.dualVideoMainPip),
     });
 
     const { controls, status, buffered, isBuffering, hasError } =
@@ -179,6 +180,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
                   secondaryBuffered={secondaryBuffered}
                   isPlaying={dualStatus === "playing"}
                   onSeek={dualVideoControls.seek}
+                  videoId={VIDEO_IDS.dualVideoMainPip}
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -232,7 +234,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
                     controls.seek(sourceTimeSec);
                   }}
-                  videoId={MAIN_VIDEO_ID}
+                  videoId={VIDEO_IDS.main}
                 />
               </div>
 
