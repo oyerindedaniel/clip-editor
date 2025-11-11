@@ -195,7 +195,7 @@ const DualVideoPreviewEditor = forwardRef<
 
   return (
     <div
-      ref={containerRef}
+      ref={composeRefs(containerRef, forwardedRef)}
       className={cn(
         "relative overflow-hidden bg-surface-secondary shadow-md w-full aspect-[9/16]",
         className
@@ -205,7 +205,6 @@ const DualVideoPreviewEditor = forwardRef<
       }}
     >
       <VideoPreview
-        ref={forwardedRef}
         playing={playing}
         source={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
         baseAspect={baseAspect}
