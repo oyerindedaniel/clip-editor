@@ -39,6 +39,7 @@ import { ClipContext } from "@/contexts/clip-context";
 import { useShallowSelector } from "react-shallow-store";
 import { useLazyRef } from "@/hooks/use-lazy-ref";
 import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
+import { useStableHandler } from "@/hooks/use-stable-handler";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -80,13 +81,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   keyframes,
   videoId,
 }) => {
-  const { clearTrimData, canClearTrim, primaryTrim, secondaryTrim } =
-    useShallowSelector(ClipContext, (state) => ({
+  const { clearTrimData, canClearTrim } = useShallowSelector(
+    ClipContext,
+    (state) => ({
       clearTrimData: state.clearTrimData,
       canClearTrim: state.canClearTrim,
-      primaryTrim: state.primaryTrim,
-      secondaryTrim: state.secondaryTrim,
-    }));
+    })
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -394,7 +395,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
   };
 
-  const handleUndo = () => {
+  const handleUndo = useStableHandler(() => {
     let newIndex: number | null = null;
 
     setHistoryIndex((prevIndex) => {
@@ -446,9 +447,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         saveHistoryToStorage(editHistory);
       }
     }
-  };
+  });
 
-  const handleRedo = () => {
+  const handleRedo = useStableHandler(() => {
     let newIndex: number | null = null;
 
     setHistoryIndex((prevIndex) => {
@@ -500,7 +501,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         saveHistoryToStorage(editHistory);
       }
     }
-  };
+  });
 
   const handleAddMarker = () => {
     if (!containerRef.current || !playheadRef.current) return;
@@ -572,6 +573,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
 
     e.preventDefault();
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
     const scrollContainer = scrollContainerRef.current;
     const container = containerRef.current;
 
@@ -625,7 +629,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const markerX = msToPx(startOffset, pxPerMs) - scrollContainer.scrollLeft;
     updateTooltip(markerX, `Offset: ${formatDurationDisplay(startOffset)}`);
 
-    const onMove = (moveEvent: MouseEvent) => {
+    const onMove = (moveEvent: PointerEvent) => {
       if (!isDragging) return;
 
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
@@ -675,7 +679,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       });
     };
 
-    const onUp = () => {
+    const onUp = (upEvent: PointerEvent) => {
       isDragging = false;
       draggingSecondaryRef.current = false;
       stopAutoScroll();
@@ -686,14 +690,16 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         rafIdRef.current = null;
       }
 
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+      (upEvent.target as HTMLElement).releasePointerCapture(e.pointerId);
+
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
 
       onCommitOffset?.(currentOffsetRef.current);
     };
 
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   };
 
   const onPlayheadPointerDown = (e: React.PointerEvent) => {
@@ -703,6 +709,8 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const container = containerRef.current;
 
     if (!scrollContainer || !container || !playhead) return;
+
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
     let isDragging = true;
     const startPlayheadPos = parseFloat(playhead.style.left || "0");
@@ -742,11 +750,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     const markerX = startPlayheadPos - scrollContainer.scrollLeft;
     updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
 
-    const onMove = (moveEvent: MouseEvent) => {
+    const onMove = (moveEvent: PointerEvent) => {
       const playhead = playheadRef.current;
       if (!isDragging || !playhead) return;
 
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+
       rafIdRef.current = requestAnimationFrame(() => {
         const scrollContainerRect = scrollContainer.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
@@ -778,7 +787,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       });
     };
 
-    const onUp = () => {
+    const onUp = (upEvent: PointerEvent) => {
       isDragging = false;
       draggingPlayheadRef.current = false;
       stopAutoScroll();
@@ -787,12 +796,15 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+
+      (upEvent.target as HTMLElement).releasePointerCapture(e.pointerId);
+
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
     };
 
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   };
 
   const clearTrim = () => {
@@ -1025,20 +1037,39 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                 />
               ))}
 
-              {trimStart !== null && trimEnd !== null && (
-                <div
-                  className="absolute top-0 bottom-0 pointer-events-none"
-                  style={{
-                    left: `${msToPx(trimStart, pxPerMs)}px`,
-                    width: `${Math.max(
-                      0,
-                      msToPx(trimEnd - trimStart, pxPerMs)
-                    )}px`,
-                  }}
-                >
-                  <div className="absolute inset-0 bg-primary/15 border-2 border-primary" />
-                </div>
-              )}
+              {trimStart !== null &&
+                trimEnd !== null &&
+                (() => {
+                  const relativeStart = trimStart - currentAccumulatedOffset;
+                  const relativeEnd = trimEnd - currentAccumulatedOffset;
+
+                  const isVisible =
+                    relativeEnd >= 0 &&
+                    relativeStart <= currentSecondaryDurationMs;
+
+                  if (!isVisible) return null;
+
+                  const clampedStart = Math.max(0, relativeStart);
+                  const clampedEnd = Math.min(
+                    currentSecondaryDurationMs,
+                    relativeEnd
+                  );
+
+                  return (
+                    <div
+                      className="absolute top-0 bottom-0 pointer-events-none"
+                      style={{
+                        left: `${msToPx(clampedStart, pxPerMs)}px`,
+                        width: `${Math.max(
+                          0,
+                          msToPx(clampedEnd - clampedStart, pxPerMs)
+                        )}px`,
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-primary/15 border-2 border-primary" />
+                    </div>
+                  );
+                })()}
             </div>
           </div>
         </div>
