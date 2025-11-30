@@ -71,6 +71,8 @@ interface PlaybackRootProps {
 
   isDual?: boolean;
   noGlass?: boolean;
+
+  isActive?: boolean;
 }
 
 const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
@@ -88,6 +90,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
       hasError = false,
       isDual = false,
       noGlass = false,
+      isActive = true,
       ...props
     },
     _
@@ -150,7 +153,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
           return;
         }
 
-        if (e.key === " " || e.key === "k" || e.key === "K") {
+        if ((e.key === " " || e.key === "k" || e.key === "K") && isActive) {
           e.preventDefault();
           togglePlay();
         }
@@ -158,7 +161,7 @@ const PlaybackRoot = React.forwardRef<HTMLDivElement, PlaybackRootProps>(
 
       window.addEventListener("keydown", handleGlobalKeyDown);
       return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-    }, [togglePlay]);
+    }, [togglePlay, isActive]);
 
     const contextValue = React.useMemo(
       () => ({

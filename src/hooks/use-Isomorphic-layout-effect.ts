@@ -6,5 +6,5 @@ import { useEffect, useLayoutEffect } from "react";
  *
  * This ensures compatibility with server-side rendering (SSR).
  */
-export const useIsomorphicLayoutEffect =
+export const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;

@@ -4,6 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { useComposedRefs } from "@/hooks/use-composed-refs";
 import { createPortal } from "react-dom";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 export const TOOLTIP_OFFSET_Y = 32;
 
@@ -22,7 +23,7 @@ const TimelineTooltip = React.forwardRef<HTMLDivElement, TimelineTooltipProps>(
     const tooltipRef = React.useRef<HTMLDivElement>(null);
     const composedRefs = useComposedRefs(forwardedRef, tooltipRef);
 
-    React.useLayoutEffect(() => {
+    useIsoLayoutEffect(() => {
       const tooltip = tooltipRef.current;
       if (!tooltip || !container || !visible) return;
 

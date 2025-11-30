@@ -31,6 +31,8 @@ import {
   validateKeyframeBounds,
 } from "@/utils/keyframe-bounds";
 import { isWhiteColor } from "./color-palette";
+import { ClipContext } from "@/contexts/clip-context";
+import { useShallowSelector } from "react-shallow-store";
 
 export type Video = React.ReactElement<
   React.VideoHTMLAttributes<HTMLVideoElement> & {
@@ -75,7 +77,6 @@ export interface VideoPreviewProps {
   trimData: TrimData;
 
   externalControls?: boolean;
-
   padColor?: Color;
 }
 
@@ -126,7 +127,7 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         preload: source.props.preload ?? "auto",
         playsInline: source.props.playsInline ?? true,
       });
-    }, [source]);
+    }, [source.props.src]);
 
     const filteredKeyframes = useMemo(() => {
       if (!keyframes) return undefined;
@@ -137,6 +138,12 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         );
       });
     }, [keyframes, validatedBounds]);
+
+    const { dualVideoSettings: settings, setDualVideoSettings } =
+      useShallowSelector(ClipContext, (state) => ({
+        dualVideoSettings: state.dualVideoSettings,
+        setDualVideoSettings: state.setDualVideoSettings,
+      }));
 
     const { time, status, controls, isBuffering, hasError, buffered } =
       useReactiveVideoTime({
@@ -219,8 +226,23 @@ export const VideoPreview = forwardRef<HTMLDivElement, VideoPreviewProps>(
         {!externalControls && (
           <>
             <Volume.Root
-              defaultValue={controls.getVolume()}
-              onValueChangeAlways={controls.setVolume}
+              defaultValue={(() => {
+                const video = videoRef?.current;
+                const volume = settings.primaryVolume;
+
+                if (video && video.volume !== volume) {
+                  video.volume = Math.max(0, Math.min(volume, 1));
+                }
+                return volume;
+              })()}
+              value={settings.primaryVolume}
+              onValueChange={(volume) => {
+                controls.setVolume(volume);
+                setDualVideoSettings((prev) => ({
+                  ...prev,
+                  primaryVolume: volume,
+                }));
+              }}
             >
               <Volume.Controls
                 className="absolute top-2 left-2 z-20"

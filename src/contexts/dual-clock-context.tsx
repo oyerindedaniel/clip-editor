@@ -1,9 +1,11 @@
 import React, { createContext, useContext } from "react";
 import { type StoreApi, useContextStore } from "react-shallow-store";
 
+type VideoRef = React.RefObject<HTMLVideoElement | null>;
+
 interface DualClockContextValue {
-  primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
-  secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
+  primaryVideoRef: VideoRef;
+  secondaryVideoRef: VideoRef;
   // clock: ReturnType<typeof useClock>;
 }
 
@@ -18,8 +20,8 @@ export function DualClockProvider({
 }: {
   duration?: number;
   children: React.ReactNode;
-  primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
-  secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
+  primaryVideoRef: VideoRef;
+  secondaryVideoRef: VideoRef;
 }) {
   // const clock = useClock(duration);
 

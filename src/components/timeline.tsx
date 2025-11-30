@@ -1,11 +1,4 @@
-import React, {
-  useRef,
-  useState,
-  useCallback,
-  useLayoutEffect,
-  memo,
-  useEffect,
-} from "react";
+import React, { useRef, useState, useCallback, memo, useEffect } from "react";
 import { GripVertical } from "lucide-react";
 import { useScale } from "@/hooks/app/use-scale";
 import { useAutoScroll } from "@/hooks/app/use-auto-scroll";
@@ -29,6 +22,7 @@ import InfoTooltip from "./info-tooltip";
 import { Scissors, RotateCcw } from "lucide-react";
 import { msToSecondsRate } from "@/utils/timeline-utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface TimelineProps {
   duration: number;
@@ -132,7 +126,7 @@ const Timeline: React.FC<TimelineProps> = ({
     el.style.left = `0px`;
   }, [maxContentWidth]);
 
-  useLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     rafIdRef.current = requestAnimationFrame(() => {
       drawRuler();
       renderBlock();
@@ -441,7 +435,12 @@ const Timeline: React.FC<TimelineProps> = ({
               "absolute w-(--width) h-full cursor-ew-resize z-20 top-0 left-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "left")}
-            style={{ "--width": `${HANDLE_WIDTH}px` } as React.CSSProperties}
+            style={
+              {
+                touchAction: "none",
+                "--width": `${HANDLE_WIDTH}px`,
+              } as React.CSSProperties
+            }
           >
             <div className="absolute inset-0 bg-primary rounded-md opacity-20 blur-sm" />
             <div className="relative w-full h-full bg-gradient-to-b from-primary to-primary-active rounded-md border border-primary/50 flex items-center justify-center shadow-md transition-all duration-200">
@@ -455,7 +454,12 @@ const Timeline: React.FC<TimelineProps> = ({
               "absolute w-(--width) h-full cursor-ew-resize top-0 z-20 right-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "right")}
-            style={{ "--width": `${HANDLE_WIDTH}px` } as React.CSSProperties}
+            style={
+              {
+                touchAction: "none",
+                "--width": `${HANDLE_WIDTH}px`,
+              } as React.CSSProperties
+            }
           >
             <div className="absolute inset-0 bg-primary rounded-md opacity-20 blur-sm" />
             <div className="relative w-full h-full bg-gradient-to-b from-primary to-primary-active rounded-md border border-primary/50 flex items-center justify-center shadow-md transition-all duration-200">

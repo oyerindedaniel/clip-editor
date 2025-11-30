@@ -19,6 +19,7 @@ import {
 } from "@/utils/aspect-ratios";
 import type { Transform } from "@/utils/transform";
 import { useElementSize } from "@/hooks/use-element-size";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface BoundaryBoxContextValue {
   screenSize: ScreenSize;
@@ -426,7 +427,7 @@ const BoundaryBoxOverlay = React.forwardRef<
     return () => cancelAnimationFrame(rafId);
   }, [calculateInitialSize, setTransform]);
 
-  React.useLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     if (!visible) return;
     const cleanup = initializeOverlay();
     return cleanup;
@@ -905,7 +906,7 @@ const BoundaryBoxPositioned = React.forwardRef<HTMLDivElement, PositionedProps>(
       return () => cancelAnimationFrame(rafId);
     }, [position, setTransform]);
 
-    React.useLayoutEffect(() => {
+    useIsoLayoutEffect(() => {
       const cleanup = positionOverlay();
       return cleanup;
     }, [positionOverlay]);

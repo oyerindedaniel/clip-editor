@@ -40,8 +40,6 @@ type KeyframeContextValue = {
   boundaryTransform: Transform | null;
   setBoundaryTransform: React.Dispatch<React.SetStateAction<Transform | null>>;
 
-  boundaryTransformRef: React.RefObject<Transform | null>;
-
   keyframes: KeyframeData[];
   setKeyframes: React.Dispatch<React.SetStateAction<KeyframeData[]>>;
   currentKeyframeId: string | null;
@@ -61,8 +59,6 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
   const [boundaryTransform, setBoundaryTransform] = useState<Transform | null>(
     null
   );
-
-  const boundaryTransformRef = useLatestValue(boundaryTransform);
 
   const [keyframes, setKeyframes] = useState<KeyframeData[]>([]);
   const [currentKeyframeId, setCurrentKeyframeId] = useState<string | null>(
@@ -106,7 +102,6 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
       setBoundaryVisible,
       boundaryTransform,
       setBoundaryTransform,
-      boundaryTransformRef,
       keyframes,
       setKeyframes,
       currentKeyframeId,
@@ -125,7 +120,6 @@ export function KeyframeProvider({ children }: { children: ReactNode }) {
       setBoundaryVisible,
       boundaryTransform,
       setBoundaryTransform,
-      boundaryTransformRef,
       keyframes,
       setKeyframes,
       currentKeyframeId,

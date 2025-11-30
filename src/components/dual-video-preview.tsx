@@ -8,7 +8,7 @@ import {
 import CanvasVideoRenderer from "./canvas-video-renderer";
 import { isWhiteColor, type Color } from "./color-palette";
 import { VideoPreview, type Video } from "./video-preview";
-import type { CropMode, TrimData } from "@/types/app";
+import type { CropMode, PlayerType, TrimData } from "@/types/app";
 import { type AspectRatio } from "@/utils/aspect-ratios";
 import type { PlayingStatus } from "@/hooks/app/use-video-controls-core";
 import { cn } from "@/lib/utils";
@@ -27,11 +27,9 @@ import {
 } from "@/components/ui/resizable";
 import { composeRefs } from "@/lib/compose-refs";
 import { getElementRef } from "@/lib/get-element-ref";
-import {
-  createBoundTrimData,
-  createDualBoundTrimData,
-} from "@/utils/keyframe-bounds";
+import { createDualBoundTrimData } from "@/utils/keyframe-bounds";
 import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
+import { useComposedRefs } from "@/hooks/use-composed-refs";
 
 interface BaseDualVideoProps {
   keyframes: KeyframeData[];
@@ -52,7 +50,9 @@ interface DualVideoPreviewEditorProps extends BaseDualVideoProps {
   secondaryVideoUrl?: string;
   cropMode: CropMode;
   active: "dual" | "renderer";
-  playerType: "primary" | "secondary";
+  activePlayer: PlayerType;
+  onPrimaryVideoRef?: (ref: HTMLVideoElement | null) => void;
+  onSecondaryVideoRef?: (ref: HTMLVideoElement | null) => void;
 }
 
 const DualVideoPreviewEditor = forwardRef<
@@ -74,15 +74,29 @@ const DualVideoPreviewEditor = forwardRef<
     style,
     playing = false,
     active,
-    playerType,
+    activePlayer,
     defaultRepeat,
+    onPrimaryVideoRef,
+    onSecondaryVideoRef,
   } = props;
 
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const composedPrimaryRefs = useComposedRefs(
+    primaryVideoRef,
+    onPrimaryVideoRef
+  );
+  const composedSecondaryRefs = useComposedRefs(
+    secondaryVideoRef,
+    onSecondaryVideoRef
+  );
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
+
   const {
-    dualVideoSettings,
+    dualVideoSettings: settings,
     setDualVideoSettings,
     primaryTrim,
     secondaryTrim,
@@ -92,6 +106,7 @@ const DualVideoPreviewEditor = forwardRef<
     primaryTrim: state.primaryTrim,
     secondaryTrim: state.secondaryTrim,
   }));
+
   const {
     setPrimaryBoundaryAspectOverride,
     setSecondaryBoundaryAspectOverride,
@@ -101,10 +116,45 @@ const DualVideoPreviewEditor = forwardRef<
       state.setSecondaryBoundaryAspectOverride,
   }));
 
-  const hasInitialized = useRef(false);
-
-  const primaryPercentage = dualVideoSettings.primaryPanelPercentage || 50;
+  const primaryPercentage = settings.primaryPanelPercentage || 50;
   const secondaryPercentage = 100 - primaryPercentage;
+
+  const isPIP = settings.layout === "pip";
+  const isRendererActive = active === "renderer";
+  const isPrimary = activePlayer === "primary";
+
+  const hasSecondaryClip = Boolean(secondaryVideoUrl && secondaryTrim);
+  const hasSecondaryKeyframes = keyframes.some(
+    (kf) => kf.target === "secondary"
+  );
+  const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
+  const isPadColorWhite = isWhiteColor(padColor);
+
+  const primaryKeyframeBounds = useMemo(
+    () => getKeyframeBoundsForTarget(keyframes, "primary"),
+    [keyframes]
+  );
+
+  const secondaryKeyframeBounds = useMemo(
+    () => getKeyframeBoundsForTarget(keyframes, "secondary"),
+    [keyframes]
+  );
+
+  const backgroundVideoRef =
+    settings.backgroundVideo === "primary"
+      ? primaryVideoRef
+      : secondaryVideoRef;
+
+  const boundTrimData = useMemo(
+    () =>
+      createDualBoundTrimData(
+        primaryKeyframeBounds,
+        primaryTrim,
+        secondaryKeyframeBounds,
+        secondaryTrim
+      ),
+    [primaryKeyframeBounds, primaryTrim, secondaryKeyframeBounds, secondaryTrim]
+  );
 
   useEffect(() => {
     if (canvasHeight > 0 && canvasWidth > 0 && !hasInitialized.current) {
@@ -122,57 +172,27 @@ const DualVideoPreviewEditor = forwardRef<
     }
   }, [canvasHeight, canvasWidth, primaryPercentage, secondaryPercentage]);
 
-  const hasSecondaryClip = Boolean(secondaryVideoUrl && secondaryTrim);
-
-  const hasSecondaryKeyframes = keyframes.some(
-    (kf) => kf.target === "secondary"
-  );
-
-  const useDualMode = hasSecondaryClip && hasSecondaryKeyframes;
-
-  const isPadColorWhite = isWhiteColor(padColor);
-
-  const primaryKeyframeBounds = useMemo(
-    () => getKeyframeBoundsForTarget(keyframes, "primary"),
-    [keyframes]
-  );
-  const secondaryKeyframeBounds = useMemo(
-    () => getKeyframeBoundsForTarget(keyframes, "secondary"),
-    [keyframes]
-  );
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const backgroundVideoRef =
-    dualVideoSettings.backgroundVideo === "primary"
-      ? primaryVideoRef
-      : secondaryVideoRef;
-
-  const primaryBoundTrimData = useMemo(
-    () => createBoundTrimData(primaryKeyframeBounds, primaryTrim),
-    [primaryKeyframeBounds, primaryTrim]
-  );
-
-  const isPIP = dualVideoSettings.layout === "pip";
-
   const pipSync = useDualVideoSync({
     primaryVideoRef,
     secondaryVideoRef,
-    primaryTrim: primaryBoundTrimData,
-    secondaryTrim: secondaryTrim,
-    enabled: isPIP,
-    seekProgressRafId:
-      isPIP && secondaryVideoUrl
-        ? RAF_IDS.seekProgress(VIDEO_IDS.dualVideoPreviewPip)
-        : undefined,
+    primaryTrim: boundTrimData.primaryBoundTrimData,
+    secondaryTrim: boundTrimData.secondaryBoundTrimData,
+    enabled: isPIP && isRendererActive,
+    seekProgressRafId: isPIP
+      ? RAF_IDS.seekProgress(`${VIDEO_IDS.dualVideoPreviewPip}-${activePlayer}`)
+      : undefined,
+    reInitialize: activePlayer,
   });
 
-  if (useDualMode && secondaryVideoUrl && secondaryTrim) {
+  if (useDualMode && secondaryVideoUrl && secondaryTrim && isRendererActive) {
     return (
       <DualVideoPreview
         ref={forwardedRef}
-        primarySource={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
+        primarySource={
+          <video ref={composedPrimaryRefs} src={primaryVideoUrl} />
+        }
         secondarySource={
-          <video ref={secondaryVideoRef} src={secondaryVideoUrl} />
+          <video ref={composedSecondaryRefs} src={secondaryVideoUrl} />
         }
         primaryTrimData={primaryTrim}
         secondaryTrimData={secondaryTrim}
@@ -206,13 +226,24 @@ const DualVideoPreviewEditor = forwardRef<
     >
       <VideoPreview
         playing={playing}
-        source={<video ref={primaryVideoRef} src={primaryVideoUrl} />}
+        source={
+          <video
+            ref={isPrimary ? composedPrimaryRefs : composedSecondaryRefs}
+            src={isPrimary ? primaryVideoUrl : secondaryVideoUrl}
+          />
+        }
         baseAspect={baseAspect}
         targetAspect={targetAspect}
         variant={cropMode}
-        keyframes={filterKeyframesByTarget(keyframes, "primary")}
-        keyframeBounds={primaryKeyframeBounds}
-        trimData={primaryTrim}
+        keyframes={
+          isPrimary
+            ? filterKeyframesByTarget(keyframes, "primary")
+            : filterKeyframesByTarget(keyframes, "secondary")
+        }
+        keyframeBounds={
+          isPrimary ? primaryKeyframeBounds : secondaryKeyframeBounds
+        }
+        trimData={isPrimary ? primaryTrim : secondaryTrim}
         externalControls={isPIP}
         padColor={padColor}
       >
@@ -225,19 +256,22 @@ const DualVideoPreviewEditor = forwardRef<
             width={canvasWidth}
             height={canvasHeight}
             color={padColor}
-            backgroundMode={dualVideoSettings.backgroundMode}
-            backgroundVideo={dualVideoSettings.backgroundVideo}
+            backgroundMode={settings.backgroundMode}
+            backgroundVideo={settings.backgroundVideo}
             backgroundVideoRef={backgroundVideoRef}
-            backgroundAlign={dualVideoSettings.backgroundAlign}
-            backgroundOpacity={dualVideoSettings.backgroundOpacity}
-            backgroundBlur={dualVideoSettings.backgroundBlur}
+            backgroundAlign={settings.backgroundAlign}
+            backgroundOpacity={settings.backgroundOpacity}
+            backgroundBlur={settings.backgroundBlur}
           />
         )}
       </VideoPreview>
 
-      {isPIP && secondaryVideoUrl && (
-        <PiPOverlay playerType={playerType} containerRef={containerRef}>
-          <video ref={secondaryVideoRef} src={secondaryVideoUrl} />
+      {isPIP && (
+        <PiPOverlay playerType={activePlayer} containerRef={containerRef}>
+          <video
+            ref={isPrimary ? composedSecondaryRefs : composedPrimaryRefs}
+            src={isPrimary ? secondaryVideoUrl : primaryVideoUrl}
+          />
         </PiPOverlay>
       )}
 
@@ -257,44 +291,58 @@ const DualVideoPreviewEditor = forwardRef<
           isDual
           noGlass={isPadColorWhite}
         >
-          {isPIP && (
-            <Volume.Root
-              defaultValue={(() => {
-                const video = primaryVideoRef?.current;
-                const volume = dualVideoSettings.primaryVolume;
+          <Volume.Root
+            defaultValue={(() => {
+              const isPrimary = activePlayer === "primary";
+              const video = isPrimary
+                ? primaryVideoRef?.current
+                : secondaryVideoRef?.current;
+              const volume = isPrimary
+                ? settings.primaryVolume
+                : settings.secondaryVolume;
 
-                if (video && video.volume !== volume) {
-                  video.volume = Math.max(0, Math.min(volume, 1));
-                }
-                return volume;
-              })()}
-              value={dualVideoSettings.primaryVolume}
-              onValueChange={(volume) => {
+              if (video && video.volume !== volume) {
+                video.volume = Math.max(0, Math.min(volume, 1));
+              }
+              return volume;
+            })()}
+            value={
+              activePlayer === "primary"
+                ? settings.primaryVolume
+                : settings.secondaryVolume
+            }
+            onValueChange={(volume) => {
+              const isPrimary = activePlayer === "primary";
+              if (isPrimary) {
                 pipSync.controls.setPrimaryVolume(volume);
-                setDualVideoSettings({
-                  ...dualVideoSettings,
-                  primaryVolume: volume,
-                });
-              }}
+              } else {
+                pipSync.controls.setSecondaryVolume(volume);
+              }
+              setDualVideoSettings((prev) => ({
+                ...prev,
+                ...(isPrimary
+                  ? { primaryVolume: volume }
+                  : { secondaryVolume: volume }),
+              }));
+            }}
+          >
+            <Volume.Controls
+              variant="pill"
+              className={cn(
+                "absolute bottom-[70px] left-4",
+                isPadColorWhite &&
+                  "!backdrop-blur-none !bg-surface-secondary/90"
+              )}
             >
-              <Volume.Controls
-                variant="pill"
-                className={cn(
-                  "absolute bottom-[70px] left-4",
-                  isPadColorWhite &&
-                    "!backdrop-blur-none !bg-surface-secondary/90"
-                )}
-              >
-                <Volume.Button aria-label="Primary volume" />
-                <Volume.Slider>
-                  <Volume.Slider.Track>
-                    <Volume.Slider.Range />
-                    <Volume.Slider.Thumb />
-                  </Volume.Slider.Track>
-                </Volume.Slider>
-              </Volume.Controls>
-            </Volume.Root>
-          )}
+              <Volume.Button aria-label="Primary volume" />
+              <Volume.Slider>
+                <Volume.Slider.Track>
+                  <Volume.Slider.Range />
+                  <Volume.Slider.Thumb />
+                </Volume.Slider.Track>
+              </Volume.Slider>
+            </Volume.Controls>
+          </Volume.Root>
 
           <Playback.Controls className="flex items-center justify-between px-4 w-full">
             <div className="flex items-center gap-3">
@@ -315,13 +363,13 @@ const DualVideoPreviewEditor = forwardRef<
           <Seek.Root
             primaryVideoRef={primaryVideoRef}
             secondaryVideoRef={secondaryVideoRef}
-            primaryTrim={primaryBoundTrimData}
-            secondaryTrim={secondaryTrim}
+            primaryTrim={boundTrimData.primaryBoundTrimData}
+            secondaryTrim={boundTrimData.secondaryBoundTrimData}
             isPlaying={pipSync.status === "playing"}
             onSeek={pipSync.controls.seek}
             primaryBuffered={pipSync.primaryBuffered}
             secondaryBuffered={pipSync.secondaryBuffered}
-            videoId={VIDEO_IDS.dualVideoPreviewPip}
+            videoId={`${VIDEO_IDS.dualVideoPreviewPip}-${activePlayer}`}
           >
             <Seek.Content>
               <Seek.TimeDisplay

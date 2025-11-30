@@ -1,4 +1,5 @@
 import React, { useRef, useLayoutEffect, useCallback } from "react";
+import { useIsoLayoutEffect } from "./use-Isomorphic-layout-effect";
 
 type Size = {
   width: number;
@@ -35,7 +36,7 @@ export function useElementSize<T extends HTMLElement>(): {
     }
   }, []);
 
-  useLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
 
