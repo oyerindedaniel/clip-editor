@@ -51,7 +51,7 @@ interface DualVideoTracksProps {
   primaryPreviewFrames?: string[];
   secondaryPreviewFrames?: string[];
   keyframes?: KeyframeData[];
-  videoId?: string;
+  id: string;
 }
 
 type HistoryAction = "init" | "mark" | "cut";
@@ -67,6 +67,7 @@ interface HistoryState {
   cutTrimEnd?: number;
 
   accumulatedOffset?: number; // How far into the original video does the current segment start
+  trackOffset?: number; // Track alignment offset (secondary relative to primary)
 }
 
 export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
@@ -79,7 +80,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryPreviewFrames,
   secondaryPreviewFrames,
   keyframes,
-  videoId,
+  id,
 }) => {
   const { clearTrimData, canClearTrim } = useShallowSelector(
     ClipContext,
@@ -103,7 +104,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const [showTooltip, setShowTooltip] = useState(false);
 
   const initialStateRef = useLazyRef(() =>
-    getHistoryState(videoId, secondaryDurationMs)
+    getHistoryState(id, secondaryDurationMs)
   );
 
   const [editHistory, setEditHistory] = useState<HistoryState[]>(
@@ -286,12 +287,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     if (trimStart === null && trimEnd === null) return [];
 
     const offset = currentAccumulatedOffset;
+    const trackOffset = currentOffsetRef.current;
     const markers: Array<{ time: number; isInView: boolean }> = [];
 
     if (trimStart !== null) {
       const relativeTime = trimStart - offset;
+      const timelinePosition = relativeTime + trackOffset;
       markers.push({
-        time: relativeTime,
+        time: timelinePosition,
         isInView:
           relativeTime >= 0 && relativeTime <= currentSecondaryDurationMs,
       });
@@ -299,8 +302,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (trimEnd !== null) {
       const relativeTime = trimEnd - offset;
+      const timelinePosition = relativeTime + trackOffset;
       markers.push({
-        time: relativeTime,
+        time: timelinePosition,
         isInView:
           relativeTime >= 0 && relativeTime <= currentSecondaryDurationMs,
       });
@@ -352,18 +356,23 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const saveHistoryToStorage = useCallback(
     (history: Array<HistoryState>) => {
-      if (!videoId) return;
+      if (!id) return;
 
       try {
-        const storageKey = getStorageKey(`${videoId}:dual-video-history`);
+        const storageKey = getStorageKey(`${id}:dual-video-history`);
         localStorage.setItem(storageKey, JSON.stringify(history));
       } catch {}
     },
-    [videoId]
+    [id]
   );
 
   const addToHistory = (newState: HistoryState) => {
-    const updated = [...editHistory, newState];
+    const stateWithOffset = {
+      ...newState,
+      trackOffset: newState.trackOffset ?? currentOffsetRef.current,
+    };
+
+    const updated = [...editHistory, stateWithOffset];
     const finalHistory =
       updated.length > MAX_HISTORY ? updated.slice(-MAX_HISTORY) : updated;
     const newIndex = finalHistory.length - 1;
@@ -386,6 +395,11 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     setTrimStart(state.trimStart);
     setTrimEnd(state.trimEnd);
 
+    if (state.trackOffset !== undefined) {
+      currentOffsetRef.current = state.trackOffset;
+      onOffsetChange?.(state.trackOffset);
+    }
+
     if (withRender) {
       rafIdRef.current = requestAnimationFrame(() => {
         renderBlocks();
@@ -393,6 +407,22 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         renderStrips();
       });
     }
+  };
+
+  const handleCommitTrackOffset = (newOffset: number) => {
+    const lastState = editHistory[historyIndex];
+    if (lastState && lastState.trackOffset === newOffset) return;
+
+    const state = {
+      trimStart,
+      trimEnd,
+      secondaryDurationMs: currentSecondaryDurationMs,
+      action: "mark" as const,
+      accumulatedOffset: currentAccumulatedOffset,
+      trackOffset: newOffset,
+    };
+
+    addToHistory(state);
   };
 
   const handleUndo = useStableHandler(() => {
@@ -504,12 +534,25 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   });
 
   const handleAddMarker = () => {
-    if (!containerRef.current || !playheadRef.current) return;
+    if (
+      !containerRef.current ||
+      !playheadRef.current ||
+      !secondaryBlockRef.current
+    ) {
+      return;
+    }
 
     const playheadLeft = parseFloat(playheadRef.current.style.left || "0");
-    const timeMs = pxToMs(playheadLeft, pxPerMs);
+    const secondaryBlockLeft = parseFloat(
+      secondaryBlockRef.current.style.left || "0"
+    );
 
-    const normalizedTimeMs = timeMs + currentAccumulatedOffset;
+    const timeRelativeToBlock = pxToMs(
+      playheadLeft - secondaryBlockLeft,
+      pxPerMs
+    );
+
+    const normalizedTimeMs = timeRelativeToBlock + currentAccumulatedOffset;
 
     let nextStart = trimStart;
     let nextEnd = trimEnd;
@@ -696,6 +739,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       document.removeEventListener("pointerup", onUp);
 
       onCommitOffset?.(currentOffsetRef.current);
+      handleCommitTrackOffset(currentOffsetRef.current);
     };
 
     document.addEventListener("pointermove", onMove);
@@ -955,7 +999,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                     <span className="text-sm md:text-[0.8rem]">
                       Marker at{" "}
                       {msToSeconds(
-                        marker.time + currentAccumulatedOffset
+                        marker.time -
+                          currentOffsetRef.current +
+                          currentAccumulatedOffset
                       ).toFixed(1)}
                       s (original)
                     </span>
@@ -965,7 +1011,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
                       className="size-4"
                       onClick={() => {
                         const absoluteTime =
-                          marker.time + currentAccumulatedOffset;
+                          marker.time -
+                          currentOffsetRef.current +
+                          currentAccumulatedOffset;
                         if (trimStart === absoluteTime) setTrimStart(null);
                         if (trimEnd === absoluteTime) setTrimEnd(null);
                       }}
@@ -1095,7 +1143,7 @@ interface GetHistoryStateResult {
 }
 
 function getHistoryState(
-  videoId: string | undefined,
+  id: string,
   secondaryDurationMs: number
 ): GetHistoryStateResult {
   const fallbackState: GetHistoryStateResult = {
@@ -1106,6 +1154,7 @@ function getHistoryState(
         action: "init",
         secondaryDurationMs,
         accumulatedOffset: 0,
+        trackOffset: 0,
       },
     ],
     index: 0,
@@ -1113,20 +1162,25 @@ function getHistoryState(
     trimEnd: null,
   };
 
-  if (!videoId || typeof window === "undefined") return fallbackState;
+  if (!id || typeof window === "undefined") return fallbackState;
 
   try {
-    const key = getStorageKey(`${videoId}:dual-video-history`);
+    const key = getStorageKey(`${id}:dual-video-history`);
     const saved = localStorage.getItem(key);
     if (!saved) return fallbackState;
 
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed) || parsed.length === 0) return fallbackState;
 
-    const last = parsed.at(-1);
+    const normalizedHistory = parsed.map((item) => ({
+      ...item,
+      trackOffset: item.trackOffset ?? 0,
+    }));
+
+    const last = normalizedHistory.at(-1);
     return {
-      history: parsed,
-      index: parsed.length - 1,
+      history: normalizedHistory,
+      index: normalizedHistory.length - 1,
       trimStart: last?.trimStart ?? null,
       trimEnd: last?.trimEnd ?? null,
     };

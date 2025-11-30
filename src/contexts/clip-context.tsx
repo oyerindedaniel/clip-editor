@@ -26,6 +26,7 @@ import { DEFAULT_TRANSFORM } from "@/utils/transform";
 import type { Color } from "@/components/color-palette";
 
 type ClipContextValue = {
+  videoId: string;
   secondaryClip: (DualVideoClip & ClipMetadata) | null;
   setSecondaryClip: React.Dispatch<
     React.SetStateAction<(DualVideoClip & ClipMetadata) | null>
@@ -84,7 +85,7 @@ export const ClipContext = createContext<StoreApi<ClipContextValue> | null>(
 
 interface ClipProviderProps {
   children: ReactNode;
-  videoId?: string;
+  videoId: string;
   isManual?: boolean;
 }
 
@@ -321,6 +322,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       setCropMode,
       padColor,
       setPadColor,
+      videoId,
     }),
     [
       secondaryClip,
@@ -339,6 +341,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       setCropMode,
       padColor,
       setPadColor,
+      videoId,
     ]
   );
 

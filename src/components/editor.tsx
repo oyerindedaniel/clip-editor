@@ -1147,7 +1147,7 @@ const ClipEditor = ({
                         }));
                       }}
                       keyframes={keyframes}
-                      videoId={currentClipData.metadata.clipId}
+                      id={secondaryClip.id}
                     />
                   ) : isVideoLoaded ? (
                     <Timeline

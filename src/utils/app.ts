@@ -89,7 +89,7 @@ function throttleWithRaf<T extends (...args: any[]) => void>(fn: T): T {
   } as T;
 }
 
-function formatDurationDisplay(ms: number): string {
+function formatDurationDisplay(ms: number) {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -99,7 +99,7 @@ function formatDurationDisplay(ms: number): string {
     .padStart(2, "0")}.${milliseconds.toString().padStart(2, "0")}`;
 }
 
-function formatTime(milliseconds: number): string {
+function formatTime(milliseconds: number) {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -115,14 +115,18 @@ function formatTime(milliseconds: number): string {
   return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-function roundToDecimals(value: number, decimals: number = 3): number {
+function roundToDecimals(value: number, decimals: number = 3) {
   if (!Number.isFinite(value)) return 0;
   const power = Math.pow(10, decimals);
   return Math.round(value * power) / power;
 }
 
-function getStorageKey(suffix: string): string {
+function getStorageKey(suffix: string) {
   return `zinc:${suffix}`;
+}
+
+function getSecondaryClipId(suffix: string) {
+  return `secondary_${suffix}`.trim().toLowerCase();
 }
 
 function normalizePosition(position: Point, container: Dimensions): Point {
@@ -147,5 +151,6 @@ export {
   formatTime,
   roundToDecimals,
   getStorageKey,
+  getSecondaryClipId,
   normalizePosition,
 };
