@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+import type { PlayerType } from "@/types/app";
 
 export function useVideoRefs() {
   // Video element refs
@@ -8,11 +9,14 @@ export function useVideoRefs() {
   const primaryDualVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryDualVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const primaryRendererVideoRef = useRef<HTMLVideoElement | null>(null);
+  const secondaryRendererVideoRef = useRef<HTMLVideoElement | null>(null);
+
   const pipVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Helper to select video element
   const getVideoRef = useCallback(
-    (player: "primary" | "secondary") =>
+    (player: PlayerType) =>
       player === "primary" ? primaryVideoRef : secondaryVideoRef,
     []
   );
@@ -22,6 +26,8 @@ export function useVideoRefs() {
     secondaryVideoRef,
     primaryDualVideoRef,
     secondaryDualVideoRef,
+    primaryRendererVideoRef,
+    secondaryRendererVideoRef,
     pipVideoRef,
     getVideoRef,
   };

@@ -12,6 +12,7 @@ import { useControllableStateWithCallback } from "@/hooks/use-controllable-state
 import { HitArea } from "./hit-area";
 import type { AnimationState } from "@/hooks/use-animate-presence";
 import { useElementReadyForMeasurement } from "@/hooks/use-element-ready-for-measurement";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface VolumeContextValue {
   volume: number;
@@ -211,7 +212,7 @@ const VolumeControls = React.forwardRef<HTMLDivElement, VolumeControlsProps>(
           : controls.offsetHeight;
     }, [orientation, isMeasured, variant]);
 
-    React.useLayoutEffect(() => {
+    useIsoLayoutEffect(() => {
       if (variant === "default" || !isVisible) return;
 
       const slider = sliderRef.current;
@@ -482,6 +483,10 @@ const VolumeSliderTrack = React.forwardRef<
           className
         )}
         onPointerDown={handlePointerDown}
+        style={{
+          touchAction: "none",
+          ...props.style,
+        }}
         {...props}
       >
         {children}
@@ -612,6 +617,7 @@ const VolumeSliderThumb = React.forwardRef<
         )}
         style={{
           ...style,
+          touchAction: "none",
           ...(orientation === "horizontal"
             ? { left: offset }
             : { top: offset }),

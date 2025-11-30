@@ -84,6 +84,9 @@ import { withProgressToast } from "@/lib/with-progress-toast";
 import { globalRAF } from "@/lib/raf-manager";
 import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
 import { getClipBuffer } from "@/utils/buffer";
+import { useNormalizeKeyframeTime } from "@/hooks/app/use-normalize-keyframe-time";
+import { useVideoStackTransition } from "@/hooks/app/use-video-stack-transition";
+import { useDualRendererStackTransition } from "@/hooks/app/use-dual-renderer-stack-transition";
 
 interface ClipEditorProps {
   clipData: ClipData | null;
@@ -124,6 +127,8 @@ const ClipEditor = ({
   const primaryClipMetaDataRef = useRef<ClipMetadata>(DEFAULT_CLIP_METADATA);
   const traceRef = useRef<HTMLDivElement>(null);
 
+  const normalizeKeyframeTime = useNormalizeKeyframeTime();
+
   const {
     textOverlaysRef,
     imageOverlaysRef,
@@ -150,6 +155,8 @@ const ClipEditor = ({
     secondaryVideoRef,
     primaryDualVideoRef,
     secondaryDualVideoRef,
+    primaryRendererVideoRef,
+    secondaryRendererVideoRef,
     pipVideoRef,
     cropMode,
     padColor,
@@ -165,6 +172,8 @@ const ClipEditor = ({
     secondaryVideoRef: state.secondaryVideoRef,
     primaryDualVideoRef: state.primaryDualVideoRef,
     secondaryDualVideoRef: state.secondaryDualVideoRef,
+    primaryRendererVideoRef: state.primaryRendererVideoRef,
+    secondaryRendererVideoRef: state.secondaryRendererVideoRef,
     pipVideoRef: state.pipVideoRef,
     cropMode: state.cropMode,
     padColor: state.padColor,
@@ -240,32 +249,26 @@ const ClipEditor = ({
 
   const primaryUrl = currentClipData?.url;
 
-  const toggleActivePlayer = useCallback(() => {
-    const primary =
-      !!primaryVideoRef.current && !primaryVideoRef.current.paused;
-    const secondary =
-      !!secondaryVideoRef.current && !secondaryVideoRef.current.paused;
-    wasPlayingRef.current = { primary, secondary };
-
-    togglePlayerStack();
-
-    //  restore playback for new active if it was playing before
-    queueMicrotask(() => {
-      const activeIsSecondary = playerActive === "primary"; // will become secondary
-      if (activeIsSecondary) {
-        if (primary && primaryVideoRef.current) primaryVideoRef.current.pause();
-        if (wasPlayingRef.current.secondary && secondaryVideoRef.current) {
-          secondaryVideoRef.current.play().catch(() => {});
-        }
-      } else {
-        if (secondary && secondaryVideoRef.current)
-          secondaryVideoRef.current.pause();
-        if (wasPlayingRef.current.primary && primaryVideoRef.current) {
-          primaryVideoRef.current.play().catch(() => {});
-        }
-      }
+  const { toggleWithPlaybackControl: toggleActiveMainPlayer } =
+    useVideoStackTransition({
+      videoRefs: {
+        primary: primaryVideoRef,
+        secondary: secondaryVideoRef,
+      },
+      toggleStack: togglePlayerStack,
+      activeKey: playerActive,
     });
-  }, [togglePlayerStack, playerActive]);
+
+  const { toggleWithPlaybackControl: toggleStackWithPlayback } =
+    useDualRendererStackTransition({
+      primaryDualVideoRef,
+      secondaryDualVideoRef,
+      primaryRendererVideoRef,
+      secondaryRendererVideoRef,
+      toggleStack,
+      activeStack: active,
+      hasSecondaryClip: !!secondaryClip,
+    });
 
   const togglePanelSide = useCallback(() => {
     setPanelSide((prev) => (prev === "right" ? "left" : "right"));
@@ -558,8 +561,6 @@ const ClipEditor = ({
 
   const secondaryDurationMs = secondaryClip?.metadata.clipDurationMs ?? 0;
 
-  const maxDurationMs = Math.max(primaryDurationMs, secondaryDurationMs);
-
   if (!currentClipData || !primaryUrl) {
     return <EditPageSkeleton />;
   }
@@ -639,7 +640,7 @@ const ClipEditor = ({
                                 });
                               }
                             }}
-                            disabled={!boundaryTransform}
+                            disabled={!boundaryTransform || !boundaryVisible}
                             className="ml-2"
                           >
                             <Film className="mr-2" size={14} />
@@ -656,7 +657,9 @@ const ClipEditor = ({
                                   if (video) {
                                     video.currentTime = keyframe.time;
                                     globalRAF.trigger(
-                                      RAF_IDS.seekProgress(VIDEO_IDS.main)
+                                      RAF_IDS.seekProgress(
+                                        `${VIDEO_IDS.main}-${playerActive}`
+                                      )
                                     );
                                   }
                                   setCurrentKeyframeId(id);
@@ -676,7 +679,7 @@ const ClipEditor = ({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={toggleActivePlayer}
+                            onClick={toggleActiveMainPlayer}
                             disabled={isAnimatingPlayerStack}
                             className="flex items-center gap-2"
                           >
@@ -730,7 +733,6 @@ const ClipEditor = ({
                             className="relative flex-1 min-w-0"
                           >
                             <DualClockProvider
-                              duration={maxDurationMs}
                               primaryVideoRef={
                                 playerActive === "primary"
                                   ? primaryVideoRef
@@ -772,6 +774,7 @@ const ClipEditor = ({
                                         mediaUrl={primaryUrl}
                                         playerType="primary"
                                         setVideoRef={setVideoRef}
+                                        activePlayer={playerActive}
                                       />
                                     </div>
                                   </div>
@@ -790,6 +793,7 @@ const ClipEditor = ({
                                         ref={secondaryVideoRef}
                                         mediaUrl={secondaryClip.url}
                                         playerType="secondary"
+                                        activePlayer={playerActive}
                                         setVideoRef={setVideoRef}
                                       />
                                     </div>
@@ -816,10 +820,9 @@ const ClipEditor = ({
                           <Keyframe.Box triggerRef={keyframeTriggerRef}>
                             <Keyframe.BoxHeader>
                               {currentKeyframeId &&
-                                getKeyframe(currentKeyframeId) &&
-                                `Keyframe @ ${getKeyframe(
-                                  currentKeyframeId
-                                )!.time.toFixed(1)}s`}
+                                `Keyframe @ ${normalizeKeyframeTime(
+                                  getKeyframe(currentKeyframeId)!
+                                ).toFixed(1)}s`}
 
                               <Keyframe.BoxClose />
                             </Keyframe.BoxHeader>
@@ -1050,28 +1053,22 @@ const ClipEditor = ({
                   </div>
 
                   <div className="lg:self-end flex flex-col gap-2">
-                    {cropMode === "crop" &&
-                      keyframes &&
-                      keyframes.length >= 2 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={toggleStack}
-                          disabled={isAnimatingStack}
-                          className="flex items-center gap-2 self-end"
-                        >
-                          {isAnimatingStack ? (
-                            <LoaderIcon size={14} />
-                          ) : active === "dual" ? (
-                            <Monitor size={14} />
-                          ) : (
-                            <Smartphone size={14} />
-                          )}
-                          <span>
-                            {active === "dual" ? "Preview" : "Dual View"}
-                          </span>
-                        </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={toggleStackWithPlayback}
+                      disabled={isAnimatingStack}
+                      className="flex items-center gap-2 self-end"
+                    >
+                      {isAnimatingStack ? (
+                        <LoaderIcon size={14} />
+                      ) : active === "dual" ? (
+                        <Monitor size={14} />
+                      ) : (
+                        <Smartphone size={14} />
                       )}
+                      <span>{active === "dual" ? "Preview" : "Dual View"}</span>
+                    </Button>
 
                     <div
                       ref={videoRenderRef}
@@ -1079,16 +1076,11 @@ const ClipEditor = ({
                     >
                       {present.dual && (
                         <DualClockProvider
-                          duration={maxDurationMs}
                           primaryVideoRef={primaryDualVideoRef}
                           secondaryVideoRef={secondaryDualVideoRef}
                         >
                           <DualVideoPlayer
-                            ref={
-                              keyframes?.length
-                                ? (refs.dual as React.Ref<HTMLDivElement>)
-                                : null
-                            }
+                            ref={refs.dual as React.Ref<HTMLDivElement>}
                             primaryClip={currentClipData}
                             secondaryClip={secondaryClip}
                             duration={duration}
@@ -1100,11 +1092,7 @@ const ClipEditor = ({
 
                       {present.renderer && (
                         <DualVideoPreviewEditor
-                          ref={
-                            keyframes?.length
-                              ? (refs.renderer as React.Ref<HTMLDivElement>)
-                              : null
-                          }
+                          ref={refs.renderer as React.Ref<HTMLDivElement>}
                           primaryVideoUrl={primaryUrl}
                           secondaryVideoUrl={secondaryClip?.url}
                           playing={active === "renderer"}
@@ -1117,9 +1105,15 @@ const ClipEditor = ({
                           boundaryAspectRatio={boundaryAspectRatio}
                           padColor={padColor}
                           active={active}
-                          playerType={playerActive}
+                          activePlayer={playerActive}
                           className={classNames.renderer}
                           style={styles.renderer}
+                          onPrimaryVideoRef={(ref) => {
+                            primaryRendererVideoRef.current = ref;
+                          }}
+                          onSecondaryVideoRef={(ref) => {
+                            secondaryRendererVideoRef.current = ref;
+                          }}
                         />
                       )}
                     </div>
@@ -1241,7 +1235,10 @@ const ClipEditor = ({
         type="button"
         ref={triggerRef}
         onClick={() => setToolPanelOpen(true)}
-        className="fixed bottom-4 right-4 z-40 shadow-lg hover:shadow-xl rounded-full hover:scale-105 transition-transform duration-200 ease-in-out focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-surface-primary"
+        className={cn(
+          "fixed bottom-4 z-40 shadow-lg hover:shadow-xl rounded-full hover:scale-105 transition-transform duration-200 ease-in-out focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-surface-primary",
+          panelSide === "right" ? "right-4" : "left-4"
+        )}
         size="icon"
         variant="default"
         aria-label="Open Tools (T)"

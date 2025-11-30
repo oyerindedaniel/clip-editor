@@ -40,13 +40,13 @@ type ClipContextValue = {
   setSecondaryTrim: React.Dispatch<React.SetStateAction<TrimData>>;
   secondaryTrimRef: React.RefObject<TrimData>;
   getVideoRef: ReturnType<typeof useVideoRefs>["getVideoRef"];
-  primaryVideoRef: ReturnType<typeof useVideoRefs>["primaryVideoRef"];
-  secondaryVideoRef: ReturnType<typeof useVideoRefs>["secondaryVideoRef"];
-  primaryDualVideoRef: ReturnType<typeof useVideoRefs>["primaryDualVideoRef"];
-  secondaryDualVideoRef: ReturnType<
-    typeof useVideoRefs
-  >["secondaryDualVideoRef"];
-  pipVideoRef: ReturnType<typeof useVideoRefs>["pipVideoRef"];
+  primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
+  secondaryVideoRef: React.RefObject<HTMLVideoElement | null>;
+  primaryDualVideoRef: React.RefObject<HTMLVideoElement | null>;
+  secondaryDualVideoRef: React.RefObject<HTMLVideoElement | null>;
+  primaryRendererVideoRef: React.RefObject<HTMLVideoElement | null>;
+  secondaryRendererVideoRef: React.RefObject<HTMLVideoElement | null>;
+  pipVideoRef: React.RefObject<HTMLVideoElement | null>;
   clearTrimData: () => { primaryTrim: TrimData; secondaryTrim: TrimData };
   canClearTrim: boolean;
   cropMode: CropMode;
@@ -96,7 +96,6 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   const [dualVideoSettings, setDualVideoSettings] = useState<DualVideoSettings>(
     DEFAULT_DUAL_VIDEO_SETTINGS
   );
-
   const [cropMode, setCropMode] = useState<CropMode>(
     DEFAULT_CLIP_METADATA.cropMode
   );
@@ -106,7 +105,6 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   );
 
   const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
-
   const hasPersistedTrimDataRef = useRef(false);
 
   const [primaryTrim, setPrimaryTrim] = useState<TrimData>(() => {
@@ -156,6 +154,8 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     secondaryVideoRef,
     primaryDualVideoRef,
     secondaryDualVideoRef,
+    primaryRendererVideoRef,
+    secondaryRendererVideoRef,
     pipVideoRef,
   } = useVideoRefs();
 
@@ -312,6 +312,8 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       secondaryVideoRef,
       primaryDualVideoRef,
       secondaryDualVideoRef,
+      primaryRendererVideoRef,
+      secondaryRendererVideoRef,
       pipVideoRef,
       clearTrimData,
       canClearTrim,
@@ -330,11 +332,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       handleSetPrimaryTrim,
       secondaryTrim,
       handleSetSecondaryTrim,
-      primaryTrimRef,
-      secondaryTrimRef,
       getVideoRef,
-      primaryVideoRef,
-      secondaryVideoRef,
       clearTrimData,
       canClearTrim,
       cropMode,

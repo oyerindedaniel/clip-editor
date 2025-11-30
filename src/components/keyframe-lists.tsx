@@ -14,9 +14,8 @@ import type { KeyframeData } from "@/utils/keyframe";
 import { Input } from "@/components/ui/input";
 import { useFilteredKeyframes } from "@/hooks/app/use-filtered-keyframes";
 import { DEFAULT_COLORS } from "@/constants/app";
-import { useShallowSelector } from "react-shallow-store";
-import { ClipContext } from "@/contexts/clip-context";
-import { secondsToMs, msToSeconds } from "@/utils/video";
+import { useNormalizeKeyframeTime } from "@/hooks/app/use-normalize-keyframe-time";
+import type { PlayerType } from "@/types/app";
 
 interface KeyframeListsProps extends React.HTMLAttributes<HTMLDivElement> {
   keyframes: KeyframeData[];
@@ -116,7 +115,7 @@ export const KeyframeLists: React.FC<KeyframeListsProps> = ({
 };
 
 interface KeyframeListProps extends Omit<KeyframeListsProps, "keyframes"> {
-  groupedKeyframes: Record<"primary" | "secondary", KeyframeData[]>;
+  groupedKeyframes: Record<PlayerType, KeyframeData[]>;
 }
 
 export const KeyframeList: React.FC<KeyframeListProps> = ({
@@ -125,25 +124,7 @@ export const KeyframeList: React.FC<KeyframeListProps> = ({
   onKeyframeSelect,
   onKeyframeRemove,
 }) => {
-  const { primaryTrim, secondaryTrim } = useShallowSelector(
-    ClipContext,
-    (state) => ({
-      primaryTrim: state.primaryTrim,
-      secondaryTrim: state.secondaryTrim,
-    })
-  );
-
-  const normalizeKeyframeTime = React.useCallback(
-    (keyframe: KeyframeData): number => {
-      const timeMs = secondsToMs(keyframe.time);
-      const trim = keyframe.target === "primary" ? primaryTrim : secondaryTrim;
-      if (!trim) return keyframe.time;
-
-      const normalizedMs = Math.max(0, timeMs - trim.trimStart);
-      return msToSeconds(normalizedMs);
-    },
-    [primaryTrim, secondaryTrim]
-  );
+  const normalizeKeyframeTime = useNormalizeKeyframeTime();
 
   return (
     <>

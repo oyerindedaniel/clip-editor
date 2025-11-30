@@ -1,5 +1,5 @@
 import { RefObject, useRef } from "react";
-import { useIsomorphicLayoutEffect } from "./use-Isomorphic-layout-effect";
+import { useIsoLayoutEffect } from "./use-Isomorphic-layout-effect";
 
 /**
  * Hook to get the latest value of a variable.
@@ -9,7 +9,7 @@ import { useIsomorphicLayoutEffect } from "./use-Isomorphic-layout-effect";
 export function useLatestValue<T>(value: T): RefObject<T> {
   const valueRef = useRef(value);
 
-  useIsomorphicLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     if (valueRef.current !== value) {
       valueRef.current = value;
     }

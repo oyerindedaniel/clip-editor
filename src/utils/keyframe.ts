@@ -1,11 +1,12 @@
 import { DEFAULT_COLORS } from "@/constants/app";
 import type { Transform } from "./transform";
+import type { PlayerType } from "@/types/app";
 
 type KeyframeTransform = Transform;
 
 type KeyframeEasing = (typeof KEYFRAME_EASINGS)[number];
 
-type KeyframeTarget = "primary" | "secondary";
+type KeyframeTarget = PlayerType;
 
 interface KeyframeData {
   id: string;

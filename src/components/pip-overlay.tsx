@@ -11,11 +11,12 @@ import type { Video } from "@/components/video-preview";
 import { Volume } from "./volume";
 import { PIP_SETTINGS } from "@/constants/app";
 import { getAspectRatioValue, type AspectRatio } from "@/utils/aspect-ratios";
+import type { PlayerType } from "@/types/app";
 
 export interface PiPOverlayProps {
   children: Video;
   containerRef: React.RefObject<HTMLDivElement | null>;
-  playerType: "primary" | "secondary";
+  playerType: PlayerType;
 }
 
 export const PiPOverlay = React.forwardRef<HTMLVideoElement, PiPOverlayProps>(

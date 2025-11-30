@@ -4,7 +4,6 @@ import React, {
   useState,
   useRef,
   useCallback,
-  useLayoutEffect,
   useEffect,
   useMemo,
 } from "react";
@@ -20,6 +19,7 @@ import UploadVideoItem from "./upload-video-item";
 import { useManualClips } from "@/hooks/app/use-manual-clips";
 import { toast } from "sonner";
 import { useClientOnly } from "@/hooks/use-client-only";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface ClipGridProps {
   initialClips: ClipData[];
@@ -83,7 +83,7 @@ export default function ClipGrid({
     [removeManualClip]
   );
 
-  useLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       if (rect.width && rect.height) {

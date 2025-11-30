@@ -16,6 +16,7 @@ import { getScrollState } from "@/utils/timeline-utils";
 import { HitArea } from "./hit-area";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { msToSeconds, secondsToMs } from "@/utils/video";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -221,7 +222,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const keyframeTimeMs = keyframe ? secondsToMs(keyframe.time) : 0;
     const left = keyframeTimeMs * pxPerMs;
 
-    React.useLayoutEffect(() => {
+    useIsoLayoutEffect(() => {
       const el = markerRef.current;
       if (el) el.style.transform = `translate3d(${left}px,0,0)`;
     }, [left]);
@@ -535,7 +536,7 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
       (focusable ?? el).focus();
     }, [shouldRender]);
 
-    React.useLayoutEffect(() => {
+    useIsoLayoutEffect(() => {
       if (!triggerRef?.current) return;
       const trigger = triggerRef.current;
       const rect = trigger.getBoundingClientRect();

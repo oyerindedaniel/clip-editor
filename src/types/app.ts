@@ -166,10 +166,10 @@ export interface ClipMetadata extends Settings {
 }
 
 export type DualVideoLayout = "vertical-letterbox" | "vertical-crop" | "pip";
-export type AudioMixMode = "primary" | "secondary" | "mixed";
+export type AudioMixMode = PlayerType | "mixed";
 
 export type BackgroundMode = "pad-color" | "video";
-export type BackgroundVideo = "primary" | "secondary";
+export type BackgroundVideo = PlayerType;
 
 export interface DualVideoSettings {
   layout: DualVideoLayout;
@@ -314,3 +314,14 @@ export interface WorkerResponse {
   type: WorkerType.FRAMES;
   frames: Uint8Array[];
 }
+
+export type Primitive =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | undefined
+  | null;
+
+export type PlayerType = "primary" | "secondary";

@@ -11,16 +11,21 @@ import { msToSeconds } from "@/utils/video";
 import { useDualVideoSync } from "@/hooks/app/use-dual-video-sync";
 import { DualClockContext } from "@/contexts/dual-clock-context";
 import { RAF_IDS, VIDEO_IDS } from "@/constants/raf-ids";
+import { type PlayerType } from "@/types/app";
 
 // Component for 16:9 main media
 interface MainMediaProps {
   mediaUrl: string;
   setVideoRef: (element: HTMLVideoElement | null) => void;
-  playerType: "primary" | "secondary";
+  playerType: PlayerType;
+  activePlayer: PlayerType;
 }
 
 const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
-  ({ mediaUrl, playerType: mediaType, setVideoRef }, forwardedRef) => {
+  (
+    { mediaUrl, playerType: mediaType, activePlayer, setVideoRef },
+    forwardedRef
+  ) => {
     const videoPlayerId = React.useId();
     const controlsId = React.useId();
 
@@ -40,13 +45,16 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
       setDualVideoSettings: state.setDualVideoSettings,
     }));
 
-    const { primaryVideoRef, secondaryVideoRef } = useShallowSelector(
+    const { secondaryVideoRef: pipVideoRef } = useShallowSelector(
       DualClockContext,
       (state) => ({
         primaryVideoRef: state.primaryVideoRef,
         secondaryVideoRef: state.secondaryVideoRef,
       })
     );
+
+    const isPrimary = activePlayer === "primary";
+    const isPIP = settings.layout === "pip";
 
     const {
       controls: dualVideoControls,
@@ -58,12 +66,14 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
       playbackRate: dualPlaybackRate,
       repeat: dualRepeat,
     } = useDualVideoSync({
-      primaryVideoRef,
-      secondaryVideoRef,
-      primaryTrim,
-      secondaryTrim,
-      enabled: settings.layout === "pip",
-      seekProgressRafId: RAF_IDS.seekProgress(VIDEO_IDS.dualVideoMainPip),
+      primaryVideoRef: videoRef,
+      secondaryVideoRef: pipVideoRef,
+      primaryTrim: isPrimary ? primaryTrim : secondaryTrim,
+      secondaryTrim: isPrimary ? secondaryTrim : primaryTrim,
+      enabled: isPIP && mediaType === activePlayer,
+      seekProgressRafId: RAF_IDS.seekProgress(
+        `${VIDEO_IDS.dualVideoMainPip}-${mediaType}`
+      ),
     });
 
     const { controls, status, buffered, isBuffering, hasError } =
@@ -107,12 +117,12 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
         onValueChange={(volume) => {
           const isPrimary = mediaType === "primary";
           controls.setVolume(volume);
-          setSettings({
-            ...settings,
+          setSettings((prev) => ({
+            ...prev,
             ...(isPrimary
               ? { primaryVolume: volume }
               : { secondaryVolume: volume }),
-          });
+          }));
         }}
       >
         <Volume.Controls
@@ -163,6 +173,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
             isBuffering={isBufferingDualVideo}
             hasError={hasErrorDualVideo}
             isDual
+            isActive={mediaType === activePlayer}
           >
             <Playback.Controls className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -172,15 +183,15 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
               <div className="w-full">
                 <Playback.Seek
-                  primaryVideoRef={primaryVideoRef}
-                  secondaryVideoRef={secondaryVideoRef}
-                  primaryTrim={primaryTrim}
-                  secondaryTrim={secondaryTrim}
+                  primaryVideoRef={videoRef}
+                  secondaryVideoRef={pipVideoRef}
+                  primaryTrim={isPrimary ? primaryTrim : secondaryTrim}
+                  secondaryTrim={isPrimary ? secondaryTrim : primaryTrim}
                   primaryBuffered={primaryBuffered}
                   secondaryBuffered={secondaryBuffered}
                   isPlaying={dualStatus === "playing"}
                   onSeek={dualVideoControls.seek}
-                  videoId={VIDEO_IDS.dualVideoMainPip}
+                  videoId={`${VIDEO_IDS.dualVideoMainPip}-${mediaType}`}
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -234,7 +245,7 @@ const MainMedia = React.forwardRef<HTMLVideoElement, MainMediaProps>(
 
                     controls.seek(sourceTimeSec);
                   }}
-                  videoId={VIDEO_IDS.main}
+                  videoId={`${VIDEO_IDS.main}-${mediaType}`}
                 />
               </div>
 

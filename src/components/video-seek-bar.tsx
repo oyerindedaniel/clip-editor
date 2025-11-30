@@ -12,6 +12,7 @@ import { useRAF, useRAFTrigger } from "@/hooks/use-raf";
 import { generateVideoId, secondsToMs } from "@/utils/video";
 import { RAF_IDS } from "@/constants/raf-ids";
 import { globalRAF } from "@/lib/raf-manager";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface SeekContextValue {
   primaryVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -290,6 +291,10 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          touchAction: "none",
+          ...props.style,
+        }}
         {...props}
       >
         <div>{children}</div>
@@ -399,7 +404,7 @@ function SeekAnimator() {
   /**
    * Calculate current normalized timeline position from video times
    */
-  const getCurrentNormalizedTime = useStableHandler(() => {
+  const getCurrentNormalizedTime = React.useCallback(() => {
     const primaryVideo = primaryVideoRef.current;
     const secondaryVideo = secondaryVideoRef?.current;
     if (!primaryVideo) return 0;
@@ -433,12 +438,12 @@ function SeekAnimator() {
     }
 
     return Math.max(primaryTimelinePos, secondaryTimelinePos);
-  });
+  }, [primaryTrim, secondaryTrim]);
 
   /**
    * Update buffer display
    */
-  const updateBufferDisplay = useStableHandler(() => {
+  const updateBufferDisplay = React.useCallback(() => {
     if (!_bufferRef.current) return;
 
     const primary = primaryVideoRef.current;
@@ -486,46 +491,49 @@ function SeekAnimator() {
 
     const bufferProgress = Math.min(1, totalBufferedMs / timelineDurationMs);
     _bufferRef.current.style.transform = `scaleX(${bufferProgress})`;
-  });
+  }, [primaryTrim, secondaryTrim, primaryBuffered, secondaryBuffered]);
 
   /**
    * Update all visual elements (progress, thumb, time display)
    */
-  const updateVisualElements = useStableHandler((progress: number) => {
-    const clamped = Math.max(0, Math.min(1, progress));
-    progressRef.current = clamped;
+  const updateVisualElements = React.useCallback(
+    (progress: number) => {
+      const clamped = Math.max(0, Math.min(1, progress));
+      progressRef.current = clamped;
 
-    if (_progressRef.current) {
-      _progressRef.current.style.transform = `scaleX(${clamped})`;
-    }
+      if (_progressRef.current) {
+        _progressRef.current.style.transform = `scaleX(${clamped})`;
+      }
 
-    if (_thumbRef.current && _trackRef.current) {
-      const track = _trackRef.current;
-      const thumb = _thumbRef.current;
-      const barWidth = track.offsetWidth;
-      const thumbWidth = thumb.offsetWidth;
-      const x = clamped * barWidth - thumbWidth / 2;
-      _thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
-    }
+      if (_thumbRef.current && _trackRef.current) {
+        const track = _trackRef.current;
+        const thumb = _thumbRef.current;
+        const barWidth = track.offsetWidth;
+        const thumbWidth = thumb.offsetWidth;
+        const x = clamped * barWidth - thumbWidth / 2;
+        _thumbRef.current.style.transform = `translate3d(${x}px, -50%, 0)`;
+      }
 
-    if (currentTimeRef.current) {
-      const currentTimeMs = clamped * timelineDurationMs;
-      currentTimeRef.current.textContent = formatTime(currentTimeMs);
-    }
+      if (currentTimeRef.current) {
+        const currentTimeMs = clamped * timelineDurationMs;
+        currentTimeRef.current.textContent = formatTime(currentTimeMs);
+      }
 
-    if (_trackRef.current) {
-      const track = _trackRef.current;
-      const ariaValueNow = Math.round(clamped * 100);
-      const currentTimeMs = clamped * timelineDurationMs;
-      const ariaValueText = `${formatTime(currentTimeMs)} of ${formatTime(
-        timelineDurationMs
-      )}`;
-      track.setAttribute("aria-valuenow", ariaValueNow.toString());
-      track.setAttribute("aria-valuetext", ariaValueText);
-    }
+      if (_trackRef.current) {
+        const track = _trackRef.current;
+        const ariaValueNow = Math.round(clamped * 100);
+        const currentTimeMs = clamped * timelineDurationMs;
+        const ariaValueText = `${formatTime(currentTimeMs)} of ${formatTime(
+          timelineDurationMs
+        )}`;
+        track.setAttribute("aria-valuenow", ariaValueNow.toString());
+        track.setAttribute("aria-valuetext", ariaValueText);
+      }
 
-    updateBufferDisplay();
-  });
+      updateBufferDisplay();
+    },
+    [updateBufferDisplay, timelineDurationMs]
+  );
 
   /**
    * Schedule visual update on next frame (used during dragging)
@@ -546,6 +554,7 @@ function SeekAnimator() {
    */
   const updateProgress = useStableHandler(() => {
     const normalizedTimeMs = getCurrentNormalizedTime();
+
     let newProgress = 0;
 
     if (timelineDurationMs > 0 && Number.isFinite(normalizedTimeMs)) {
@@ -562,18 +571,14 @@ function SeekAnimator() {
   useRAF(() => updateProgress(), isPlaying && !isDragging, rafId);
 
   // Trigger handler - always available for manual triggers
-  useRAFTrigger(rafId, () => {
-    updateProgress();
-  });
+  useRAFTrigger(rafId, () => updateProgress());
 
   /**
-   * Update once when playback stops (not handled by RAF when !isPlaying)
+   * Update once when playback on mount
    */
-  React.useEffect(() => {
-    if (!isPlaying && !isDragging) {
-      updateProgress();
-    }
-  }, [isPlaying, isDragging]);
+  useIsoLayoutEffect(() => {
+    updateProgress();
+  }, []);
 
   /**
    * Cleanup scheduled visual updates on unmount
@@ -601,7 +606,7 @@ function SeekAnimator() {
       );
       return ratio * timelineDurationMs;
     },
-    [timelineDurationMs, _trackRef]
+    [timelineDurationMs]
   );
 
   /**
@@ -627,7 +632,7 @@ function SeekAnimator() {
       trackElement.setPointerCapture(e.pointerId);
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
-      stableOnSeek(normalizedTimeMs);
+      debouncedSeek(normalizedTimeMs);
 
       const newProgress = normalizedTimeMs / timelineDurationMs;
       scheduleVisualUpdate(newProgress);
@@ -635,6 +640,8 @@ function SeekAnimator() {
 
     const handlePointerMove = (e: PointerEvent) => {
       if (!isDraggingRef.current) return;
+
+      e.stopPropagation();
 
       const normalizedTimeMs = getTimeFromPosition(e.clientX);
       debouncedSeek(normalizedTimeMs);
@@ -645,7 +652,9 @@ function SeekAnimator() {
 
     const handlePointerUp = (e: PointerEvent) => {
       if (!isDraggingRef.current) return;
+
       trackElement.releasePointerCapture(e.pointerId);
+
       isDraggingRef.current = false;
       setIsDragging(false);
     };
@@ -664,7 +673,6 @@ function SeekAnimator() {
     getTimeFromPosition,
     debouncedSeek,
     scheduleVisualUpdate,
-    stableOnSeek,
   ]);
 
   return null;

@@ -6,7 +6,6 @@ import React, {
   useCallback,
   useState,
   useMemo,
-  useLayoutEffect,
 } from "react";
 import { Redo2, Scissors, Undo2, X, Film, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,8 +37,8 @@ import { msToSeconds } from "@/utils/video";
 import { msToSecondsRate } from "@/utils/timeline-utils";
 import { ClipContext } from "@/contexts/clip-context";
 import { useShallowSelector } from "react-shallow-store";
-import { useStableHandler } from "@/hooks/use-stable-handler";
 import { useLazyRef } from "@/hooks/use-lazy-ref";
+import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
 
 interface DualVideoTracksProps {
   primaryDurationMs: number;
@@ -61,9 +60,12 @@ interface HistoryState {
   trimEnd: number | null;
   secondaryDurationMs: number;
   action: HistoryAction;
-  prevSecondaryDurationMs?: number;
+
+  // For cut actions, store the trim points that were applied
   cutTrimStart?: number;
   cutTrimEnd?: number;
+
+  accumulatedOffset?: number; // How far into the original video does the current segment start
 }
 
 export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
@@ -78,13 +80,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   keyframes,
   videoId,
 }) => {
-  const { clearTrimData, canClearTrim } = useShallowSelector(
-    ClipContext,
-    (state) => ({
+  const { clearTrimData, canClearTrim, primaryTrim, secondaryTrim } =
+    useShallowSelector(ClipContext, (state) => ({
       clearTrimData: state.clearTrimData,
       canClearTrim: state.canClearTrim,
-    })
-  );
+      primaryTrim: state.primaryTrim,
+      secondaryTrim: state.secondaryTrim,
+    }));
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -111,13 +113,17 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(
     initialStateRef.current.index
   );
-  const historyIndexRef = useLatestValue(historyIndex);
+  const historyIndexRef = useRef(historyIndex);
 
   const currentState = editHistory[historyIndex];
 
   const currentSecondaryDurationMs = currentState
     ? currentState.secondaryDurationMs
     : secondaryDurationMs;
+
+  const currentAccumulatedOffset = useMemo(() => {
+    return currentState?.accumulatedOffset ?? 0;
+  }, [currentState]);
 
   const [trimStart, setTrimStart] = useState<number | null>(
     initialStateRef.current.trimStart
@@ -149,7 +155,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
   const rafIdRef = useRef<number | null>(null);
 
-  const primaryStripInitialized = useRef(false);
+  const renderPrimaryStrip = useRef(true);
 
   const maxDurationMs = Math.max(primaryDurationMs, currentSecondaryDurationMs);
 
@@ -185,11 +191,12 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (
       state.action === "cut" &&
-      state.cutTrimStart != undefined &&
-      state.cutTrimEnd != undefined
+      state.cutTrimStart !== undefined &&
+      state.cutTrimEnd !== undefined
     ) {
       visualDuration = state.cutTrimEnd - state.cutTrimStart;
-      visualOffset = state.cutTrimStart;
+      // Visual offset is NOT needed - we're rendering the segment as-is
+      visualOffset = 0;
     }
 
     return { visualDuration, visualOffset };
@@ -209,7 +216,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     if (pxPerMs <= 0) return;
 
     // Primary strips
-    if (!primaryStripInitialized.current) {
+    if (renderPrimaryStrip.current) {
       renderTimelineStrips({
         pxPerMs,
         durationMs: primaryDurationMs,
@@ -217,8 +224,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         container: primaryStripRef.current,
       });
 
-      if (!!primaryPreviewFrames?.length)
-        primaryStripInitialized.current = true;
+      if (!!primaryPreviewFrames?.length) {
+        renderPrimaryStrip.current = false;
+      }
     }
 
     const state = editHistoryRef.current[historyIndexRef.current];
@@ -271,9 +279,41 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         }
       }
     }
-  }, [primaryDurationMs, pxPerMs]);
+  }, [primaryDurationMs, pxPerMs, getVisualState]);
 
-  useLayoutEffect(() => {
+  const visualMarkers = useMemo(() => {
+    if (trimStart === null && trimEnd === null) return [];
+
+    const offset = currentAccumulatedOffset;
+    const markers: Array<{ time: number; isInView: boolean }> = [];
+
+    if (trimStart !== null) {
+      const relativeTime = trimStart - offset;
+      markers.push({
+        time: relativeTime,
+        isInView:
+          relativeTime >= 0 && relativeTime <= currentSecondaryDurationMs,
+      });
+    }
+
+    if (trimEnd !== null) {
+      const relativeTime = trimEnd - offset;
+      markers.push({
+        time: relativeTime,
+        isInView:
+          relativeTime >= 0 && relativeTime <= currentSecondaryDurationMs,
+      });
+    }
+
+    return markers;
+  }, [
+    trimStart,
+    trimEnd,
+    currentAccumulatedOffset,
+    currentSecondaryDurationMs,
+  ]);
+
+  useIsoLayoutEffect(() => {
     currentOffsetRef.current = initialOffsetMs;
 
     rafIdRef.current = requestAnimationFrame(() => {
@@ -321,52 +361,46 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     [videoId]
   );
 
-  const addToHistory = useCallback(
-    (newState: HistoryState) => {
-      setEditHistory((prev) => {
-        const truncated = prev.slice(0, historyIndex + 1);
-        const updated = [...truncated, newState];
-        const finalHistory =
-          updated.length > MAX_HISTORY ? updated.slice(-MAX_HISTORY) : updated;
+  const addToHistory = (newState: HistoryState) => {
+    const updated = [...editHistory, newState];
+    const finalHistory =
+      updated.length > MAX_HISTORY ? updated.slice(-MAX_HISTORY) : updated;
+    const newIndex = finalHistory.length - 1;
 
-        setHistoryIndex(finalHistory.length - 1);
-        saveHistoryToStorage(finalHistory);
+    setEditHistory(finalHistory);
+    setHistoryIndex(newIndex);
+    historyIndexRef.current = newIndex;
+    saveHistoryToStorage(finalHistory);
+  };
 
-        return finalHistory;
+  const applyHistoryState = (
+    state: HistoryState,
+    withRender: boolean = true
+  ) => {
+    if (!state) {
+      logger.warn("Attempted to apply undefined history state");
+      return;
+    }
+
+    setTrimStart(state.trimStart);
+    setTrimEnd(state.trimEnd);
+
+    if (withRender) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        renderBlocks();
+        renderRuler();
+        renderStrips();
       });
-    },
-    [historyIndex, saveHistoryToStorage]
-  );
+    }
+  };
 
-  const applyHistoryState = useCallback(
-    (state: HistoryState, withRender: boolean = true) => {
-      if (!state) {
-        logger.warn("Attempted to apply undefined history state");
-        return;
-      }
-
-      setTrimStart(state.trimStart);
-      setTrimEnd(state.trimEnd);
-
-      if (withRender) {
-        rafIdRef.current = requestAnimationFrame(() => {
-          renderBlocks();
-          renderRuler();
-          renderStrips();
-        });
-      }
-    },
-    [renderBlocks, renderRuler, renderStrips]
-  );
-
-  const stableApplyHistoryState = useStableHandler(applyHistoryState);
-
-  const handleUndo = useCallback(() => {
+  const handleUndo = () => {
     let newIndex: number | null = null;
 
     setHistoryIndex((prevIndex) => {
       if (prevIndex > 0) {
         newIndex = prevIndex - 1;
+        historyIndexRef.current = newIndex;
         return newIndex;
       }
       return prevIndex;
@@ -374,35 +408,53 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (newIndex !== null) {
       const stateToApply = editHistory[newIndex];
-      const prevState = editHistory[newIndex + 1];
+      const currentState = editHistory[newIndex + 1];
 
       if (stateToApply) {
-        if (prevState.action === "cut") {
-          if (prevState.prevSecondaryDurationMs) {
-            onCutSecondaryAt?.({
-              trimStart: 0,
-              trimEnd: Math.round(prevState.prevSecondaryDurationMs),
-            });
-          }
+        // If currently on a cut state, restore previous segment
+        if (currentState.action === "cut") {
+          const previousCutState = editHistory
+            .slice(0, newIndex + 1)
+            .reverse()
+            .find((state) => state.action === "cut");
+
+          onCutSecondaryAt?.({
+            trimStart: previousCutState?.cutTrimStart ?? 0,
+            trimEnd: previousCutState?.cutTrimEnd ?? secondaryDurationMs,
+          });
+        }
+        // If going TO a cut state, apply it
+        else if (
+          stateToApply.action === "cut" &&
+          stateToApply.cutTrimStart !== undefined &&
+          stateToApply.cutTrimEnd !== undefined
+        ) {
+          onCutSecondaryAt?.({
+            trimStart: stateToApply.cutTrimStart,
+            trimEnd: stateToApply.cutTrimEnd,
+          });
         }
 
         const needsRender =
-          !prevState ||
-          stateToApply.secondaryDurationMs !== prevState.secondaryDurationMs ||
-          stateToApply.action === "cut";
+          !currentState ||
+          stateToApply.secondaryDurationMs !==
+            currentState.secondaryDurationMs ||
+          stateToApply.action === "cut" ||
+          currentState.action === "cut";
 
         applyHistoryState(stateToApply, needsRender);
         saveHistoryToStorage(editHistory);
       }
     }
-  }, [editHistory, applyHistoryState, onCutSecondaryAt, saveHistoryToStorage]);
+  };
 
-  const handleRedo = useCallback(() => {
+  const handleRedo = () => {
     let newIndex: number | null = null;
 
     setHistoryIndex((prevIndex) => {
       if (prevIndex < editHistory.length - 1) {
         newIndex = prevIndex + 1;
+        historyIndexRef.current = newIndex;
         return newIndex;
       }
       return prevIndex;
@@ -410,50 +462,67 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
 
     if (newIndex !== null) {
       const stateToApply = editHistory[newIndex];
+      const currentState = editHistory[newIndex - 1];
 
       if (stateToApply) {
+        // If redoing TO a cut state, apply it
         if (
           stateToApply.action === "cut" &&
           stateToApply.cutTrimStart !== undefined &&
           stateToApply.cutTrimEnd !== undefined
         ) {
           onCutSecondaryAt?.({
-            trimStart: Math.round(stateToApply.cutTrimStart),
-            trimEnd: Math.round(stateToApply.cutTrimEnd),
+            trimStart: stateToApply.cutTrimStart,
+            trimEnd: stateToApply.cutTrimEnd,
+          });
+        }
+        // If currently on a cut and going to non-cut, need to restore
+        else if (currentState.action === "cut") {
+          const previousCutState = editHistory
+            .slice(0, newIndex)
+            .reverse()
+            .find((state) => state.action === "cut");
+
+          onCutSecondaryAt?.({
+            trimStart: previousCutState?.cutTrimStart ?? 0,
+            trimEnd: previousCutState?.cutTrimEnd ?? secondaryDurationMs,
           });
         }
 
-        const prevState = editHistory[newIndex - 1];
         const needsRender =
-          !prevState ||
-          stateToApply.secondaryDurationMs !== prevState.secondaryDurationMs ||
-          stateToApply.action === "cut";
+          !currentState ||
+          stateToApply.secondaryDurationMs !==
+            currentState.secondaryDurationMs ||
+          stateToApply.action === "cut" ||
+          currentState.action === "cut";
 
         applyHistoryState(stateToApply, needsRender);
         saveHistoryToStorage(editHistory);
       }
     }
-  }, [editHistory, applyHistoryState, onCutSecondaryAt, saveHistoryToStorage]);
+  };
 
-  const handleAddMarker = useCallback(() => {
+  const handleAddMarker = () => {
     if (!containerRef.current || !playheadRef.current) return;
 
     const playheadLeft = parseFloat(playheadRef.current.style.left || "0");
     const timeMs = pxToMs(playheadLeft, pxPerMs);
 
+    const normalizedTimeMs = timeMs + currentAccumulatedOffset;
+
     let nextStart = trimStart;
     let nextEnd = trimEnd;
 
     if (trimStart !== null && trimEnd === null) {
-      if (trimStart <= timeMs) {
+      if (trimStart <= normalizedTimeMs) {
         nextStart = trimStart;
-        nextEnd = timeMs;
+        nextEnd = normalizedTimeMs;
       } else {
-        nextStart = timeMs;
+        nextStart = normalizedTimeMs;
         nextEnd = trimStart;
       }
     } else {
-      nextStart = timeMs;
+      nextStart = normalizedTimeMs;
       nextEnd = null;
     }
 
@@ -462,29 +531,22 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       trimEnd: nextEnd,
       secondaryDurationMs: currentSecondaryDurationMs,
       action: "mark",
+      accumulatedOffset: currentAccumulatedOffset,
     } satisfies HistoryState;
 
     addToHistory(state);
-
     applyHistoryState(state, false);
-  }, [
-    pxPerMs,
-    addToHistory,
-    applyHistoryState,
-    currentSecondaryDurationMs,
-    trimStart,
-    trimEnd,
-  ]);
+  };
 
-  const handleCutSecondary = useCallback(() => {
+  const handleCutSecondary = () => {
     if (trimStart === null || trimEnd === null) {
       logger.warn("Both trim markers must be set before cutting");
       return;
     }
 
     onCutSecondaryAt?.({
-      trimStart: Math.round(trimStart),
-      trimEnd: Math.round(trimEnd),
+      trimStart: trimStart,
+      trimEnd: trimEnd,
     });
 
     const newDuration = trimEnd - trimStart;
@@ -494,68 +556,112 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       trimEnd: null,
       secondaryDurationMs: newDuration,
       action: "cut",
-      prevSecondaryDurationMs: currentSecondaryDurationMs,
       cutTrimStart: trimStart,
       cutTrimEnd: trimEnd,
+      accumulatedOffset: trimStart,
     } satisfies HistoryState;
 
     addToHistory(state);
-
     applyHistoryState(state);
-  }, [
-    onCutSecondaryAt,
-    addToHistory,
-    trimStart,
-    trimEnd,
-    currentSecondaryDurationMs,
-    renderStrips,
-    renderBlocks,
-  ]);
+  };
 
-  const onSecondaryMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest("[data-keyframe-marker]")) {
-        return;
+  const onSecondaryPointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-keyframe-marker]")) {
+      return;
+    }
+
+    e.preventDefault();
+    const scrollContainer = scrollContainerRef.current;
+    const container = containerRef.current;
+
+    if (!scrollContainer || !container) return;
+
+    if (hasBothMarkers) {
+      toast.warning("Move is disabled while both markers are set");
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+
+    let isDragging = true;
+    const startOffset = currentOffsetRef.current;
+
+    const moveEvent = e;
+    const startMouseX = moveEvent.clientX - containerRect.left;
+
+    draggingSecondaryRef.current = true;
+
+    startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
+      const { canScrollLeft, canScrollRight } = getScrollState(scrollContainer);
+
+      const isScrollingLeft = scrollDelta < 0;
+      const isScrollingRight = scrollDelta > 0;
+
+      const shouldAllowAutoScroll =
+        (isScrollingLeft && canScrollLeft) ||
+        (isScrollingRight && canScrollRight);
+
+      if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+        const deltaMs = pxToMs(scrollDelta, pxPerMs);
+        const newOffset = Math.max(
+          0,
+          Math.min(currentOffsetRef.current + deltaMs, primaryDurationMs)
+        );
+
+        currentOffsetRef.current = newOffset;
+        onOffsetChange?.(newOffset);
+        renderBlocks();
+
+        const markerX = msToPx(newOffset, pxPerMs) - scrollContainer.scrollLeft;
+        updateTooltip(markerX, `Offset: ${formatDurationDisplay(newOffset)}`);
       }
+    });
 
-      e.preventDefault();
-      const scrollContainer = scrollContainerRef.current;
-      const container = containerRef.current;
+    flushSync(() => {
+      setShowTooltip(true);
+    });
 
-      if (!scrollContainer || !container) return;
+    const markerX = msToPx(startOffset, pxPerMs) - scrollContainer.scrollLeft;
+    updateTooltip(markerX, `Offset: ${formatDurationDisplay(startOffset)}`);
 
-      if (hasBothMarkers) {
-        toast.warning("Move is disabled while both markers are set");
-        return;
-      }
+    const onMove = (moveEvent: MouseEvent) => {
+      if (!isDragging) return;
 
-      const containerRect = container.getBoundingClientRect();
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
 
-      let isDragging = true;
-      const startOffset = currentOffsetRef.current;
+      rafIdRef.current = requestAnimationFrame(() => {
+        const scrollContainerRect = scrollContainer.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
 
-      const moveEvent = e;
-      const startMouseX = moveEvent.clientX - containerRect.left;
+        if (!scrollContainerRect || !containerRect) return;
 
-      draggingSecondaryRef.current = true;
-
-      startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        const { canScrollLeft, canScrollRight } =
+        const { containerWidth, canScrollLeft, canScrollRight } =
           getScrollState(scrollContainer);
 
-        const isScrollingLeft = scrollDelta < 0;
-        const isScrollingRight = scrollDelta > 0;
+        const mouseXRelativeToContainer =
+          moveEvent.clientX - scrollContainerRect.left;
 
-        const shouldAllowAutoScroll =
-          (isScrollingLeft && canScrollLeft) ||
-          (isScrollingRight && canScrollRight);
+        const needsLeftScroll =
+          mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
+        const needsRightScroll =
+          mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
+          canScrollRight;
 
-        if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
-          const deltaMs = pxToMs(scrollDelta, pxPerMs);
+        const shouldControlSecondary = !needsLeftScroll && !needsRightScroll;
+
+        if (needsLeftScroll || needsRightScroll) {
+          handleAutoScroll(moveEvent);
+        }
+
+        if (shouldControlSecondary) {
+          const mouseX = moveEvent.clientX - containerRect.left;
+          const deltaX = mouseX - startMouseX;
+
+          const deltaMs = pxToMs(deltaX, pxPerMs);
           const newOffset = Math.max(
             0,
-            Math.min(currentOffsetRef.current + deltaMs, primaryDurationMs)
+            Math.min(startOffset + deltaMs, primaryDurationMs)
           );
 
           currentOffsetRef.current = newOffset;
@@ -567,214 +673,127 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
           updateTooltip(markerX, `Offset: ${formatDurationDisplay(newOffset)}`);
         }
       });
+    };
 
-      flushSync(() => {
-        setShowTooltip(true);
-      });
+    const onUp = () => {
+      isDragging = false;
+      draggingSecondaryRef.current = false;
+      stopAutoScroll();
+      setShowTooltip(false);
 
-      const markerX = msToPx(startOffset, pxPerMs) - scrollContainer.scrollLeft;
-      updateTooltip(markerX, `Offset: ${formatDurationDisplay(startOffset)}`);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
 
-      const onMove = (moveEvent: MouseEvent) => {
-        if (!isDragging) return;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
 
-        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      onCommitOffset?.(currentOffsetRef.current);
+    };
 
-        rafIdRef.current = requestAnimationFrame(() => {
-          const scrollContainerRect = scrollContainer.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
-          if (!scrollContainerRect || !containerRect) return;
+  const onPlayheadPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const scrollContainer = scrollContainerRef.current;
+    const playhead = playheadRef.current;
+    const container = containerRef.current;
 
-          const { containerWidth, canScrollLeft, canScrollRight } =
-            getScrollState(scrollContainer);
+    if (!scrollContainer || !container || !playhead) return;
 
-          const mouseXRelativeToContainer =
-            moveEvent.clientX - scrollContainerRect.left;
+    let isDragging = true;
+    const startPlayheadPos = parseFloat(playhead.style.left || "0");
+    draggingPlayheadRef.current = true;
 
-          const needsLeftScroll =
-            mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
-          const needsRightScroll =
-            mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
-            canScrollRight;
+    const secondaryEnd =
+      msToPx(currentSecondaryDurationMs, pxPerMs) +
+      msToPx(currentOffsetRef.current, pxPerMs);
 
-          const shouldControlSecondary = !needsLeftScroll && !needsRightScroll;
+    startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
+      const { canScrollLeft, canScrollRight } = getScrollState(scrollContainer);
+      const isScrollingLeft = scrollDelta < 0;
+      const isScrollingRight = scrollDelta > 0;
+      const shouldAllowAutoScroll =
+        (isScrollingLeft && canScrollLeft) ||
+        (isScrollingRight && canScrollRight);
 
-          if (needsLeftScroll || needsRightScroll) {
-            handleAutoScroll(moveEvent);
-          }
+      if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+        const currentLeft = parseFloat(playhead.style.left || "0");
+        const newLeft = Math.max(
+          0,
+          Math.min(currentLeft + scrollDelta, secondaryEnd)
+        );
 
-          if (shouldControlSecondary) {
-            const mouseX = moveEvent.clientX - containerRect.left;
-            const deltaX = mouseX - startMouseX;
+        playhead.style.left = `${newLeft}px`;
+        const timeMs = pxToMs(newLeft, pxPerMs);
+        const markerX = newLeft - scrollContainer.scrollLeft;
+        updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
+      }
+    });
 
-            const deltaMs = pxToMs(deltaX, pxPerMs);
-            const newOffset = Math.max(
-              0,
-              Math.min(startOffset + deltaMs, primaryDurationMs)
-            );
+    flushSync(() => {
+      setShowTooltip(true);
+    });
 
-            currentOffsetRef.current = newOffset;
-            onOffsetChange?.(newOffset);
-            renderBlocks();
+    const timeMs = pxToMs(startPlayheadPos, pxPerMs);
+    const markerX = startPlayheadPos - scrollContainer.scrollLeft;
+    updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
 
-            const markerX =
-              msToPx(newOffset, pxPerMs) - scrollContainer.scrollLeft;
-            updateTooltip(
-              markerX,
-              `Offset: ${formatDurationDisplay(newOffset)}`
-            );
-          }
-        });
-      };
+    const onMove = (moveEvent: MouseEvent) => {
+      const playhead = playheadRef.current;
+      if (!isDragging || !playhead) return;
 
-      const onUp = () => {
-        isDragging = false;
-        draggingSecondaryRef.current = false;
-        stopAutoScroll();
-        setShowTooltip(false);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        const scrollContainerRect = scrollContainer.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const { containerWidth, canScrollLeft, canScrollRight } =
+          getScrollState(scrollContainer);
+        const mouseXRelativeToContainer =
+          moveEvent.clientX - scrollContainerRect.left;
+        const needsLeftScroll =
+          mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
+        const needsRightScroll =
+          mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
+          canScrollRight;
+        const shouldControlPlayhead = !needsLeftScroll && !needsRightScroll;
 
-        if (rafIdRef.current) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
+        if (needsLeftScroll || needsRightScroll) {
+          handleAutoScroll(moveEvent);
         }
 
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+        if (shouldControlPlayhead) {
+          const mouseX = moveEvent.clientX;
+          let newX = mouseX - containerRect.left;
+          newX = Math.max(0, Math.min(newX, secondaryEnd));
 
-        onCommitOffset?.(currentOffsetRef.current);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [
-      onCommitOffset,
-      pxPerMs,
-      renderBlocks,
-      handleAutoScroll,
-      startAutoScroll,
-      stopAutoScroll,
-      primaryDurationMs,
-      hasBothMarkers,
-      maxDurationMs,
-      pxPerSecond,
-      updateTooltip,
-    ]
-  );
-
-  const onPlayheadMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const scrollContainer = scrollContainerRef.current;
-      const playhead = playheadRef.current;
-      const container = containerRef.current;
-
-      if (!scrollContainer || !container || !playhead) return;
-
-      let isDragging = true;
-      const startPlayheadPos = parseFloat(playhead.style.left || "0");
-      draggingPlayheadRef.current = true;
-
-      const secondaryEnd =
-        msToPx(currentSecondaryDurationMs, pxPerMs) +
-        msToPx(currentOffsetRef.current, pxPerMs);
-
-      startAutoScroll(scrollContainerRef.current, (scrollDelta) => {
-        const { canScrollLeft, canScrollRight } =
-          getScrollState(scrollContainer);
-        const isScrollingLeft = scrollDelta < 0;
-        const isScrollingRight = scrollDelta > 0;
-        const shouldAllowAutoScroll =
-          (isScrollingLeft && canScrollLeft) ||
-          (isScrollingRight && canScrollRight);
-
-        if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
-          const currentLeft = parseFloat(playhead.style.left || "0");
-          const newLeft = Math.max(
-            0,
-            Math.min(currentLeft + scrollDelta, secondaryEnd)
-          );
-
-          playhead.style.left = `${newLeft}px`;
-          const timeMs = pxToMs(newLeft, pxPerMs);
-          const markerX = newLeft - scrollContainer.scrollLeft;
+          playhead.style.left = `${newX}px`;
+          const timeMs = pxToMs(newX, pxPerMs);
+          const markerX = newX - scrollContainer.scrollLeft;
           updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
         }
       });
+    };
 
-      flushSync(() => {
-        setShowTooltip(true);
-      });
+    const onUp = () => {
+      isDragging = false;
+      draggingPlayheadRef.current = false;
+      stopAutoScroll();
+      setShowTooltip(false);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
 
-      const timeMs = pxToMs(startPlayheadPos, pxPerMs);
-      const markerX = startPlayheadPos - scrollContainer.scrollLeft;
-      updateTooltip(markerX, `Playhead: ${formatDurationDisplay(timeMs)}`);
-
-      const onMove = (moveEvent: MouseEvent) => {
-        const playhead = playheadRef.current;
-        if (!isDragging || !playhead) return;
-
-        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = requestAnimationFrame(() => {
-          const scrollContainerRect = scrollContainer.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-          const { containerWidth, canScrollLeft, canScrollRight } =
-            getScrollState(scrollContainer);
-          const mouseXRelativeToContainer =
-            moveEvent.clientX - scrollContainerRect.left;
-          const needsLeftScroll =
-            mouseXRelativeToContainer <= EDGE_THRESHOLD && canScrollLeft;
-          const needsRightScroll =
-            mouseXRelativeToContainer >= containerWidth - EDGE_THRESHOLD &&
-            canScrollRight;
-          const shouldControlPlayhead = !needsLeftScroll && !needsRightScroll;
-
-          if (needsLeftScroll || needsRightScroll) {
-            handleAutoScroll(moveEvent);
-          }
-
-          if (shouldControlPlayhead) {
-            const mouseX = moveEvent.clientX;
-            let newX = mouseX - containerRect.left;
-            newX = Math.max(0, Math.min(newX, secondaryEnd));
-
-            playhead.style.left = `${newX}px`;
-            const timeMs = pxToMs(newX, pxPerMs);
-            const markerX = newX - scrollContainer.scrollLeft;
-            updateTooltip(
-              markerX,
-              `Playhead: ${formatDurationDisplay(timeMs)}`
-            );
-          }
-        });
-      };
-
-      const onUp = () => {
-        isDragging = false;
-        draggingPlayheadRef.current = false;
-        stopAutoScroll();
-        setShowTooltip(false);
-        if (rafIdRef.current) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
-        }
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [
-      pxPerMs,
-      handleAutoScroll,
-      startAutoScroll,
-      stopAutoScroll,
-      currentSecondaryDurationMs,
-      updateTooltip,
-    ]
-  );
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   const clearTrim = () => {
     clearTrimData();
@@ -784,13 +803,17 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       trimEnd: null,
       action: "init",
       secondaryDurationMs,
+      accumulatedOffset: 0,
     };
 
     setEditHistory([defaultState]);
     setHistoryIndex(0);
+    historyIndexRef.current = 0;
     setTrimStart(null);
     setTrimEnd(null);
 
+    renderPrimaryStrip.current = true;
+    applyHistoryState(defaultState, true);
     saveHistoryToStorage([defaultState]);
   };
 
@@ -881,7 +904,13 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             ref={playheadRef}
             className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
-            <HitArea variant="x" onMouseDown={onPlayheadMouseDown}>
+            <HitArea
+              variant="x"
+              onPointerDown={onPlayheadPointerDown}
+              style={{
+                touchAction: "none",
+              }}
+            >
               <div className="relative h-full">
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
@@ -889,41 +918,52 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             </HitArea>
           </div>
 
-          {markers.map((markerTime, index) => (
-            <div
-              key={`marker-${index}-${markerTime}`}
-              className="absolute top-0 bottom-0 z-5"
-              style={{ left: `${msToPx(markerTime, pxPerMs)}px` }}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <HitArea variant="x" className="relative h-full">
-                    <div className="relative h-full">
-                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-yellow-500" />
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
-                    </div>
-                  </HitArea>
-                </TooltipTrigger>
+          {visualMarkers
+            .filter((m) => m.isInView)
+            .map((marker, index) => (
+              <div
+                key={`marker-${index}-${marker.time}`}
+                className="absolute top-0 bottom-0 z-5"
+                style={{ left: `${msToPx(marker.time, pxPerMs)}px` }}
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HitArea variant="x" className="relative h-full">
+                      <div className="relative h-full">
+                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-yellow-500" />
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
+                      </div>
+                    </HitArea>
+                  </TooltipTrigger>
 
-                <TooltipContent side="top" className="flex items-center gap-2">
-                  <span className="text-sm md:text-[0.8rem]">
-                    Marker at {msToSeconds(markerTime).toFixed(1)}s
-                  </span>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="size-4"
-                    onClick={() => {
-                      if (trimStart === markerTime) setTrimStart(null);
-                      if (trimEnd === markerTime) setTrimEnd(null);
-                    }}
+                  <TooltipContent
+                    side="top"
+                    className="flex items-center gap-2"
                   >
-                    <X className="size-3 text-white" />
-                  </Button>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ))}
+                    <span className="text-sm md:text-[0.8rem]">
+                      Marker at{" "}
+                      {msToSeconds(
+                        marker.time + currentAccumulatedOffset
+                      ).toFixed(1)}
+                      s (original)
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="size-4"
+                      onClick={() => {
+                        const absoluteTime =
+                          marker.time + currentAccumulatedOffset;
+                        if (trimStart === absoluteTime) setTrimStart(null);
+                        if (trimEnd === absoluteTime) setTrimEnd(null);
+                      }}
+                    >
+                      <X className="size-3 text-white" />
+                    </Button>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ))}
 
           <div className="absolute inset-x-0 top-6 h-14">
             <div className="absolute inset-0 rounded bg-surface-tertiary/60" />
@@ -960,11 +1000,14 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
               aria-label="secondary video"
               tabIndex={0}
               ref={secondaryBlockRef}
-              onMouseDown={onSecondaryMouseDown}
+              onPointerDown={onSecondaryPointerDown}
               className={cn(
                 "absolute top-0 h-full rounded-md border border-default overflow-hidden",
                 "shadow-inner cursor-grab active:cursor-grabbing focus:outline-none focus-visible:border-2 focus-visible:border-primary"
               )}
+              style={{
+                touchAction: "none",
+              }}
               title="Secondary video (drag to align)"
             >
               <div
@@ -1031,6 +1074,7 @@ function getHistoryState(
         trimEnd: null,
         action: "init",
         secondaryDurationMs,
+        accumulatedOffset: 0,
       },
     ],
     index: 0,

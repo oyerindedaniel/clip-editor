@@ -16,8 +16,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import React from "react";
 import { cn } from "@/lib/utils";
-import ColorPalette, { type Color } from "@/components/color-palette";
-import type { BackgroundVideo, CropMode } from "@/types/app";
+import ColorPalette from "@/components/color-palette";
+import type { BackgroundVideo, CropMode, PlayerType } from "@/types/app";
 import type {
   ScreenSize,
   AspectRatio169,
@@ -97,9 +97,9 @@ const AspectRatioPicker = ({
   const [isOpen, setIsOpen] = useState(false);
   const [localAspectRatio, setLocalAspectRatio] =
     useState<AspectRatioType>(aspectRatio);
-  const [selectedOverride, setSelectedOverride] = useState<
-    "primary" | "secondary" | null
-  >(null);
+  const [selectedOverride, setSelectedOverride] = useState<PlayerType | null>(
+    null
+  );
 
   const availableRatios =
     screenSize === "16:9" ? aspectRatios169 : aspectRatios916;
@@ -121,6 +121,7 @@ const AspectRatioPicker = ({
     padColor: state.padColor,
     setPadColor: state.setPadColor,
   }));
+
   const { primaryBoundaryAspectOverride, secondaryBoundaryAspectOverride } =
     useShallowSelector(KeyframeContext, (state) => ({
       primaryBoundaryAspectOverride: state.primaryBoundaryAspectOverride,
@@ -145,7 +146,10 @@ const AspectRatioPicker = ({
       onClearKeyframes();
 
       if (activeStack === "renderer" && setActiveStack) {
-        setActiveStack("dual");
+        // Defers the stack transition to avoid react batching issues
+        queueMicrotask(() => {
+          setActiveStack("dual");
+        });
       }
     }
     setIsOpen(false);
