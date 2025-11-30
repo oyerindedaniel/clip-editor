@@ -409,31 +409,21 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     }
   };
 
-  const handleCommitTrackOffset = useCallback(
-    (newOffset: number) => {
-      const lastState = editHistory[historyIndex];
-      if (lastState && lastState.trackOffset === newOffset) return;
+  const handleCommitTrackOffset = (newOffset: number) => {
+    const lastState = editHistory[historyIndex];
+    if (lastState && lastState.trackOffset === newOffset) return;
 
-      const state = {
-        trimStart,
-        trimEnd,
-        secondaryDurationMs: currentSecondaryDurationMs,
-        action: "mark" as const,
-        accumulatedOffset: currentAccumulatedOffset,
-        trackOffset: newOffset,
-      };
-
-      addToHistory(state);
-    },
-    [
-      editHistory,
-      historyIndex,
+    const state = {
       trimStart,
       trimEnd,
-      currentSecondaryDurationMs,
-      currentAccumulatedOffset,
-    ]
-  );
+      secondaryDurationMs: currentSecondaryDurationMs,
+      action: "mark" as const,
+      accumulatedOffset: currentAccumulatedOffset,
+      trackOffset: newOffset,
+    };
+
+    addToHistory(state);
+  };
 
   const handleUndo = useStableHandler(() => {
     let newIndex: number | null = null;
@@ -1153,7 +1143,7 @@ interface GetHistoryStateResult {
 }
 
 function getHistoryState(
-  id: string | undefined,
+  id: string,
   secondaryDurationMs: number
 ): GetHistoryStateResult {
   const fallbackState: GetHistoryStateResult = {

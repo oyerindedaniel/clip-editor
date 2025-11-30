@@ -108,8 +108,6 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
   const dualVideoSettingsRef = useLatestValue(dualVideoSettings);
   const hasPersistedTrimDataRef = useRef(false);
 
-  console.log({ videoId });
-
   const [primaryTrim, setPrimaryTrim] = useState<TrimData>(() => {
     if (!videoId || typeof window === "undefined") return DEFAULT_TRIM_DATA;
 
