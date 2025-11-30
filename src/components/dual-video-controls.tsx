@@ -50,6 +50,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { getSecondaryClipId } from "@/utils/app";
 
 interface DualVideoControlsProps {
   primaryClip: S3ClipData;
@@ -135,6 +136,7 @@ export default function DualVideoControls({
   isBufferDownloaded = false,
 }: DualVideoControlsProps) {
   const {
+    videoId,
     secondaryClip,
     dualVideoSettings: settings,
     onSecondaryClipChange,
@@ -142,6 +144,7 @@ export default function DualVideoControls({
     setSecondaryClip,
     setSecondaryTrim,
   } = useShallowSelector(ClipContext, (state) => ({
+    videoId: state.videoId,
     secondaryClip: state.secondaryClip,
     dualVideoSettings: state.dualVideoSettings,
     onSecondaryClipChange: state.setSecondaryClip,
@@ -162,13 +165,15 @@ export default function DualVideoControls({
         return;
       }
 
+      const secondaryClipId = getSecondaryClipId(`${videoId}_${file.name}`);
+
       try {
         const tempVideo = document.createElement("video");
         const tempUrl = URL.createObjectURL(file);
         tempVideo.src = tempUrl;
 
         const metadata: DualVideoClip["metadata"] = {
-          clipId: `secondary_${Date.now()}`,
+          clipId: secondaryClipId,
           clipDurationMs: 0,
           clipStartTime: 0,
           clipEndTime: 0,
@@ -176,7 +181,7 @@ export default function DualVideoControls({
         };
 
         const newSecondaryClip: DualVideoClip = {
-          id: `secondary_${Date.now()}`,
+          id: secondaryClipId,
           url: tempUrl,
           metadata,
           visible: true,
