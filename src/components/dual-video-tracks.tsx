@@ -860,6 +860,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
       action: "init",
       secondaryDurationMs,
       accumulatedOffset: 0,
+      trackOffset: 0,
     };
 
     setEditHistory([defaultState]);
