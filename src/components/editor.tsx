@@ -1125,7 +1125,6 @@ const ClipEditor = ({
                     <DualVideoTracks
                       primaryDurationMs={primaryDurationMs}
                       secondaryDurationMs={secondaryDurationMs}
-                      initialOffsetMs={0}
                       primaryPreviewFrames={primaryFrames}
                       secondaryPreviewFrames={secondaryFrames}
                       // onOffsetChange={(liveOffsetMs) => {

@@ -462,6 +462,8 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
     const positionRef = React.useRef({ x: 100, y: 100 });
 
     const [isClosing, setIsClosing] = React.useState(false);
+    const [animationState, setAnimationState] =
+      React.useState<AnimationState>("idle");
 
     const handleClose = React.useCallback(() => {
       if (isClosing) return;
@@ -479,9 +481,6 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
       if (!focusables.length) return;
       (reverse ? focusables.at(-1) : focusables.at(0))?.focus();
     }, []);
-
-    const [animationState, setAnimationState] =
-      React.useState<AnimationState>("idle");
 
     const handleAnimation = (presence: boolean) => {
       return new Promise<void>((resolve) => {
@@ -535,6 +534,17 @@ const KeyframeBox = React.forwardRef<HTMLDivElement, KeyframeBoxProps>(
       );
       (focusable ?? el).focus();
     }, [shouldRender]);
+
+    React.useEffect(() => {
+      if (isVisible) {
+        const originalStyle = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        return () => {
+          document.body.style.overflow = originalStyle;
+        };
+      }
+    }, [isVisible]);
 
     useIsoLayoutEffect(() => {
       if (!triggerRef?.current) return;

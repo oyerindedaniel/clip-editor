@@ -25,25 +25,13 @@ interface ClipGridProps {
   initialClips: ClipData[];
 }
 
-export default function ClipGrid({
-  initialClips: initialServerClips,
-}: ClipGridProps) {
+export default function ClipGrid({ initialClips: serverClips }: ClipGridProps) {
   const isClient = useClientOnly();
   const { manualClips, addManualClip, removeManualClip } = useManualClips();
   const [isUploading, setIsUploading] = useState(false);
 
-  const serverClips = useMemo(
-    () => initialServerClips.filter((clip) => !isManualClip(clip)),
-    [initialServerClips]
-  );
-
-  const allClips = useMemo(
-    () => [...serverClips, ...manualClips],
-    [serverClips, manualClips]
-  );
-
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(
-    () => new Set(initialServerClips.map((clip) => clip.metadata.clipId))
+    () => new Set(serverClips.map((clip) => clip.metadata.clipId))
   );
   const processedThumbnailsRef = useRef<Set<string>>(new Set());
   const dimensionRef = useRef<{ width: number; height: number }>({
@@ -53,6 +41,12 @@ export default function ClipGrid({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const activeCleanups = useRef<Map<string, () => void>>(new Map());
+
+  const allClips = useMemo(
+    () => [...serverClips, ...manualClips],
+    [serverClips, manualClips]
+  );
 
   const handleVideoUpload = useCallback(
     async (file: File) => {
@@ -83,16 +77,6 @@ export default function ClipGrid({
     [removeManualClip]
   );
 
-  useIsoLayoutEffect(() => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      if (rect.width && rect.height) {
-        dimensionRef.current = { width: rect.width, height: rect.height };
-        setReady(true);
-      }
-    }
-  }, []);
-
   const generateThumbnail = useCallback(
     (videoUrl: string, canvas: HTMLCanvasElement, clipId: string) => {
       if (processedThumbnailsRef.current.has(clipId)) return;
@@ -102,8 +86,6 @@ export default function ClipGrid({
         logger.warn("Tried to generate thumbnail before ready:", clipId);
         return;
       }
-
-      processedThumbnailsRef.current.add(clipId);
 
       const video = document.createElement("video");
       video.crossOrigin = "anonymous";
@@ -122,6 +104,8 @@ export default function ClipGrid({
       const cleanup = () => {
         if (isCleaningUp) return;
         isCleaningUp = true;
+
+        activeCleanups.current.delete(clipId);
 
         video.removeEventListener("seeked", drawFrame);
         video.removeEventListener("error", onError);
@@ -162,6 +146,7 @@ export default function ClipGrid({
           }
 
           ctx.drawImage(video, dx, dy, dw, dh);
+          processedThumbnailsRef.current.add(clipId);
         } catch (err) {
           logger.warn("Draw failed", clipId, err);
         } finally {
@@ -187,31 +172,50 @@ export default function ClipGrid({
       video.addEventListener("error", onError);
       video.load();
 
+      activeCleanups.current.set(clipId, cleanup);
       return cleanup;
     },
     []
   );
 
+  useIsoLayoutEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        dimensionRef.current = { width: rect.width, height: rect.height };
+        setReady(true);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!ready) return;
-    const cleanups: (() => void)[] = [];
+
+    const currentClipIds = new Set(allClips.map((c) => c.metadata.clipId));
+
+    activeCleanups.current.forEach((cleanup, clipId) => {
+      if (!currentClipIds.has(clipId)) {
+        cleanup();
+        processedThumbnailsRef.current.delete(clipId);
+        canvasRefs.current.delete(clipId);
+      }
+    });
 
     for (const [clipId, canvas] of canvasRefs.current.entries()) {
       const clip = allClips.find((clip) => clip.metadata.clipId === clipId);
-      if (clip && canvas) {
-        const cleanup = generateThumbnail(clip.url, canvas, clipId);
-        if (cleanup) cleanups.push(() => cleanup());
+      if (clip && canvas && !processedThumbnailsRef.current.has(clipId)) {
+        generateThumbnail(clip.url, canvas, clipId);
       }
     }
+  }, [ready, generateThumbnail, allClips]);
 
+  useEffect(() => {
     return () => {
-      cleanups.forEach((fn, index) => {
-        const clipId = Array.from(canvasRefs.current.keys())[index];
-        if (loadingThumbnails.has(clipId)) return;
-        fn();
-      });
+      activeCleanups.current.forEach((cleanup) => cleanup());
+      activeCleanups.current.clear();
+      processedThumbnailsRef.current.clear();
     };
-  }, [ready, generateThumbnail, allClips, loadingThumbnails]);
+  }, []);
 
   const setCanvasRef = useCallback((clipId: string) => {
     return (el: HTMLCanvasElement | null) => {
@@ -221,7 +225,7 @@ export default function ClipGrid({
     };
   }, []);
 
-  if (initialServerClips.length === 0 && !isUploading) {
+  if (allClips.length === 0 && !isUploading) {
     return (
       <div>
         <h2 className="text-3xl font-semibold absolute left-2/4 top-2/4 -translate-y-2/4 -translate-x-2/4 text-foreground-subtle mb-4 font-sans tracking-tight">

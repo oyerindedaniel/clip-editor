@@ -44,7 +44,6 @@ import { useStableHandler } from "@/hooks/use-stable-handler";
 interface DualVideoTracksProps {
   primaryDurationMs: number;
   secondaryDurationMs: number;
-  initialOffsetMs: number; // secondary relative to primary; positive means secondary starts later
   onOffsetChange?: (offsetMs: number) => void; // live as user drags
   onCommitOffset?: (offsetMs: number) => void; // when drag ends
   onCutSecondaryAt?: (trimData: { trimStart: number; trimEnd: number }) => void;
@@ -56,7 +55,7 @@ interface DualVideoTracksProps {
 
 type HistoryAction = "init" | "mark" | "cut";
 
-interface HistoryState {
+export interface HistoryState {
   trimStart: number | null;
   trimEnd: number | null;
   secondaryDurationMs: number;
@@ -73,7 +72,6 @@ interface HistoryState {
 export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   primaryDurationMs,
   secondaryDurationMs,
-  initialOffsetMs,
   onOffsetChange,
   onCutSecondaryAt,
   onCommitOffset,
@@ -123,9 +121,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     ? currentState.secondaryDurationMs
     : secondaryDurationMs;
 
-  const currentAccumulatedOffset = useMemo(() => {
-    return currentState?.accumulatedOffset ?? 0;
-  }, [currentState]);
+  const currentAccumulatedOffset = currentState?.accumulatedOffset ?? 0;
 
   const [trimStart, setTrimStart] = useState<number | null>(
     initialStateRef.current.trimStart
@@ -151,7 +147,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     return keyframes ? filterKeyframesByTarget(keyframes, "secondary") : [];
   }, [keyframes]);
 
-  const currentOffsetRef = useRef<number>(initialOffsetMs);
+  const currentOffsetRef = useRef<number>(
+    initialStateRef.current.initialOffset
+  );
   const draggingSecondaryRef = useRef<boolean>(false);
   const draggingPlayheadRef = useRef<boolean>(false);
 
@@ -319,8 +317,6 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
   ]);
 
   useIsoLayoutEffect(() => {
-    currentOffsetRef.current = initialOffsetMs;
-
     rafIdRef.current = requestAnimationFrame(() => {
       renderBlocks();
       renderRuler();
@@ -330,7 +326,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [initialOffsetMs, renderBlocks, renderRuler]);
+  }, [renderBlocks, renderRuler]);
 
   useEffect(() => {
     renderStrips();
@@ -1141,6 +1137,7 @@ interface GetHistoryStateResult {
   index: number;
   trimStart: number | null;
   trimEnd: number | null;
+  initialOffset: number;
 }
 
 function getHistoryState(
@@ -1161,6 +1158,7 @@ function getHistoryState(
     index: 0,
     trimStart: null,
     trimEnd: null,
+    initialOffset: 0,
   };
 
   if (!id || typeof window === "undefined") return fallbackState;
@@ -1179,11 +1177,19 @@ function getHistoryState(
     }));
 
     const last = normalizedHistory.at(-1);
+
+    const lastStateWithOffset = [...normalizedHistory]
+      .reverse()
+      .find(
+        (state) => state.trackOffset !== undefined && state.trackOffset !== 0
+      );
+
     return {
       history: normalizedHistory,
       index: normalizedHistory.length - 1,
       trimStart: last?.trimStart ?? null,
       trimEnd: last?.trimEnd ?? null,
+      initialOffset: lastStateWithOffset?.trackOffset ?? 0,
     };
   } catch {
     return fallbackState;
