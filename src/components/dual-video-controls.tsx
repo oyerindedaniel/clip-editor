@@ -33,6 +33,7 @@ import type {
   S3ClipData,
   VideoFormat,
   CropMode,
+  TrimData,
 } from "@/types/app";
 import type { AspectRatio } from "@/utils/aspect-ratios";
 import { toast } from "sonner";
@@ -43,6 +44,7 @@ import {
   DEFAULT_ASPECT_RATIO,
   DEFAULT_COLOR,
   DEFAULT_CROP_MODE,
+  DEFAULT_TRIM_DATA,
 } from "@/constants/app";
 import { DEFAULT_DUAL_VIDEO_SETTINGS } from "@/contexts/clip-context";
 import {
@@ -50,7 +52,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { getSecondaryClipId } from "@/utils/app";
+import { getSecondaryClipId, getStorageKey } from "@/utils/app";
+import type { HistoryState } from "./dual-video-tracks";
 
 interface DualVideoControlsProps {
   primaryClip: S3ClipData;
@@ -155,93 +158,136 @@ export default function DualVideoControls({
 
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleFileSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      if (!file.type.startsWith("video/")) {
-        toast.error("Please select a video file");
-        return;
-      }
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please select a video file");
+      return;
+    }
 
-      const secondaryClipId = getSecondaryClipId(`${videoId}_${file.name}`);
+    const secondaryClipId = getSecondaryClipId(`${videoId}_${file.name}`);
 
-      try {
-        const tempVideo = document.createElement("video");
-        const tempUrl = URL.createObjectURL(file);
-        tempVideo.src = tempUrl;
+    try {
+      const tempVideo = document.createElement("video");
+      const tempUrl = URL.createObjectURL(file);
+      tempVideo.src = tempUrl;
 
-        const metadata: DualVideoClip["metadata"] = {
-          clipId: secondaryClipId,
-          clipDurationMs: 0,
-          clipStartTime: 0,
-          clipEndTime: 0,
-          originalFilename: file.name,
-        };
+      const metadata: DualVideoClip["metadata"] = {
+        clipId: secondaryClipId,
+        clipDurationMs: 0,
+        clipStartTime: 0,
+        clipEndTime: 0,
+        originalFilename: file.name,
+      };
 
-        const newSecondaryClip: DualVideoClip = {
-          id: secondaryClipId,
-          url: tempUrl,
-          metadata,
-          visible: true,
+      const newSecondaryClip: DualVideoClip = {
+        id: secondaryClipId,
+        url: tempUrl,
+        metadata,
+        visible: true,
+        trimStart: 0,
+        trimEnd: 0,
+        timelineOffset: 0,
+      };
+
+      const handleMetadata = () => {
+        const aspect = tempVideo.videoWidth / tempVideo.videoHeight;
+        if (Math.abs(aspect - 16 / 9) > 0.01) {
+          toast.warning("Secondary video must have an aspect ratio of 16:9");
+          URL.revokeObjectURL(tempUrl);
+          return;
+        }
+
+        const durationMs = tempVideo.duration * 1000;
+        setSecondaryClip({
+          ...newSecondaryClip,
+          trimEnd: durationMs,
+          metadata: {
+            ...newSecondaryClip.metadata,
+            clipDurationMs: durationMs,
+            clipEndTime: durationMs,
+          },
+          dimensions: {
+            width: tempVideo.videoWidth,
+            height: tempVideo.videoHeight,
+          },
+          aspectRatio: DEFAULT_ASPECT_RATIO,
+          cropMode: DEFAULT_CROP_MODE as CropMode,
+          format: file.type.split("/")[1] as VideoFormat,
+          padColor: DEFAULT_COLOR,
+        });
+
+        let trimData: TrimData = {
           trimStart: 0,
-          trimEnd: 0,
+          trimEnd: durationMs,
           timelineOffset: 0,
         };
 
-        tempVideo.addEventListener("loadedmetadata", () => {
-          const aspect = tempVideo.videoWidth / tempVideo.videoHeight;
-          if (Math.abs(aspect - 16 / 9) > 0.01) {
-            toast.warning("Secondary video must have an aspect ratio of 16:9");
-            URL.revokeObjectURL(tempUrl);
-            return;
+        try {
+          const key = getStorageKey(`${secondaryClipId}:dual-video-history`);
+          const saved = localStorage.getItem(key);
+
+          if (saved) {
+            const parsed = JSON.parse(saved) as Array<HistoryState>;
+
+            const lastCutState = [...parsed]
+              .reverse()
+              .find((state) => state.action === "cut");
+
+            if (
+              lastCutState &&
+              lastCutState.cutTrimStart !== undefined &&
+              lastCutState.cutTrimEnd !== undefined
+            ) {
+              trimData.trimStart = lastCutState.cutTrimStart;
+              trimData.trimEnd = lastCutState.cutTrimEnd;
+            }
+
+            const lastStateWithOffset = [...parsed]
+              .reverse()
+              .find(
+                (state) =>
+                  state.trackOffset !== undefined && state.trackOffset !== 0
+              );
+
+            if (
+              lastStateWithOffset &&
+              lastStateWithOffset.trackOffset !== undefined
+            ) {
+              trimData.timelineOffset = lastStateWithOffset.trackOffset;
+            }
+
+            logger.log("Loaded secondary clip history:", {
+              trimData,
+              lastCutState,
+              lastStateWithOffset,
+            });
           }
+        } catch (error) {
+          logger.error("Failed to load secondary clip history:", error);
+        }
 
-          const durationMs = tempVideo.duration * 1000;
-          setSecondaryClip({
-            ...newSecondaryClip,
-            trimEnd: durationMs,
-            metadata: {
-              ...newSecondaryClip.metadata,
-              clipDurationMs: durationMs,
-              clipEndTime: durationMs,
-            },
-            dimensions: {
-              width: tempVideo.videoWidth,
-              height: tempVideo.videoHeight,
-            },
-            aspectRatio: DEFAULT_ASPECT_RATIO,
-            cropMode: DEFAULT_CROP_MODE as CropMode,
-            format: file.type.split("/")[1] as VideoFormat,
-            padColor: DEFAULT_COLOR,
-          });
+        setSecondaryTrim(trimData);
+        toast.success("Secondary video clip added");
 
-          setSecondaryTrim({
-            trimStart: 0,
-            trimEnd: durationMs,
-            timelineOffset: 0,
-          });
+        tempVideo.removeEventListener("loadedmetadata", handleMetadata);
+      };
 
-          toast.success("Secondary video clip added");
-        });
-      } catch (error) {
-        logger.error("Error adding secondary clip:", error);
-        toast.error("Failed to add secondary video clip");
-      }
-    },
-    []
-  );
+      tempVideo.addEventListener("loadedmetadata", handleMetadata);
+    } catch (error) {
+      logger.error("Error adding secondary clip:", error);
+      toast.error("Failed to add secondary video clip");
+    }
+  };
 
-  const updateSetting = useCallback(
-    <K extends keyof DualVideoSettings>(
-      key: K,
-      value: DualVideoSettings[K]
-    ) => {
-      onSettingsChange({ ...settings, [key]: value });
-    },
-    [settings, onSettingsChange]
-  );
+  const updateSetting = <K extends keyof DualVideoSettings>(
+    key: K,
+    value: DualVideoSettings[K]
+  ) => {
+    onSettingsChange({ ...settings, [key]: value });
+  };
 
   if (!secondaryClip) {
     return (

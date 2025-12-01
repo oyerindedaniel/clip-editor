@@ -112,8 +112,8 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (!videoId || typeof window === "undefined") return DEFAULT_TRIM_DATA;
 
     try {
-      const combinedKey = getStorageKey(`${videoId}:trim-data`);
-      const saved = localStorage.getItem(combinedKey);
+      const key = getStorageKey(`${videoId}:trim-data`);
+      const saved = localStorage.getItem(key);
 
       if (saved) {
         const parsed = JSON.parse(saved) as StoredTrimData;
@@ -127,24 +127,8 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     return DEFAULT_TRIM_DATA;
   });
 
-  const [secondaryTrim, setSecondaryTrim] = useState<TrimData>(() => {
-    if (!videoId || typeof window === "undefined") return DEFAULT_TRIM_DATA;
-
-    try {
-      const combinedKey = getStorageKey(`${videoId}:trim-data`);
-      const saved = localStorage.getItem(combinedKey);
-
-      if (saved) {
-        const parsed = JSON.parse(saved) as StoredTrimData;
-        if (parsed?.secondary) {
-          hasPersistedTrimDataRef.current = true;
-          return parsed.secondary;
-        }
-      }
-    } catch {}
-
-    return DEFAULT_TRIM_DATA;
-  });
+  const [secondaryTrim, setSecondaryTrim] =
+    useState<TrimData>(DEFAULT_TRIM_DATA);
 
   const primaryTrimRef = useLatestValue(primaryTrim);
   const secondaryTrimRef = useLatestValue(secondaryTrim);
@@ -160,19 +144,18 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     pipVideoRef,
   } = useVideoRefs();
 
-  const saveTrimDataToStorage = (primary: TrimData, secondary: TrimData) => {
+  const savePrimaryTrimDataToStorage = (primary: TrimData) => {
     if (!videoId) return;
 
-    const combinedKey = getStorageKey(`${videoId}:trim-data`);
-    if (!combinedKey) return;
+    const key = getStorageKey(`${videoId}:primary-trim-data`);
+    if (!key) return;
 
     try {
       const payload = JSON.stringify({
         primary,
-        secondary,
       });
 
-      localStorage.setItem(combinedKey, payload);
+      localStorage.setItem(key, payload);
     } catch {}
   };
 
@@ -189,9 +172,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
         return;
       }
 
-      saveTrimDataToStorage(newTrim, secondaryTrimRef.current);
+      savePrimaryTrimDataToStorage(newTrim);
     },
-    [primaryTrim, secondaryTrimRef]
+    [primaryTrim]
   );
 
   const handleSetSecondaryTrim = useCallback(
@@ -207,9 +190,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
         return;
       }
 
-      saveTrimDataToStorage(primaryTrimRef.current, newTrim);
+      // History handles the saving in @dual-video-tracks.tsx
     },
-    [secondaryTrim, primaryTrimRef]
+    [secondaryTrim]
   );
 
   const isDefaultTrim = useCallback((trim: TrimData, duration?: number) => {
@@ -264,9 +247,9 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       };
     }
 
-    const combinedKey = getStorageKey(`${videoId}:trim-data`);
-    if (combinedKey) {
-      localStorage.removeItem(combinedKey);
+    const key = getStorageKey(`${videoId}:trim-data`);
+    if (key) {
+      localStorage.removeItem(key);
     }
 
     const primaryDuration = primaryVideoRef.current?.duration ?? 0;
