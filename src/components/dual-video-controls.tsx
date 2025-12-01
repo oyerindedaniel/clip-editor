@@ -218,7 +218,7 @@ export default function DualVideoControls({
           padColor: DEFAULT_COLOR,
         });
 
-        let trimData: TrimData = {
+        const trimData: TrimData = {
           trimStart: 0,
           trimEnd: durationMs,
           timelineOffset: 0,
