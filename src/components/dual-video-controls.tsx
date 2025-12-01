@@ -44,7 +44,6 @@ import {
   DEFAULT_ASPECT_RATIO,
   DEFAULT_COLOR,
   DEFAULT_CROP_MODE,
-  DEFAULT_TRIM_DATA,
 } from "@/constants/app";
 import { DEFAULT_DUAL_VIDEO_SETTINGS } from "@/contexts/clip-context";
 import {
