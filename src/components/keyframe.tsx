@@ -17,6 +17,7 @@ import { HitArea } from "./hit-area";
 import { useTimelineTooltip } from "@/hooks/app/use-timeline-tooltip";
 import { msToSeconds, secondsToMs } from "@/utils/video";
 import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
+import { flushSync } from "react-dom";
 
 interface KeyframeContextValue {
   keyframes: KeyframeData[];
@@ -193,7 +194,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const markerRef = React.useRef<HTMLDivElement>(null);
     const tooltipRef = React.useRef<HTMLDivElement>(null);
     const composedRef = useComposedRefs(forwardedRef, markerRef);
-    const scrollEl = scrollRef?.current;
+    const scrollContainer = scrollRef.current;
 
     const isDragging = React.useRef(false);
     const dragStartX = React.useRef(0);
@@ -231,7 +232,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
       (e: React.PointerEvent<HTMLDivElement>) => {
         e.stopPropagation();
 
-        if (!keyframe || !scrollEl) return;
+        if (!keyframe || !scrollContainer) return;
 
         const marker = markerRef.current;
         if (!marker) return;
@@ -245,16 +246,18 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         startTimeRef.current = keyframeTimeMs;
         dragTimeRef.current = keyframeTimeMs;
 
-        setVisible(true);
+        flushSync(() => {
+          setVisible(true);
+        });
 
         updateTooltip(
-          startTimeRef.current * pxPerMs,
+          startTimeRef.current * pxPerMs - scrollContainer.scrollLeft,
           `${keyframe.time.toFixed(2)}s`
         );
 
-        startAutoScroll(scrollEl, (scrollDelta) => {
+        startAutoScroll(scrollContainer, (scrollDelta) => {
           const el = markerRef.current;
-          const container = scrollEl;
+          const container = scrollContainer;
           if (!isDragging.current || !el || !container) return;
 
           const { canScrollLeft, canScrollRight } = getScrollState(container);
@@ -263,24 +266,27 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           const isLeft = scrollDelta < 0;
           const isRight = scrollDelta > 0;
 
-          if ((isLeft && canScrollLeft) || (isRight && canScrollRight)) return;
+          const shouldAllowAutoScroll =
+            (isLeft && canScrollLeft) || (isRight && canScrollRight);
 
-          const newTimeMs = Math.max(
-            0,
-            dragTimeRef.current + scrollDelta / pxPerMs
-          );
-          const newLeftPx = Math.min(
-            Math.max(0, newTimeMs * pxPerMs),
-            container.scrollWidth
-          );
+          if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+            const newTimeMs = Math.max(
+              0,
+              dragTimeRef.current + scrollDelta / pxPerMs
+            );
+            const newLeftPx = Math.min(
+              Math.max(0, newTimeMs * pxPerMs),
+              container.scrollWidth
+            );
 
-          el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
-          updateTooltip(
-            newLeftPx - scrollLeft,
-            `${msToSeconds(newTimeMs).toFixed(2)}s`
-          );
+            el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
+            updateTooltip(
+              newLeftPx - scrollLeft,
+              `${msToSeconds(newTimeMs).toFixed(2)}s`
+            );
 
-          dragTimeRef.current = newTimeMs;
+            dragTimeRef.current = newTimeMs;
+          }
         });
 
         const onPointerMove = (moveEvent: PointerEvent) => {
@@ -288,7 +294,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
 
           cancelAnimationFrame(rafId.current);
           rafId.current = requestAnimationFrame(() => {
-            const container = scrollEl;
+            const container = scrollContainer;
             if (!container) return;
 
             const rect = container.getBoundingClientRect();
@@ -358,7 +364,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         keyframe,
         keyframeId,
         pxPerMs,
-        scrollEl,
+        scrollContainer,
         startAutoScroll,
         stopAutoScroll,
         handleAutoScroll,
@@ -413,7 +419,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           ref={tooltipRef}
           tooltipState={lastTooltipState}
           visible={visible}
-          container={scrollEl}
+          containerRef={scrollRef}
         />
       </>
     );

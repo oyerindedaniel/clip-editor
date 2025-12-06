@@ -90,6 +90,8 @@ interface ClipProviderProps {
 }
 
 export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
+  const storageKey = getStorageKey(`${videoId}:primary-trim-data`);
+
   const [secondaryClip, setSecondaryClip] = useState<
     (DualVideoClip & ClipMetadata) | null
   >(null);
@@ -112,8 +114,7 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (!videoId || typeof window === "undefined") return DEFAULT_TRIM_DATA;
 
     try {
-      const key = getStorageKey(`${videoId}:trim-data`);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem(storageKey);
 
       if (saved) {
         const parsed = JSON.parse(saved) as StoredTrimData;
@@ -144,27 +145,27 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     pipVideoRef,
   } = useVideoRefs();
 
-  const savePrimaryTrimDataToStorage = (primary: TrimData) => {
-    if (!videoId) return;
+  const savePrimaryTrimDataToStorage = useCallback(
+    (primary: TrimData) => {
+      if (!storageKey) return;
 
-    const key = getStorageKey(`${videoId}:primary-trim-data`);
-    if (!key) return;
-
-    try {
-      const payload = JSON.stringify({
-        primary,
-      });
-
-      localStorage.setItem(key, payload);
-    } catch {}
-  };
+      try {
+        const payload = JSON.stringify({ primary });
+        localStorage.setItem(storageKey, payload);
+      } catch {}
+    },
+    [storageKey]
+  );
 
   const handleSetPrimaryTrim = useCallback(
     (trim: TrimUpdater) => {
       const newTrim = typeof trim === "function" ? trim(primaryTrim) : trim;
       setPrimaryTrim(newTrim);
 
-      if (hasPersistedTrimDataRef.current) {
+      if (
+        hasPersistedTrimDataRef.current &&
+        primaryTrim !== DEFAULT_TRIM_DATA
+      ) {
         logger.info(
           "Skipped save: loaded persisted trim data already present."
         );
@@ -172,9 +173,10 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
         return;
       }
 
+      hasPersistedTrimDataRef.current = false;
       savePrimaryTrimDataToStorage(newTrim);
     },
-    [primaryTrim]
+    [primaryTrim, savePrimaryTrimDataToStorage]
   );
 
   const handleSetSecondaryTrim = useCallback(
@@ -182,28 +184,30 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       const newTrim = typeof trim === "function" ? trim(secondaryTrim) : trim;
       setSecondaryTrim(newTrim);
 
-      if (hasPersistedTrimDataRef.current) {
-        logger.info(
-          "Skipped save: loaded persisted trim data already present."
-        );
-        hasPersistedTrimDataRef.current = false;
-        return;
-      }
-
       // History handles the saving in @dual-video-tracks.tsx
     },
     [secondaryTrim]
   );
 
   const isDefaultTrim = useCallback((trim: TrimData, duration?: number) => {
-    const isTrimEndDefault =
-      trim.trimEnd === 0 ||
-      (duration !== undefined &&
-        Math.abs(msToSeconds(trim.trimEnd) - duration) < 0.01);
+    if (!trim) return true;
 
-    return (
-      trim.trimStart === 0 && isTrimEndDefault && trim.timelineOffset === 0
-    );
+    if (trim.trimStart !== 0) return false;
+
+    if ("timelineOffset" in trim && trim.timelineOffset !== 0) return false;
+
+    // Check trimEnd
+    // Case 1: trimEnd is exactly 0 (uninitialized or cleared)
+    if (trim.trimEnd === 0) return true;
+
+    // Case 2: We have a duration to compare against
+    if (duration !== undefined && duration > 0) {
+      const trimEndSeconds = msToSeconds(trim.trimEnd);
+      // Check if trimEnd matches the full duration
+      return Math.abs(trimEndSeconds - duration) < 0.01;
+    }
+
+    return true;
   }, []);
 
   const evaluateCanClearTrim = useCallback(() => {
@@ -214,16 +218,17 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
     if (!primaryEl && !secondaryEl) return false;
 
     const primaryDuration = primaryEl?.duration ?? 0;
-    const secondaryDuration = secondaryEl?.duration ?? 0;
+    const secondaryDuration =
+      secondaryEl?.duration ??
+      msToSeconds(secondaryClip?.metadata.clipDurationMs ?? 0);
 
     // no valid duration
     if (primaryDuration === 0 && secondaryDuration === 0) return false;
 
     const primaryDefault = isDefaultTrim(primaryTrim, primaryDuration);
-    const secondaryDefault =
-      secondaryEl && secondaryClip
-        ? isDefaultTrim(secondaryTrim, secondaryDuration)
-        : true;
+    const secondaryDefault = secondaryClip
+      ? isDefaultTrim(secondaryTrim, secondaryDuration)
+      : true;
 
     // only allow clear if something actually changed
     return !(primaryDefault && secondaryDefault);
@@ -247,9 +252,8 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       };
     }
 
-    const key = getStorageKey(`${videoId}:trim-data`);
-    if (key) {
-      localStorage.removeItem(key);
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
     }
 
     const primaryDuration = primaryVideoRef.current?.duration ?? 0;
@@ -271,11 +275,11 @@ export const ClipProvider = ({ children, videoId }: ClipProviderProps) => {
       primaryTrim: newPrimaryTrim,
       secondaryTrim: newSecondaryTrim,
     };
-  }, [videoId, evaluateCanClearTrim]);
+  }, [videoId, storageKey, evaluateCanClearTrim]);
 
   const canClearTrim = useMemo(
     () => evaluateCanClearTrim(),
-    [primaryTrim, secondaryTrim, evaluateCanClearTrim]
+    [evaluateCanClearTrim]
   );
 
   const contextValue = useMemo<ClipContextValue>(

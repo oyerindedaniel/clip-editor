@@ -957,70 +957,59 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
             ref={playheadRef}
             className="absolute top-0 left-0 bottom-0 z-[10] cursor-ew-resize"
           >
-            <HitArea
-              variant="x"
-              onPointerDown={onPlayheadPointerDown}
-              style={{
-                touchAction: "none",
-              }}
-            >
-              <div className="relative h-full">
+            <HitArea variant="x" onPointerDown={onPlayheadPointerDown}>
+              <div className="relative h-full touch-none">
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-primary" />
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 bg-primary rotate-45" />
               </div>
             </HitArea>
           </div>
 
-          {visualMarkers
-            .filter((m) => m.isInView)
-            .map((marker, index) => (
-              <div
-                key={`marker-${index}-${marker.time}`}
-                className="absolute top-0 bottom-0 z-5"
-                style={{ left: `${msToPx(marker.time, pxPerMs)}px` }}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HitArea variant="x" className="relative h-full">
-                      <div className="relative h-full">
-                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-yellow-500" />
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
-                      </div>
-                    </HitArea>
-                  </TooltipTrigger>
+          {visualMarkers.map((marker, index) => (
+            <div
+              key={`marker-${index}-${marker.time}`}
+              className="absolute top-0 bottom-0 z-5"
+              style={{ left: `${msToPx(marker.time, pxPerMs)}px` }}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HitArea variant="x" className="relative h-full">
+                    <div className="relative h-full">
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-yellow-500" />
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
+                    </div>
+                  </HitArea>
+                </TooltipTrigger>
 
-                  <TooltipContent
-                    side="top"
-                    className="flex items-center gap-2"
-                  >
-                    <span className="text-sm md:text-[0.8rem]">
-                      Marker at{" "}
-                      {msToSeconds(
+                <TooltipContent side="top" className="flex items-center gap-2">
+                  <span className="text-sm md:text-[0.8rem]">
+                    Marker at{" "}
+                    {msToSeconds(
+                      marker.time -
+                        currentOffsetRef.current +
+                        currentAccumulatedOffset
+                    ).toFixed(1)}
+                    s (original)
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="size-4"
+                    onClick={() => {
+                      const absoluteTime =
                         marker.time -
-                          currentOffsetRef.current +
-                          currentAccumulatedOffset
-                      ).toFixed(1)}
-                      s (original)
-                    </span>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="size-4"
-                      onClick={() => {
-                        const absoluteTime =
-                          marker.time -
-                          currentOffsetRef.current +
-                          currentAccumulatedOffset;
-                        if (trimStart === absoluteTime) setTrimStart(null);
-                        if (trimEnd === absoluteTime) setTrimEnd(null);
-                      }}
-                    >
-                      <X className="size-3 text-white" />
-                    </Button>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            ))}
+                        currentOffsetRef.current +
+                        currentAccumulatedOffset;
+                      if (trimStart === absoluteTime) setTrimStart(null);
+                      if (trimEnd === absoluteTime) setTrimEnd(null);
+                    }}
+                  >
+                    <X className="size-3 text-white" />
+                  </Button>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          ))}
 
           <div className="absolute inset-x-0 top-6 h-14">
             <div className="absolute inset-0 rounded bg-surface-tertiary/60" />
@@ -1059,12 +1048,9 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
               ref={secondaryBlockRef}
               onPointerDown={onSecondaryPointerDown}
               className={cn(
-                "absolute top-0 h-full rounded-md border border-default overflow-hidden",
+                "absolute top-0 h-full rounded-md border border-default overflow-hidden touch-none",
                 "shadow-inner cursor-grab active:cursor-grabbing focus:outline-none focus-visible:border-2 focus-visible:border-primary"
               )}
-              style={{
-                touchAction: "none",
-              }}
               title="Secondary video (drag to align)"
             >
               <div
@@ -1124,7 +1110,7 @@ export const DualVideoTracks: React.FC<DualVideoTracksProps> = ({
         ref={tooltipRef}
         tooltipState={lastTooltipState}
         visible={showTooltip}
-        container={scrollContainerRef.current}
+        containerRef={scrollContainerRef}
       />
     </div>
   );

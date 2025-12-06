@@ -476,7 +476,7 @@ const VolumeSliderTrack = React.forwardRef<
         ref={composedRefs}
         tabIndex={-1}
         className={cn(
-          "relative bg-surface-tertiary rounded",
+          "relative bg-surface-tertiary rounded touch-none",
           orientation === "horizontal"
             ? "w-full h-1 px-1.5"
             : "h-full w-1 py-1.5",
@@ -484,7 +484,6 @@ const VolumeSliderTrack = React.forwardRef<
         )}
         onPointerDown={handlePointerDown}
         style={{
-          touchAction: "none",
           ...props.style,
         }}
         {...props}
@@ -609,7 +608,7 @@ const VolumeSliderThumb = React.forwardRef<
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         className={cn(
-          "absolute size-3 bg-primary rounded-full cursor-pointer focus-visible:ring-2 focus-visible:ring-primary/50",
+          "absolute size-3 bg-primary rounded-full cursor-pointer touch-none focus-visible:ring-2 focus-visible:ring-primary/50",
           orientation === "horizontal"
             ? "top-1/2 -translate-x-1/2 -translate-y-1/2"
             : "left-1/2 -translate-x-1/2 -translate-y-1/2",
@@ -617,7 +616,6 @@ const VolumeSliderThumb = React.forwardRef<
         )}
         style={{
           ...style,
-          touchAction: "none",
           ...(orientation === "horizontal"
             ? { left: offset }
             : { top: offset }),
