@@ -23,6 +23,7 @@ import { Scissors, RotateCcw } from "lucide-react";
 import { msToSecondsRate } from "@/utils/timeline-utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useIsoLayoutEffect } from "@/hooks/use-Isomorphic-layout-effect";
+import { flushSync } from "react-dom";
 
 interface TimelineProps {
   duration: number;
@@ -165,15 +166,19 @@ const Timeline: React.FC<TimelineProps> = ({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, handleType: Dir) => {
       const timelineEl = timelineRef.current;
-      const scrollEl = scrollContainerRef.current;
+      const scrollContainer = scrollContainerRef.current;
       const leftHandle = leftHandleRef.current;
       const rightHandle = rightHandleRef.current;
-      if (!timelineEl || !scrollEl || !leftHandle || !rightHandle) return;
+      if (!timelineEl || !scrollContainer || !leftHandle || !rightHandle)
+        return;
 
       e.currentTarget.setPointerCapture(e.pointerId);
       let isDragging = true;
       setIsDragging(true);
-      setShowTooltip(true);
+
+      flushSync(() => {
+        setShowTooltip(true);
+      });
 
       const updateTooltipForHandle = (handleType: Dir) => {
         const leftPos = parseFloat(leftHandle.style.left || "0");
@@ -186,13 +191,14 @@ const Timeline: React.FC<TimelineProps> = ({
           trimValuesRef.current.start
         )} • End: ${formatDurationDisplay(trimValuesRef.current.end)}`;
 
-        updateTooltip(markerX - scrollEl.scrollLeft, displayText);
+        updateTooltip(markerX - scrollContainer.scrollLeft, displayText);
       };
 
       updateTooltipForHandle(handleType);
 
-      startAutoScroll(scrollEl, (scrollDelta) => {
-        const { canScrollLeft, canScrollRight } = getScrollState(scrollEl);
+      startAutoScroll(scrollContainer, (scrollDelta) => {
+        const { canScrollLeft, canScrollRight } =
+          getScrollState(scrollContainer);
         const isLeft = scrollDelta < 0;
         const isRight = scrollDelta > 0;
         const canScroll =
@@ -230,10 +236,10 @@ const Timeline: React.FC<TimelineProps> = ({
         if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
 
         rafIdRef.current = requestAnimationFrame(() => {
-          const scrollRect = scrollEl.getBoundingClientRect();
+          const scrollRect = scrollContainer.getBoundingClientRect();
           const timelineRect = timelineEl.getBoundingClientRect();
           const { containerWidth, canScrollLeft, canScrollRight } =
-            getScrollState(scrollEl);
+            getScrollState(scrollContainer);
 
           const mouseX = ev.clientX - scrollRect.left;
           const needsLeftScroll = mouseX <= EDGE_THRESHOLD && canScrollLeft;
