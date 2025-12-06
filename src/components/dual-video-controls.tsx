@@ -173,24 +173,6 @@ export default function DualVideoControls({
       const tempUrl = URL.createObjectURL(file);
       tempVideo.src = tempUrl;
 
-      const metadata: DualVideoClip["metadata"] = {
-        clipId: secondaryClipId,
-        clipDurationMs: 0,
-        clipStartTime: 0,
-        clipEndTime: 0,
-        originalFilename: file.name,
-      };
-
-      const newSecondaryClip: DualVideoClip = {
-        id: secondaryClipId,
-        url: tempUrl,
-        metadata,
-        visible: true,
-        trimStart: 0,
-        trimEnd: 0,
-        timelineOffset: 0,
-      };
-
       const handleMetadata = () => {
         const aspect = tempVideo.videoWidth / tempVideo.videoHeight;
         if (Math.abs(aspect - 16 / 9) > 0.01) {
@@ -200,23 +182,6 @@ export default function DualVideoControls({
         }
 
         const durationMs = tempVideo.duration * 1000;
-        setSecondaryClip({
-          ...newSecondaryClip,
-          trimEnd: durationMs,
-          metadata: {
-            ...newSecondaryClip.metadata,
-            clipDurationMs: durationMs,
-            clipEndTime: durationMs,
-          },
-          dimensions: {
-            width: tempVideo.videoWidth,
-            height: tempVideo.videoHeight,
-          },
-          aspectRatio: DEFAULT_ASPECT_RATIO,
-          cropMode: DEFAULT_CROP_MODE as CropMode,
-          format: file.type.split("/")[1] as VideoFormat,
-          padColor: DEFAULT_COLOR,
-        });
 
         const trimData: TrimData = {
           trimStart: 0,
@@ -257,17 +222,40 @@ export default function DualVideoControls({
             ) {
               trimData.timelineOffset = lastStateWithOffset.trackOffset;
             }
-
-            logger.log("Loaded secondary clip history:", {
-              trimData,
-              lastCutState,
-              lastStateWithOffset,
-            });
           }
         } catch (error) {
           logger.error("Failed to load secondary clip history:", error);
         }
 
+        const metadata: DualVideoClip["metadata"] = {
+          clipId: secondaryClipId,
+          clipDurationMs: durationMs,
+          clipStartTime: 0,
+          clipEndTime: durationMs,
+          originalFilename: file.name,
+        };
+
+        const newSecondaryClip: DualVideoClip = {
+          id: secondaryClipId,
+          url: tempUrl,
+          metadata,
+          visible: true,
+          ...trimData,
+        };
+
+        setSecondaryClip({
+          ...newSecondaryClip,
+          trimEnd: durationMs,
+          metadata: newSecondaryClip.metadata,
+          dimensions: {
+            width: tempVideo.videoWidth,
+            height: tempVideo.videoHeight,
+          },
+          aspectRatio: DEFAULT_ASPECT_RATIO,
+          cropMode: DEFAULT_CROP_MODE as CropMode,
+          format: file.type.split("/")[1] as VideoFormat,
+          padColor: DEFAULT_COLOR,
+        });
         setSecondaryTrim(trimData);
         toast.success("Secondary video clip added");
 

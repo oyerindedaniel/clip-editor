@@ -1,6 +1,5 @@
-import { useCallback, useRef } from "react";
-
-const TOOLTIP_OFFSET_Y = 30;
+import React, { useCallback, useRef } from "react";
+import { TOOLTIP_OFFSET_Y } from "@/components/timeline-tooltip";
 
 interface UseTimelineTooltipOptions {
   tooltipRef: React.RefObject<HTMLDivElement | null>;

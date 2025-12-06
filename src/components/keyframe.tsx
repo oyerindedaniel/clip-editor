@@ -193,7 +193,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
     const markerRef = React.useRef<HTMLDivElement>(null);
     const tooltipRef = React.useRef<HTMLDivElement>(null);
     const composedRef = useComposedRefs(forwardedRef, markerRef);
-    const scrollEl = scrollRef?.current;
+    const scrollEl = scrollRef.current;
 
     const isDragging = React.useRef(false);
     const dragStartX = React.useRef(0);
@@ -248,7 +248,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
         setVisible(true);
 
         updateTooltip(
-          startTimeRef.current * pxPerMs,
+          startTimeRef.current * pxPerMs - scrollEl.scrollLeft,
           `${keyframe.time.toFixed(2)}s`
         );
 
@@ -263,24 +263,27 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           const isLeft = scrollDelta < 0;
           const isRight = scrollDelta > 0;
 
-          if ((isLeft && canScrollLeft) || (isRight && canScrollRight)) return;
+          const shouldAllowAutoScroll =
+            (isLeft && canScrollLeft) || (isRight && canScrollRight);
 
-          const newTimeMs = Math.max(
-            0,
-            dragTimeRef.current + scrollDelta / pxPerMs
-          );
-          const newLeftPx = Math.min(
-            Math.max(0, newTimeMs * pxPerMs),
-            container.scrollWidth
-          );
+          if (Math.abs(scrollDelta) > 0 && shouldAllowAutoScroll) {
+            const newTimeMs = Math.max(
+              0,
+              dragTimeRef.current + scrollDelta / pxPerMs
+            );
+            const newLeftPx = Math.min(
+              Math.max(0, newTimeMs * pxPerMs),
+              container.scrollWidth
+            );
 
-          el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
-          updateTooltip(
-            newLeftPx - scrollLeft,
-            `${msToSeconds(newTimeMs).toFixed(2)}s`
-          );
+            el.style.transform = `translate3d(${newLeftPx}px,0,0)`;
+            updateTooltip(
+              newLeftPx - scrollLeft,
+              `${msToSeconds(newTimeMs).toFixed(2)}s`
+            );
 
-          dragTimeRef.current = newTimeMs;
+            dragTimeRef.current = newTimeMs;
+          }
         });
 
         const onPointerMove = (moveEvent: PointerEvent) => {
@@ -413,7 +416,7 @@ const KeyframeMarker = React.forwardRef<HTMLDivElement, KeyframeMarkerProps>(
           ref={tooltipRef}
           tooltipState={lastTooltipState}
           visible={visible}
-          container={scrollEl}
+          containerRef={scrollRef}
         />
       </>
     );

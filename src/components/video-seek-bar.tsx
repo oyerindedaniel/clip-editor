@@ -276,7 +276,7 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         buffer={10}
         variant="y"
         className={cn(
-          "group/track relative cursor-pointer pointer-events-auto rounded-full bg-primary/40 h-[5px]",
+          "group/track relative cursor-pointer pointer-events-auto touch-none rounded-full bg-primary/40 h-[5px]",
           className
         )}
         ref={composedRefs}
@@ -292,7 +292,6 @@ const SeekTrack = React.forwardRef<HTMLDivElement, SeekTrackProps>(
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
         style={{
-          touchAction: "none",
           ...props.style,
         }}
         {...props}

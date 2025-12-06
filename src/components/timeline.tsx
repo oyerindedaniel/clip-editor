@@ -432,12 +432,11 @@ const Timeline: React.FC<TimelineProps> = ({
           <div
             ref={leftHandleRef}
             className={cn(
-              "absolute w-(--width) h-full cursor-ew-resize z-20 top-0 left-0 hover:scale-105"
+              "absolute w-(--width) h-full cursor-ew-resize touch-none z-20 top-0 left-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "left")}
             style={
               {
-                touchAction: "none",
                 "--width": `${HANDLE_WIDTH}px`,
               } as React.CSSProperties
             }
@@ -451,12 +450,11 @@ const Timeline: React.FC<TimelineProps> = ({
           <div
             ref={rightHandleRef}
             className={cn(
-              "absolute w-(--width) h-full cursor-ew-resize top-0 z-20 right-0 hover:scale-105"
+              "absolute w-(--width) h-full cursor-ew-resize touch-none top-0 z-20 right-0 hover:scale-105"
             )}
             onPointerDown={(e) => handlePointerDown(e, "right")}
             style={
               {
-                touchAction: "none",
                 "--width": `${HANDLE_WIDTH}px`,
               } as React.CSSProperties
             }
@@ -473,7 +471,7 @@ const Timeline: React.FC<TimelineProps> = ({
         ref={tooltipRef}
         tooltipState={lastTooltipState}
         visible={showTooltip}
-        container={scrollContainerRef.current}
+        containerRef={scrollContainerRef}
       />
     </div>
   );
